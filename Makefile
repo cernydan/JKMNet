@@ -6,7 +6,7 @@ TODO: replace with pattern rules; mkdir for folders
 
 TARGET = bin/JKMNet
 CC = g++ 	# compiler
-CPPFLAGS = -std=c++14 -Wall -pedantic -Iinclude -fopenmp # bad code warnings and include header folder
+CPPFLAGS = -std=c++20 -Wall -pedantic -Iinclude -fopenmp # bad code warnings and include header folder
 OBJ = obj/main.o obj/JKMNet.o# TODO
 LDFLAGS := -Llib 
 

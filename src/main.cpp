@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include <iostream>
-
-#include "JKMNet.h"
+#include "JKMNet.hpp"
 //ups
 
 using namespace std;
