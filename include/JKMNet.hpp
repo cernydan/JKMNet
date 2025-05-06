@@ -16,9 +16,7 @@ class JKMNet {
     // JKMNet& operator=(const JKMNet& other);
 
     protected:
-
     private:
-    
 
 };
 
