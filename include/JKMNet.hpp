@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <iostream>
 
+//#include "MLP.hpp"
+
 
 class JKMNet {
 
@@ -16,7 +18,7 @@ class JKMNet {
     protected:
 
     private:
-
+    
 
 };
 

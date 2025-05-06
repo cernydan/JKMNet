@@ -1,4 +1,5 @@
 #include "JKMNet.hpp"
+#include "MLP.hpp"
 //ups
 
 using namespace std;
