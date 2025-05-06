@@ -1,5 +1,8 @@
-#ifndef JKMNet_H
-#define JKMNet_H
+#ifndef JKMNet_HPP
+#define JKMNet_HPP
+#include <stdio.h>
+#include <iostream>
+
 
 class JKMNet {
 

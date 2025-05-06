@@ -1,4 +1,4 @@
-#include "include/JKMNet.h"
+#include "JKMNet.hpp"
 
 JKMNet::JKMNet(){
  std::cout << "Init of net";
