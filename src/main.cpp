@@ -1,10 +1,11 @@
 #include <stdio.h>
+#include <iostream>
 //ups
 
 using namespace std;
 
 int main() {
-  cout << "Testing the functionalities of JKMNet" << endl;
+  std::cout << "Testing the functionalities of JKMNet" << std::endl;
 
 
   return 0;
