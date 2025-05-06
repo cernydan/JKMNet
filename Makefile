@@ -18,6 +18,9 @@ all: $(TARGET)
 obj/main.o: src/main.cpp
 	$(CC) -c $< -o obj/main.o $(CPPFLAGS)
 
+obj/data_HB_1d.o: src/JKMNet.cpp
+	$(CC) -c $< -o obj/JKMNet.o $(CPPFLAGS)
+
 $(TARGET): $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(CPPFLAGS) $(LDFLAGS)
 
