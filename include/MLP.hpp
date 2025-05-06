@@ -11,7 +11,8 @@ class MLP {
 
 
     // vytvorit objekt pro vahy, x, a, f(a)
-
+    // get nArch, set nArch ... metody pro nastaveni architektur
+    // printArch
 
 
     protected:
@@ -19,7 +20,6 @@ class MLP {
     private:
     std::vector<unsigned> nNeurons;
 
-    // get nArch, set nArch ... metody pro nastaveni architektur
-    // print
+   
 
 };

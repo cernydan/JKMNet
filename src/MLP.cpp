@@ -1,7 +1,9 @@
 #include "MLP.hpp"
 
-MLP::MLP(){
+MLP::MLP(): nNeurons(){
     //nNeurons = 1;
 }
 
-MLP::~MLP()
+MLP::~MLP(){
+    
+}
