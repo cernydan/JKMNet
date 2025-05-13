@@ -1,5 +1,6 @@
 #include "JKMNet.hpp"
-#include "MLP.hpp"
+
+
 //ups
 
 using namespace std;
@@ -41,5 +42,11 @@ int main() {
   // Print the updated architecture
   mlp.printArchitecture();
 
+  Layer myLayer;
+
   return 0;
 }
+
+// gettery, setters pro w, x
+// metoda pro aktivaci
+// enum pro act_functions + const

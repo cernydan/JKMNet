@@ -3,17 +3,19 @@
 #include <stdio.h>
 #include <iostream>
 
+#include "MLP.hpp"
+#include "Layer.hpp"
 //#include "MLP.hpp"
 
 
 class JKMNet {
 
     public:
-    JKMNet();//< The constructor of NNet
-    ~JKMNet();
-    // virtual ~JKMNet();
-    // JKMNet(const JKMNet& other);
-    // JKMNet& operator=(const JKMNet& other);
+        JKMNet();//< The constructor of NNet
+        ~JKMNet();
+        // virtual ~JKMNet();
+        // JKMNet(const JKMNet& other);
+        // JKMNet& operator=(const JKMNet& other);
 
     protected:
     private:

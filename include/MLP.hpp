@@ -1,3 +1,6 @@
+#ifndef MLP_HPP
+#define MLP_HPP
+
 #include <vector>
 
 using namespace std;
@@ -27,3 +30,5 @@ class MLP {
         size_t numLayers;
 
 };
+
+#endif // MLP_H
