@@ -8,7 +8,7 @@ using namespace std;
  * The constructor
  */
 MLP::MLP(): nNeurons(){
-
+    numLayers = 0;
 }
 
 /**
@@ -18,10 +18,34 @@ MLP::~MLP(){
 
 }
 
+
+/**
+ * The copy constructor
+ */
+MLP::MLP(const MLP& other): nNeurons(){
+    nNeurons = other.nNeurons;
+    numLayers = other.numLayers;
+
+}
+
+
+/**
+ * The assignment operator
+ */
+MLP& MLP::operator=(const MLP& other){
+    if (this == &other) return *this;
+  else {
+    nNeurons = other.nNeurons;
+    numLayers = other.numLayers;
+  }
+  return *this;
+
+}
+
 /**
  *  Getter: Returns the current architecture (vector of neurons in each layer)
  */
-std::vector<unsigned> MLP::getArchitecture() const {
+std::vector<unsigned> MLP::getArchitecture() {
     return nNeurons;
 }
 
@@ -35,12 +59,14 @@ void MLP::setArchitecture(const std::vector<unsigned>& architecture) {
 /**
  *  Print the architecture
  */
-void MLP::printArchitecture() const {
+void MLP::printArchitecture() {
     std::cout << "MLP Architecture: ";
 
-    for (size_t i = 0; i < nNeurons.size(); ++i) {
+    numLayers = nNeurons.size(); 
+
+    for (size_t i = 0; i < numLayers; ++i) {
         std::cout << nNeurons[i];
-        if (i != nNeurons.size() - 1) {
+        if (i != numLayers - 1) {
             std::cout << " -> ";
         }
     }
