@@ -21,19 +21,22 @@ class Layer {
         // getInputs - minuele vystupy jsou vstupem do dalsiho
         
         void initLayer(unsigned numInputs, unsigned numNeurons);  //!< Initialize the layer with the specified number of neurons and input size
-        Eigen::VectorXd getInputs() const;  //!< Get the input vector to the layer
+        Eigen::VectorXd getInputs();  //!< Get the input vector to the layer
         Eigen::VectorXd calculateActivation(activ_func_type activFuncType);  //!< Calculate activations based on the activation function type
-        Eigen::VectorXd getOutput() const;  //!< Get the output of the layer after applying the activation function
+        Eigen::VectorXd getOutput();  //!< Get the output of the layer after applying the activation function
         
+        // put the following to 'private' after creating getter and setter
         Eigen::MatrixXd weights;  //!< The weight matrix for the layer
         Eigen::VectorXd inputs;  //!< The input vector to the layer
-        Eigen::VectorXd activations;  //!< The activations after applying the activation function
+        Eigen::VectorXd activations;  //!< The activations
         Eigen::VectorXd output;  //!< The output vector of the layer
         Eigen::VectorXd bias;  //!< The bias vector
 
     protected:
 
     private:
+        
+
         
 };
 

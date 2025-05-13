@@ -1,6 +1,5 @@
 // TODO: Create getter and setter for 'weights' and 'inputs' (in Layer) and update the code.
 // TODO: Join 'setArchitecture()' with 'layer.initLayer()'.
-// TODO: Initialize bias to 1.
 // TODO: Create getter and setter for 'numLayers' (in MLP).
 // TODO: Solve the Eigen library errors.
 // TODO: Check and update activation functions.

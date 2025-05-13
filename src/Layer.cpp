@@ -68,7 +68,7 @@ void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
     
     // Initialize the bias
     bias = Eigen::VectorXd(numNeurons);
-    bias.setZero();  // to zero
+    bias.setOnes();  // to one
 
     // Initialize activations
     activations = Eigen::VectorXd(numNeurons);
@@ -83,7 +83,7 @@ void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
 /**
  * Get the input vector to the layer
  */
-Eigen::VectorXd Layer::getInputs() const {
+Eigen::VectorXd Layer::getInputs() {
     return inputs; 
 }
 
@@ -134,6 +134,6 @@ Eigen::VectorXd Layer::calculateActivation(activ_func_type activFuncType) {
 /**
  * Get the output of the layer after applying the activation function
  */
-Eigen::VectorXd Layer::getOutput() const {
+Eigen::VectorXd Layer::getOutput() {
     return output; 
 }
