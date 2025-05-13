@@ -17,9 +17,10 @@ class MLP {
         void setArchitecture(const std::vector<unsigned>& architecture);  //!< Setter for the architecture (modifies number of neurons in each layer)
         void printArchitecture();  //!< Print the architecture
 
-        //get, set numLayers
+        // get, set numLayers
         // pokud mam arch a modifikuji nNeurons, tak zkontroluj, ze je dobre zadany vektor 
-        // UPDATE:
+        
+        // TODO: Update for Layers, not architecture any more
         std::vector<unsigned> getLayers();  //!< Getter for the layers 
         void setLayers(const std::vector<unsigned>& architecture);  //!< Setter for the layers
 

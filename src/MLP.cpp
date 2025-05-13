@@ -74,15 +74,17 @@ void MLP::printArchitecture() {
     std::cout << std::endl;
 }
 
+// TODO: Update for Layers, not architecture any more
 /**
- *  Getter: Returns the current architecture (vector of neurons in each layer)
+ *  Getter
  */
 std::vector<unsigned> MLP::getLayers() {
     return nNeurons;
 }
 
+// TODO: Update for Layers, not architecture any more
 /**
- *  Setter: Sets the architecture from a vector
+ *  Setter
  */
 void MLP::setLayers(const std::vector<unsigned>& architecture) {
     nNeurons = architecture;

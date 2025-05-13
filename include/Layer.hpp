@@ -2,10 +2,11 @@
 #define LAYER_HPP
 
 #include "Eigen/Dense"
+#include <cmath> 
 
-enum class activ_func_type{RELU, SIGMOID};
-const activ_func_type all_activ_func[]{activ_func_type::RELU, activ_func_type::SIGMOID};
-const unsigned numActivFunc = 2;
+enum class activ_func_type{RELU, SIGMOID, LINEAR, TANH};
+const activ_func_type all_activ_func[]{activ_func_type::RELU, activ_func_type::SIGMOID, activ_func_type::LINEAR, activ_func_type::TANH};
+const unsigned numActivFunc = 4;
 
 class Layer {
     public:
@@ -18,14 +19,22 @@ class Layer {
         // getOutput - argumentem je typ act func
         // initLayer - definice velikosti objektu, tj, pocet radku ve w, ...
         // getInputs - minuele vystupy jsou vstupem do dalsiho
-
-    protected:
-
-    private:
+        
+        void initLayer(unsigned numInputs, unsigned numNeurons);  //!< Initialize the layer with the specified number of neurons and input size
+        Eigen::VectorXd getInputs() const;  //!< Get the input vector to the layer
+        Eigen::VectorXd calculateActivation(activ_func_type activFuncType);  //!< Calculate activations based on the activation function type
+        Eigen::VectorXd getOutput() const;  //!< Get the output of the layer after applying the activation function
+        
         Eigen::MatrixXd weights;  //!< The weight matrix for the layer
         Eigen::VectorXd inputs;  //!< The input vector to the layer
         Eigen::VectorXd activations;  //!< The activations after applying the activation function
         Eigen::VectorXd output;  //!< The output vector of the layer
+        Eigen::VectorXd bias;  //!< The bias vector
+
+    protected:
+
+    private:
+        
 };
 
 #endif // LAYER_H

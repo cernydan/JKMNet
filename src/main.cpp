@@ -1,7 +1,9 @@
+// TODO: Create getter and setter for 'weights' and 'inputs' (in Layer) and update the code.
+// TODO: Join 'setArchitecture()' with 'layer.initLayer()'.
+// TODO: Initialize bias to 1.
+// TODO: Create getter and setter for 'numLayers' (in MLP).
+
 #include "JKMNet.hpp"
-
-
-//ups
 
 using namespace std;
 
@@ -11,6 +13,11 @@ int main() {
 
   JKMNet NNet;
   MLP mlp;
+  Layer layer;
+
+  //!! ------------------------------------------------------------
+  //!! ARCHITECTURE
+  //!! ------------------------------------------------------------
 
   // Print the current architecture (using the getter)
   std::cout << "Getter Architecture: ";
@@ -42,10 +49,41 @@ int main() {
   // Print the updated architecture
   mlp.printArchitecture();
 
-  Layer myLayer;
+  //!! ------------------------------------------------------------
+  //!! LAYER
+  //!! ------------------------------------------------------------
+
+  // Initialize the layer 
+  layer.initLayer(5, 3);  // Example: 4 inputs, 3 neurons in the layer
+
+  // Example input
+  Eigen::VectorXd inputs(5);
+  inputs << 1.0, -2.0, 0.5, 0.3, -0.5;
+  layer.inputs = inputs;
+
+  // Get and print the inputs to the layer
+  Eigen::VectorXd layerInputs = layer.getInputs();
+  std::cout << "Layer Inputs: " << layerInputs.transpose() << std::endl;
+
+  // Calculate activations using ReLU
+  Eigen::VectorXd reluActivations = layer.calculateActivation(activ_func_type::RELU);
+  std::cout << "ReLU Activations: " << reluActivations.transpose() << std::endl;
+
+  // Calculate activations using Sigmoid
+  Eigen::VectorXd sigmoidOutput = layer.calculateActivation(activ_func_type::SIGMOID);
+  std::cout << "Sigmoid Activations: " << sigmoidOutput.transpose() << std::endl;
+  
+  // Calculate activations using Linear
+  Eigen::VectorXd linearOutput = layer.calculateActivation(activ_func_type::LINEAR);
+  std::cout << "Linear Activations: " << linearOutput.transpose() << std::endl;
+
+  // Calculate activations using Tanh
+  Eigen::VectorXd tanhOutput = layer.calculateActivation(activ_func_type::TANH);
+  std::cout << "Tanh Activations: " << tanhOutput.transpose() << std::endl;
+
+  // Get and print the output of the layer
+  Eigen::VectorXd output = layer.getOutput();
+  std::cout << "Layer Outputs: " << output.transpose() << std::endl;
 
   return 0;
 }
-
-// gettery, setters pro w, x
-// metoda pro aktivaci

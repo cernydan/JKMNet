@@ -1,6 +1,5 @@
 #include "JKMNet.hpp"
 
-
 /**
  * The constructor
  */
@@ -15,14 +14,12 @@ JKMNet::~JKMNet(){
 
 }
 
-
 /**
  * The copy constructor
  */
 JKMNet::JKMNet(const JKMNet& other) {
    
 }
-
 
 /**
  * The assignment operator

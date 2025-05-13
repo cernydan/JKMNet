@@ -1,11 +1,10 @@
 #ifndef JKMNet_HPP
 #define JKMNet_HPP
-#include <stdio.h>
-#include <iostream>
 
 #include "MLP.hpp"
 #include "Layer.hpp"
-
+#include <stdio.h>
+#include <iostream>
 
 class JKMNet {
 
