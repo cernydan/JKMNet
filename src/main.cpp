@@ -49,4 +49,3 @@ int main() {
 
 // gettery, setters pro w, x
 // metoda pro aktivaci
-// enum pro act_functions + const

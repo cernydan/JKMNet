@@ -3,7 +3,9 @@
 
 #include "Eigen/Dense"
 
-//enum act func
+enum class activ_func_type{RELU, SIGMOID};
+const activ_func_type all_activ_func[]{activ_func_type::RELU, activ_func_type::SIGMOID};
+const unsigned numActivFunc = 2;
 
 class Layer {
     public:
@@ -14,14 +16,16 @@ class Layer {
 
         // void getActivations
         // getOutput - argumentem je typ act func
+        // initLayer - definice velikosti objektu, tj, pocet radku ve w, ...
+        // getInputs - minuele vystupy jsou vstupem do dalsiho
 
     protected:
 
     private:
-        Eigen::MatrixXd weights;
-        Eigen::VectorXd inputs;
-        Eigen::VectorXd activations;
-        Eigen::VectorXd output;
+        Eigen::MatrixXd weights;  //!< The weight matrix for the layer
+        Eigen::VectorXd inputs;  //!< The input vector to the layer
+        Eigen::VectorXd activations;  //!< The activations after applying the activation function
+        Eigen::VectorXd output;  //!< The output vector of the layer
 };
 
 #endif // LAYER_H

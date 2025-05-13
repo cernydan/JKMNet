@@ -35,7 +35,6 @@ Layer::Layer(const Layer& other): weights(),
     inputs = other.inputs;
     activations= other.activations;
     output= other.output;
-   
 
 }
 

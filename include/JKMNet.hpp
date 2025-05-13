@@ -5,17 +5,16 @@
 
 #include "MLP.hpp"
 #include "Layer.hpp"
-//#include "MLP.hpp"
 
 
 class JKMNet {
 
     public:
-        JKMNet();//< The constructor of NNet
-        ~JKMNet();
+        JKMNet();  //!< The constructor
+        ~JKMNet();  //!< The destructor 
         // virtual ~JKMNet();
-        // JKMNet(const JKMNet& other);
-        // JKMNet& operator=(const JKMNet& other);
+        JKMNet(const JKMNet& other);  //!< The copy constructor
+        JKMNet& operator=(const JKMNet& other);  //!< The assignment operator
 
     protected:
     private:
