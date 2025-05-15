@@ -1,5 +1,7 @@
 #include "JKMNet.hpp"
 
+using namespace std;
+
 /**
  * The constructor
  */

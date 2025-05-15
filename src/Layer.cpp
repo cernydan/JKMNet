@@ -1,6 +1,6 @@
 #include "Layer.hpp"
 #include <iostream>
-#include "Eigen/Dense"
+#include "eigen-3.4/Eigen/Dense"
 
 using namespace std;
 
@@ -66,7 +66,7 @@ void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
     inputs = Eigen::VectorXd(numInputs);
     inputs.setZero();  // to zero
     
-    // Initialize the bias
+    // Initialize bias
     bias = Eigen::VectorXd(numNeurons);
     bias.setOnes();  // to one
 
@@ -81,10 +81,31 @@ void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
 }
 
 /**
- * Get the input vector to the layer
+ * Getter for the input vector to the layer
  */
 Eigen::VectorXd Layer::getInputs() {
-    return inputs; 
+    return inputs;  
+}
+
+/**
+ * Setter for the input vector to the layer
+ */
+void Layer::setInputs(const Eigen::VectorXd& newInputs) {
+    inputs = newInputs; 
+}
+
+/**
+ * Getter for the weight matrix of the layer
+ */
+Eigen::MatrixXd Layer::getWeights() {
+    return weights; 
+}
+
+/**
+ * Setter for the weight matrix of the layer
+ */
+void Layer::setWeights(const Eigen::MatrixXd& newWeights) {
+    weights = newWeights;
 }
 
 /**
@@ -96,19 +117,25 @@ Eigen::VectorXd Layer::calculateActivation(activ_func_type activFuncType) {
     //std::cout << "inputs dimensions: " << inputs.size() << std::endl;
     //std::cout << "bias dimensions: " << bias.size() << std::endl;
 
-    Eigen::VectorXd a = weights * inputs + bias;  // Compute the weighted sum
-    Eigen::VectorXd Activations = a;  // Create new vector for activations 
+    activations = weights * inputs + bias;  // Compute the weighted sum
+    Eigen::VectorXd Activations = activations;  // Create new vector for activations after the activation function
+
+    // numActivation = Activations.size(); 
 
     // Apply the activation function based on the activation function type
     switch (activFuncType) {
         case activ_func_type::RELU:  // f(x) = max(0, x)
-            //Activations = Activations.array().max(0);
-            Activations = Activations;
+            Activations = Activations.array().max(0.0);
             break;
         
         case activ_func_type::SIGMOID:  // f(x) = 1 / (1 + exp(-x))
-            //Activations = Activations.array().unaryExpr([](double x) { return 1.0 / (1.0 + std::exp(-x)); });
-            Activations = Activations;
+            // For loop approach: (might be slower for large datasets)
+            // for (int i = 0; i < numActivation; ++i) {
+            //     Activations[i] = 1.0 / (1.0 + std::exp(-Activations[i]));
+            // }
+
+            // Lambda approach: (might be faster for large datasets)
+            Activations = Activations.array().unaryExpr([](double x) { return 1.0 / (1.0 + std::exp(-x)); });
             break;
 
         case activ_func_type::LINEAR:  // f(x) = x
@@ -116,8 +143,7 @@ Eigen::VectorXd Layer::calculateActivation(activ_func_type activFuncType) {
             break;
 
         case activ_func_type::TANH:  // f(x) = (2 / (1 + exp(-2x))) - 1
-            //Activations = Activations.array().unaryExpr([](double x) { return (2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0; });
-            Activations = Activations;
+            Activations = Activations.array().unaryExpr([](double x) { return (2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0; });
             break;
 
         default:
@@ -125,9 +151,8 @@ Eigen::VectorXd Layer::calculateActivation(activ_func_type activFuncType) {
             break;
     }
 
-    activations = Activations;  // Store the activations
     output = Activations;  // Set the output of the layer
-    return Activations;  // Return the activations
+    return Activations; 
 
 }
 

@@ -1,10 +1,16 @@
-// TODO: Create getter and setter for 'weights' and 'inputs' (in Layer) and update the code.
 // TODO: Join 'setArchitecture()' with 'layer.initLayer()'.
 // TODO: Create getter and setter for 'numLayers' (in MLP).
-// TODO: Solve the Eigen library errors.
-// TODO: Check and update activation functions.
+
+// **DONE**: Create getter and setter for 'weights' and 'inputs' (in Layer) and update the code.
+// **DONE**: Define activation functions usinf 'switch()'. 
+// **DONE**: Calculate activations as 'weights * inputs + bias'.
+// **DONE**: Initialize 'bias' to 1.
+// **DONE**: Solve the Eigen library errors.
+// **DONE**: Check and update activation functions.
 
 #include "JKMNet.hpp"
+#include "MLP.hpp"
+#include "Layer.hpp"
 
 using namespace std;
 
@@ -55,12 +61,12 @@ int main() {
   //!! ------------------------------------------------------------
 
   // Initialize the layer 
-  layer.initLayer(5, 3);  // Example: 4 inputs, 3 neurons in the layer
+  layer.initLayer(5, 3);  // Example: 5 inputs, 3 neurons in the layer
 
   // Example input
   Eigen::VectorXd inputs(5);
   inputs << 1.0, -2.0, 0.5, 0.3, -0.5;
-  layer.inputs = inputs;
+  layer.setInputs(inputs);
 
   // Get and print the inputs to the layer
   Eigen::VectorXd layerInputs = layer.getInputs();
