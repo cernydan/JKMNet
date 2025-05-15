@@ -1,5 +1,4 @@
 #include "MLP.hpp"
-
 #include <iostream>
 
 using namespace std;
@@ -89,10 +88,10 @@ void MLP::setNumLayers(size_t layers) {
   
     if (nNeurons.size() != layers) {
         // Error message if number of layers and architecture do not match
-        std::cerr << "Error: Number of layers does not match the architecture!" << std::endl;
+        std::cerr << "-> Error: Number of layers does not match the architecture!" << std::endl;
     }
     else { 
         // Positive feedback message
-        std::cout << "Good: Number of layers matches the architecture." << std::endl;
+        std::cout << "-> Good: Number of layers matches the architecture." << std::endl;
     }
 }

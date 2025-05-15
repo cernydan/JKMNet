@@ -13,8 +13,8 @@ class MLP {
         MLP(const MLP& other);  //!< The copy constructor
         MLP& operator=(const MLP& other);  //!< The assignment operator
 
-        std::vector<unsigned> getArchitecture();  //!< Getter for the architecture (returns number of neurons in each layer)  
-        void setArchitecture(std::vector<unsigned>& architecture);  //!< Setter for the architecture (modifies number of neurons in each layer)
+        std::vector<unsigned> getArchitecture();  //!< Getter for the architecture
+        void setArchitecture(std::vector<unsigned>& architecture);  //!< Setter for the architecture
         void printArchitecture();  //!< Print the architecture
 
         size_t getNumLayers();  //!< Getter for the number of layers

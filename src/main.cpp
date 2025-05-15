@@ -16,7 +16,9 @@ using namespace std;
 
 int main() {
 
-  std::cout << "Testing the functionalities of JKMNet" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+  std::cout << "-- Testing the functionalities of JKMNet --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
 
   JKMNet NNet;
   MLP mlp;
@@ -61,7 +63,7 @@ int main() {
   std::cout << "Number of layers: " << numLayers << std::endl;
 
   // Set the number of layers
-  mlp.setNumLayers(4);
+  mlp.setNumLayers(99);
   std::cout << "Number of layers after setting: " << mlp.getNumLayers() << std::endl;
 
 
