@@ -157,7 +157,7 @@ Eigen::VectorXd Layer::calculateActivation(activ_func_type activFuncType) {
 }
 
 /**
- * Get the output of the layer after applying the activation function
+ * Getter for the output vector
  */
 Eigen::VectorXd Layer::getOutput() {
     return output; 

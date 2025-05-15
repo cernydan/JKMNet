@@ -1,6 +1,6 @@
 // TODO: Join 'setArchitecture()' with 'layer.initLayer()'.
-// TODO: Create getter and setter for 'numLayers' (in MLP).
 
+// **DONE**: Create getter and setter for 'numLayers' (in MLP).
 // **DONE**: Create getter and setter for 'weights' and 'inputs' (in Layer) and update the code.
 // **DONE**: Define activation functions usinf 'switch()'. 
 // **DONE**: Calculate activations as 'weights * inputs + bias'.
@@ -49,12 +49,21 @@ int main() {
   // Print the updated architecture
   mlp.printArchitecture();
 
-  // Set a new architecture
-  std::vector<unsigned> newArchitecture2 = {100, 20, 10, 6, 5}; // Example: 100 inputs, 20/10/6 hidden neurons, 5 outputs
-  mlp.setArchitecture(newArchitecture2);
-  std::cout << "Architecture 2: ";
-  // Print the updated architecture
-  mlp.printArchitecture();
+  // // Set a new architecture
+  // std::vector<unsigned> newArchitecture2 = {100, 20, 10, 6, 5}; // Example: 100 inputs, 20/10/6 hidden neurons, 5 outputs
+  // mlp.setArchitecture(newArchitecture2);
+  // std::cout << "Architecture 2: ";
+  // // Print the updated architecture
+  // mlp.printArchitecture();
+
+  // Get the number of layers
+  size_t numLayers = mlp.getNumLayers();
+  std::cout << "Number of layers: " << numLayers << std::endl;
+
+  // Set the number of layers
+  mlp.setNumLayers(4);
+  std::cout << "Number of layers after setting: " << mlp.getNumLayers() << std::endl;
+
 
   //!! ------------------------------------------------------------
   //!! LAYER

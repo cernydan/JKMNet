@@ -52,7 +52,7 @@ std::vector<unsigned> MLP::getArchitecture() {
 /**
  *  Setter: Sets the architecture from a vector
  */
-void MLP::setArchitecture(const std::vector<unsigned>& architecture) {
+void MLP::setArchitecture(std::vector<unsigned>& architecture) {
     nNeurons = architecture;
 }
 
@@ -74,18 +74,25 @@ void MLP::printArchitecture() {
     std::cout << std::endl;
 }
 
-// TODO: Update for Layers, not architecture any more
 /**
- *  Getter
+ * Getter for the number of layers
  */
-std::vector<unsigned> MLP::getLayers() {
-    return nNeurons;
+size_t MLP::getNumLayers() {
+    return numLayers; 
 }
 
-// TODO: Update for Layers, not architecture any more
 /**
- *  Setter
+ * Setter for the number of layers
  */
-void MLP::setLayers(const std::vector<unsigned>& architecture) {
-    nNeurons = architecture;
+void MLP::setNumLayers(size_t layers) {
+    numLayers = layers; 
+  
+    if (nNeurons.size() != layers) {
+        // Error message if number of layers and architecture do not match
+        std::cerr << "Error: Number of layers does not match the architecture!" << std::endl;
+    }
+    else { 
+        // Positive feedback message
+        std::cout << "Good: Number of layers matches the architecture." << std::endl;
+    }
 }

@@ -25,19 +25,16 @@ class Layer {
         
         Eigen::VectorXd calculateActivation(activ_func_type activFuncType);  //!< Calculate activations based on the activation function type
         
-        Eigen::VectorXd getOutput();  //!< Getter for output
-        
-        // TODO: put the following to 'private' after creating getter and setter
+        Eigen::VectorXd getOutput();  //!< Getter for output       
+
+    protected:
+
+    private:
         Eigen::MatrixXd weights;  //!< The weight matrix for the layer
         Eigen::VectorXd inputs;  //!< The input vector to the layer
         Eigen::VectorXd activations;  //!< The activation vector of the layer
         Eigen::VectorXd output;  //!< The output vector of the layer
         Eigen::VectorXd bias;  //!< The bias vector
-
-    protected:
-
-    private:
-          
 };
 
 #endif // LAYER_H

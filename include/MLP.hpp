@@ -14,17 +14,14 @@ class MLP {
         MLP& operator=(const MLP& other);  //!< The assignment operator
 
         std::vector<unsigned> getArchitecture();  //!< Getter for the architecture (returns number of neurons in each layer)  
-        void setArchitecture(const std::vector<unsigned>& architecture);  //!< Setter for the architecture (modifies number of neurons in each layer)
+        void setArchitecture(std::vector<unsigned>& architecture);  //!< Setter for the architecture (modifies number of neurons in each layer)
         void printArchitecture();  //!< Print the architecture
 
-        // get, set numLayers
-        // pokud mam arch a modifikuji nNeurons, tak zkontroluj, ze je dobre zadany vektor 
-        
-        // TODO: Update for Layers, not architecture any more
-        std::vector<unsigned> getLayers();  //!< Getter for the layers 
-        void setLayers(const std::vector<unsigned>& architecture);  //!< Setter for the layers
+        size_t getNumLayers();  //!< Getter for the number of layers
+        void setNumLayers(size_t layers);  //!< Setter for the number of layers
 
     protected:
+
     private:
         std::vector<unsigned> nNeurons;
         size_t numLayers;
