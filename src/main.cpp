@@ -11,7 +11,8 @@
 // ********* 10. 6. **********************
 // TODO: The move copy constructor pro vsechny class (PM)
 // TODO: The move assignment operator pro vsechny class (PM)
-
+// TODO: getter and setter on weights
+// TODO: getter and setter on gradient -- pro vypocet chyby a optim vah
 
 #include "JKMNet.hpp"
 #include "MLP.hpp"
