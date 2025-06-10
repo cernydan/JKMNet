@@ -63,7 +63,7 @@ int main() {
   std::cout << "Number of layers: " << numLayers << std::endl;
 
   // Set the number of layers
-  mlp.setNumLayers(99);
+  mlp.setNumLayers(999);
   std::cout << "Number of layers after setting: " << mlp.getNumLayers() << std::endl;
 
 
