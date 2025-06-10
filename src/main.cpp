@@ -11,7 +11,7 @@
 // ********* 10. 6. 2025 *********
 // TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
 // TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
-// TODO: Change 'bias' to be a part of inputs
+// **DONE**: Change 'bias' to be a part of inputs
 // TODO: Getter and setter for 'weights' (in Layer)
 // TODO: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
 // **DONE**: Split 'calculateActivation' into two methods (in Layer)
@@ -85,12 +85,12 @@ int main() {
   //!! ------------------------------------------------------------
 
   // Initialize the layer 
-  layer.initLayer(5, 3);  // Example: 5 inputs, 3 neurons in the layer
+  layer.initLayer(5, 3);  // Example: 5 inputs (including bias!), 3 neurons in the layer
 
   // Example input
-  Eigen::VectorXd inputs(5);
-  inputs << 1.0, -2.0, 0.5, 0.3, -0.5;
-  layer.setInputs(inputs);
+  Eigen::VectorXd actualInputs(5);
+  actualInputs << 10.0, 2.0, 3.0, 4.0, 5.0;
+  layer.setInputs(actualInputs);
 
   // Get and print the inputs to the layer
   Eigen::VectorXd layerInputs = layer.getInputs();

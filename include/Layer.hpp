@@ -36,9 +36,9 @@ class Layer {
     private:
         Eigen::MatrixXd weights;  //!< The weight matrix for the layer
         Eigen::VectorXd inputs;  //!< The input vector to the layer
-        Eigen::VectorXd activations;  //!< The activation vector of the layer
         Eigen::VectorXd output;  //!< The output vector of the layer
-        Eigen::VectorXd bias;  //!< The bias vector
+        //Eigen::VectorXd activations;  //!< The activation vector of the layer    
+        //Eigen::VectorXd bias;  //!< The bias vector
 };
 
 #endif // LAYER_H

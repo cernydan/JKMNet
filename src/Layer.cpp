@@ -10,8 +10,8 @@ using namespace std;
 Layer::Layer(): weights(),
         inputs(),
         //activations(),
-        output(),
-        bias() {
+        //bias(),
+        output() {
 
 }
 
@@ -28,14 +28,14 @@ Layer::~Layer(){
 Layer::Layer(const Layer& other): weights(),
         inputs(),
         //activations(),
-        output(),
-        bias() {
+        //bias(), 
+        output() {
 
     weights = other.weights;
     inputs = other.inputs;
     //activations= other.activations;
+    //bias = other.bias; 
     output= other.output;
-    bias = other.bias; 
 
 }
 
@@ -48,8 +48,9 @@ Layer& Layer::operator=(const Layer& other){
     weights = other.weights;
     inputs = other.inputs;
     //activations= other.activations;
+    //bias = other.bias; 
     output= other.output;
-    bias = other.bias; 
+    
   }
   return *this;
 
@@ -59,27 +60,27 @@ Layer& Layer::operator=(const Layer& other){
  * Initialize the layer with the specified number of neurons and input size
  */
 void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
+
     // Initialize weights
     weights = Eigen::MatrixXd::Random(numNeurons, numInputs);  // Random initialization
     // mozno latinske ctverce
-    
 
-    // Initialize inputs
+    // Initialize inputs (last element will always be 1.0 for bias)
     inputs = Eigen::VectorXd(numInputs);
-    inputs.setZero();  // to zero
-    //inputs(numInputs) = 1.0;
+    inputs.setZero();  // Set all to zero first
+    inputs(numInputs - 1) = 1.0;  // Set last element (bias) to 1.0
     
     // Initialize bias
-    bias = Eigen::VectorXd(numNeurons);
-    bias.setOnes();  // to one
+    //bias = Eigen::VectorXd(numNeurons);
+    //bias.setOnes();  // Set all to one
 
     // Initialize activations
     //activations = Eigen::VectorXd(numNeurons);
-    //activations.setZero();  // to zero
+    //activations.setZero();  // Set all to zero
 
     // Initialize output 
     output = Eigen::VectorXd(numNeurons);
-    output.setZero();  // to zero
+    output.setZero();  // Set all to zero
 
 }
 
@@ -94,7 +95,9 @@ Eigen::VectorXd Layer::getInputs() {
  * Setter for the input vector to the layer
  */
 void Layer::setInputs(const Eigen::VectorXd& newInputs) {
-    inputs = newInputs; 
+   
+    inputs = newInputs;
+    inputs(inputs.size() - 1) = 1.0;  // Ensure bias input is always 1.0
 }
 
 /**
@@ -118,8 +121,8 @@ Eigen::VectorXd Layer::calculateWeightedSum() {
     //std::cout << "weights dimensions: " << weights.rows() << "x" << weights.cols() << std::endl;
     //std::cout << "inputs dimensions: " << inputs.size() << std::endl;
     //std::cout << "bias dimensions: " << bias.size() << std::endl;
+    Eigen::VectorXd activation = weights * inputs ;//+ bias;  // Compute the weighted sum
 
-    Eigen::VectorXd activation = weights * inputs + bias;  // Compute the weighted sum
     return activation;
 }
 
