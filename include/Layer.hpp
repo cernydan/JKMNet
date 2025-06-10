@@ -14,7 +14,9 @@ class Layer {
         ~Layer();  //!< The destructor     
         Layer(const Layer& other);  //!< The copy constructor
         Layer& operator=(const Layer& other);  //!< The assignment operator
-            
+            //!< The move copy constructor
+            //!< The move assignment operator
+
         void initLayer(unsigned numInputs, unsigned numNeurons);  //!< Initialize the layer with the specified number of neurons and input size    
         
         Eigen::VectorXd getInputs();  //!< Getter for inputs

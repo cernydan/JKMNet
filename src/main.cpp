@@ -8,6 +8,11 @@
 // **DONE**: Solve the Eigen library errors.
 // **DONE**: Check and update activation functions.
 
+// ********* 10. 6. **********************
+// TODO: The move copy constructor pro vsechny class (PM)
+// TODO: The move assignment operator pro vsechny class (PM)
+
+
 #include "JKMNet.hpp"
 #include "MLP.hpp"
 #include "Layer.hpp"

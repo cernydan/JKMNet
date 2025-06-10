@@ -61,10 +61,13 @@ Layer& Layer::operator=(const Layer& other){
 void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
     // Initialize weights
     weights = Eigen::MatrixXd::Random(numNeurons, numInputs);  // Random initialization
+    // mozno latinske ctverce
+    
 
     // Initialize inputs
     inputs = Eigen::VectorXd(numInputs);
     inputs.setZero();  // to zero
+    //inputs(numInputs) = 1.0;
     
     // Initialize bias
     bias = Eigen::VectorXd(numNeurons);
@@ -138,7 +141,7 @@ Eigen::VectorXd Layer::calculateActivation(activ_func_type activFuncType) {
             Activations = Activations.array().unaryExpr([](double x) { return 1.0 / (1.0 + std::exp(-x)); });
             break;
 
-        case activ_func_type::LINEAR:  // f(x) = x
+        case activ_func_type::LINEAR:  // f(x) = k*x ??
             Activations = Activations; 
             break;
 
@@ -153,7 +156,8 @@ Eigen::VectorXd Layer::calculateActivation(activ_func_type activFuncType) {
 
     output = Activations;  // Set the output of the layer
     return Activations; 
-
+    // TODO: aktivace (lin komb) jedna metoda (napr. calculateActivation) + aktivacni fce druha metoda (napr. calculateLayerOutput)
+    // TODO: druha metoda vraci jen output, tj. prejmenuj (napr. layerOutput) misto Activations (neni traba oboji)
 }
 
 /**
