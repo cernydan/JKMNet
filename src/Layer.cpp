@@ -1,5 +1,7 @@
 #include "Layer.hpp"
 #include <iostream>
+#include <random>
+#include <cmath>
 #include "eigen-3.4/Eigen/Dense"
 
 using namespace std;
@@ -59,11 +61,11 @@ Layer& Layer::operator=(const Layer& other){
 /**
  * Initialize the layer with the specified number of neurons and input size
  */
-void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
+void Layer::initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type initType, double minVal, double maxVal) {
 
     // Initialize weights
-    weights = Eigen::MatrixXd::Random(numNeurons, numInputs);  // Random initialization
-    // mozno latinske ctverce
+    //weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
+    initWeights(numNeurons, numInputs, initType, minVal, maxVal);
 
     // Initialize inputs (last element will always be 1.0 for bias)
     inputs = Eigen::VectorXd(numInputs);
@@ -82,6 +84,43 @@ void Layer::initLayer(unsigned numInputs, unsigned numNeurons) {
     output = Eigen::VectorXd(numNeurons);
     output.setZero();  // Set all to zero
 
+}
+
+/**
+ * Initialize weights using specified technique
+ */
+void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_type initType, double minVal, double maxVal) {
+    // Initialize the weight matrix
+    //weights = Eigen::MatrixXd(numNeurons, numInputs);
+    
+    switch (initType) {
+        case weight_init_type::RANDOM: {
+            // Random initialization between minVal and maxVal
+            weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
+            // Scale to desired range
+            // TODO: Check!!
+            weights = weights.array() * (maxVal - minVal) / 2.0 + (maxVal + minVal) / 2.0;
+            break;
+
+        }
+        
+        case weight_init_type::LHS: {
+            // Latin Hypercube Sampling initialization
+            // TODO: Change!!
+            weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
+            // Scale to desired range
+            weights = weights.array() * (maxVal - minVal) / 2.0 + (maxVal + minVal) / 2.0;
+            break;
+        }
+        
+        default:
+            std::cerr << "Error: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
+            // Select random initialization
+            weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
+            // Scale to desired range
+            weights = weights.array() * (maxVal - minVal) / 2.0 + (maxVal + minVal) / 2.0;
+            break;
+    }
 }
 
 /**

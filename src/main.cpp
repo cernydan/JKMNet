@@ -18,7 +18,7 @@
 // TODO: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
 // TODO: Add more activation functions based on Maca's article [MK] (in Layer)
 // TODO: Getter and setter for 'numInputs', 'numLayers', vector of 'numNeuronsInLayers' (in MLP)
-// TODO: Save 'weights' from previus iterations 
+// TODO: Save 'weights' from previous iterations 
 // *******************************
 
 #include "JKMNet.hpp"
@@ -84,8 +84,11 @@ int main() {
   //!! LAYER
   //!! ------------------------------------------------------------
 
-  // Initialize the layer 
-  layer.initLayer(5, 3);  // Example: 5 inputs (including bias!), 3 neurons in the layer
+  // Initialize the layer: 5 inputs (including bias!), 3 neurons in the layer (others are default)
+  //layer.initLayer(5, 3); 
+
+  // Initialize the layer: 5 inputs (including bias!), 3 neurons, random weights between 0.0 and 1.0
+  layer.initLayer(5, 3, weight_init_type::RANDOM, 0.0, 1.0);
 
   // Example input
   Eigen::VectorXd actualInputs(5);
