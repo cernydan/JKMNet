@@ -14,7 +14,7 @@
 // TODO: Change 'bias' to be a part of inputs
 // TODO: Getter and setter for 'weights' (in Layer)
 // TODO: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
-// TODO: Split 'calculateActivation' into two methods ('calculateActivation' for a, 'calculateLayerOutput' for f(a)) (in Layer)
+// **DONE**: Split 'calculateActivation' into two methods (in Layer)
 // TODO: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
 // TODO: Add more activation functions based on Maca's article [MK] (in Layer)
 // TODO: Getter and setter for 'numInputs', 'numLayers', vector of 'numNeuronsInLayers' (in MLP)
@@ -97,19 +97,19 @@ int main() {
   std::cout << "Layer Inputs: " << layerInputs.transpose() << std::endl;
 
   // Calculate activations using ReLU
-  Eigen::VectorXd reluActivations = layer.calculateActivation(activ_func_type::RELU);
+  Eigen::VectorXd reluActivations = layer.calculateLayerOutput(activ_func_type::RELU);
   std::cout << "ReLU Activations: " << reluActivations.transpose() << std::endl;
 
   // Calculate activations using Sigmoid
-  Eigen::VectorXd sigmoidOutput = layer.calculateActivation(activ_func_type::SIGMOID);
+  Eigen::VectorXd sigmoidOutput = layer.calculateLayerOutput(activ_func_type::SIGMOID);
   std::cout << "Sigmoid Activations: " << sigmoidOutput.transpose() << std::endl;
   
   // Calculate activations using Linear
-  Eigen::VectorXd linearOutput = layer.calculateActivation(activ_func_type::LINEAR);
+  Eigen::VectorXd linearOutput = layer.calculateLayerOutput(activ_func_type::LINEAR);
   std::cout << "Linear Activations: " << linearOutput.transpose() << std::endl;
 
   // Calculate activations using Tanh
-  Eigen::VectorXd tanhOutput = layer.calculateActivation(activ_func_type::TANH);
+  Eigen::VectorXd tanhOutput = layer.calculateLayerOutput(activ_func_type::TANH);
   std::cout << "Tanh Activations: " << tanhOutput.transpose() << std::endl;
 
   // Get and print the output of the layer

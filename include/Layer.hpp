@@ -6,7 +6,7 @@
 
 enum class activ_func_type{RELU, SIGMOID, LINEAR, TANH};
 const activ_func_type all_activ_func[]{activ_func_type::RELU, activ_func_type::SIGMOID, activ_func_type::LINEAR, activ_func_type::TANH};
-const unsigned numActivFunc = 4;
+const unsigned numActivFunc = std::size(all_activ_func);   //!< Total number of activation functions 
 
 class Layer {
     public:
@@ -24,9 +24,11 @@ class Layer {
 
         Eigen::MatrixXd getWeights();  //!< Getter for weights
         void setWeights(const Eigen::MatrixXd& newWeights);  //!< Setter for weights
-        
-        Eigen::VectorXd calculateActivation(activ_func_type activFuncType);  //!< Calculate activations based on the activation function type
-        
+                
+        Eigen::VectorXd calculateWeightedSum(); //!< Calculate the weighted sum (linear combination)
+        Eigen::VectorXd applyActivationFunction(const Eigen::VectorXd& weightedSum, activ_func_type activFuncType); //!< Apply activation function to weighted sum
+        Eigen::VectorXd calculateLayerOutput(activ_func_type activFuncType); //!< Calculate complete layer output
+
         Eigen::VectorXd getOutput();  //!< Getter for output       
 
     protected:
