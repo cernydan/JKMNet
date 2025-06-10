@@ -1,5 +1,4 @@
-// TODO: Join 'setArchitecture()' with 'layer.initLayer()'.
-
+// ********* 13. 5. 2025 *********
 // **DONE**: Create getter and setter for 'numLayers' (in MLP).
 // **DONE**: Create getter and setter for 'weights' and 'inputs' (in Layer) and update the code.
 // **DONE**: Define activation functions usinf 'switch()'. 
@@ -7,12 +6,20 @@
 // **DONE**: Initialize 'bias' to 1.
 // **DONE**: Solve the Eigen library errors.
 // **DONE**: Check and update activation functions.
+// *******************************
 
-// ********* 10. 6. **********************
-// TODO: The move copy constructor pro vsechny class (PM)
-// TODO: The move assignment operator pro vsechny class (PM)
-// TODO: getter and setter on weights
-// TODO: getter and setter on gradient -- pro vypocet chyby a optim vah
+// ********* 10. 6. 2025 *********
+// TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
+// TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
+// TODO: Change 'bias' to be a part of inputs
+// TODO: Getter and setter for 'weights' (in Layer)
+// TODO: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
+// TODO: Split 'calculateActivation' into two methods ('calculateActivation' for a, 'calculateLayerOutput' for f(a)) (in Layer)
+// TODO: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
+// TODO: Add more activation functions based on Maca's article [MK] (in Layer)
+// TODO: Getter and setter for 'numInputs', 'numLayers', vector of 'numNeuronsInLayers' (in MLP)
+// TODO: Save 'weights' from previus iterations 
+// *******************************
 
 #include "JKMNet.hpp"
 #include "MLP.hpp"
