@@ -16,7 +16,7 @@
 // TODO: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
 // **DONE**: Split 'calculateActivation' into two methods (in Layer)
 // TODO: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
-// TODO: Add more activation functions based on Maca's article [MK] (in Layer)
+// **DONE**: Add more activation functions based on Maca's article [MK] (in Layer)
 // TODO: Getter and setter for 'numInputs', 'numLayers', vector of 'numNeuronsInLayers' (in MLP)
 // TODO: Save 'weights' from previous iterations 
 // *******************************
@@ -114,6 +114,42 @@ int main() {
   // Calculate activations using Tanh
   Eigen::VectorXd tanhOutput = layer.calculateLayerOutput(activ_func_type::TANH);
   std::cout << "Tanh Activations: " << tanhOutput.transpose() << std::endl;
+
+  // Calculate activations using Gaussian
+  Eigen::VectorXd gaussianOutput = layer.calculateLayerOutput(activ_func_type::GAUSSIAN);
+  std::cout << "Gaussian Activations: " << gaussianOutput.transpose() << std::endl;
+
+  // Calculate activations using IABS
+  Eigen::VectorXd iabsOutput = layer.calculateLayerOutput(activ_func_type::IABS);
+  std::cout << "IABS Activations: " << iabsOutput.transpose() << std::endl;
+
+  // Calculate activations using LOGLOG
+  Eigen::VectorXd loglogOutput = layer.calculateLayerOutput(activ_func_type::LOGLOG);
+  std::cout << "LOGLOG Activations: " << loglogOutput.transpose() << std::endl;
+
+  // Calculate activations using CLOGLOG
+  Eigen::VectorXd cloglogOutput = layer.calculateLayerOutput(activ_func_type::CLOGLOG);
+  std::cout << "CLOGLOG Activations: " << cloglogOutput.transpose() << std::endl;
+
+  // Calculate activations using CLOGLOGM
+  Eigen::VectorXd cloglogmOutput = layer.calculateLayerOutput(activ_func_type::CLOGLOGM);
+  std::cout << "CLOGLOGM Activations: " << cloglogmOutput.transpose() << std::endl;
+
+  // Calculate activations using ROOTSIG
+  Eigen::VectorXd rootsigOutput = layer.calculateLayerOutput(activ_func_type::ROOTSIG);
+  std::cout << "ROOTSIG Activations: " << rootsigOutput.transpose() << std::endl;
+
+  // Calculate activations using LOGSIG
+  Eigen::VectorXd logsigOutput = layer.calculateLayerOutput(activ_func_type::LOGSIG);
+  std::cout << "LOGSIG Activations: " << logsigOutput.transpose() << std::endl;
+
+  // Calculate activations using SECH
+  Eigen::VectorXd sechOutput = layer.calculateLayerOutput(activ_func_type::SECH);
+  std::cout << "SECH Activations: " << sechOutput.transpose() << std::endl;
+
+  // Calculate activations using WAWE 
+  Eigen::VectorXd waveOutput = layer.calculateLayerOutput(activ_func_type::WAVE);
+  std::cout << "WAWE Activations: " << waveOutput.transpose() << std::endl;
 
   // Get and print the output of the layer
   Eigen::VectorXd output = layer.getOutput();

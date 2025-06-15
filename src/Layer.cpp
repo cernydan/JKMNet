@@ -194,6 +194,42 @@ Eigen::VectorXd Layer::applyActivationFunction(const Eigen::VectorXd& weightedSu
         case activ_func_type::TANH:  // f(x) = (2 / (1 + exp(-2x))) - 1
             activatedOutput = activatedOutput.array().unaryExpr([](double x) { return (2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0; });
             break;
+        
+        case activ_func_type::GAUSSIAN:  // f(x) = exp(-x^2)
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return std::exp(-x * x); });
+            break;
+
+        case activ_func_type::IABS:  // f(x) = x / (1 + |x|)
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return x / (1.0 + std::abs(x)); });
+            break;  
+
+        case activ_func_type::LOGLOG:  // f(x) = exp(-exp(-x))
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return std::exp(-1 * std::exp(-x)); });
+            break; 
+        
+        case activ_func_type::CLOGLOG:  // f(x) = 1 - exp(-exp(x))
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return 1 - std::exp(- std::exp(x)); });
+            break;
+
+        case activ_func_type::CLOGLOGM:  // f(x) = -log(1 - exp(-x)) + 1
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return 1 - 2 * std::exp(-0.7 * std::exp(x)); });
+            break;
+
+        case activ_func_type::ROOTSIG:  // f(x) = x / ((1 + sqrt(1 + x^2)) * sqrt(1 + x^2))
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return x / (1 + std::sqrt(1.0 + std::exp(-x * x))); });
+            break;
+
+        case activ_func_type::LOGSIG:  // f(x) = sigmoid(x)^2
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return pow((1 / (1 + std::exp(-x))), 2); });
+            break;
+
+        case activ_func_type::SECH:  // f(x) = 2 / (exp(x) + exp(-x))
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return 2 / (std::exp(x) + std::exp(-x)); });
+            break;
+
+        case activ_func_type::WAVE:  // f(x) = (1 − 𝑎2) exp(−𝑎2)
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return (1 - x * x) * exp(-x * x); });
+            break;
 
         default:
             std::cerr << "Error: Unknown activation function type!" << std::endl;

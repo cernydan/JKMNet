@@ -1,1 +1,7 @@
 .vscode/c_cpp_properties.json
+# Přeložené objekty a binárky
+*.o
+*.exe
+
+# VS Code konfigurace
+.vscode/
