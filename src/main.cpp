@@ -9,13 +9,13 @@
 // **DONE**: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
 // **DONE**: Add more activation functions based on Maca's article [MK] (in Layer)
 // **DONE**: Getter and setter for 'numInputs', 'numLayers' (in MLP)
-// TODO: Getter and setter for vector of 'numNeuronsInLayers' (in MLP)
+// **DONE**: Getter and setter for vector of 'numNeuronsInLayers' (in MLP)
 // TODO: Save 'weights' from previous iterations 
 // *******************************
 
 // ********* 16. 6. 2025 *********
 // TODO: Test large values of activations for NA's in f(a), e.g., 'a' in (-10 000, 10 000)
-// regularizace - vahy, ktere daji velke aktivace jsou penalizovane (aby nebyl model preuceny)
+// regularizace - vahy, ktere daji velke aktivace, jsou penalizovany (aby nebyl model preuceny)
 // *******************************
 
 
@@ -94,6 +94,21 @@ int main() {
   std::cout << "Architecture after setting inputs: ";
   mlp.printArchitecture();
 
+  // Get the number of neurons at specific layer
+  unsigned h0 = mlp.getNumNeuronsInLayers(0); 
+  unsigned h1 = mlp.getNumNeuronsInLayers(1);   
+  unsigned h2 = mlp.getNumNeuronsInLayers(2);   
+  std::cout << "Number of neurons in the input layer: " << h0 << std::endl;
+  std::cout << "Number of neurons in the 1st hidden layer: " << h1 << std::endl;
+  std::cout << "Number of neurons in the 2nd hidden layer: " << h2 << std::endl;
+
+  // Set the number of neurons at specific layer
+  mlp.setNumNeuronsInLayers(2, 90);  // 2nd hidden layer change to 90
+  std::cout << "Change number of neurons at 2nd hidden layer to: " << mlp.getNumNeuronsInLayers(2) << std::endl;
+
+  // Print the updated architecture
+  std::cout << "Architecture after changing neurons at 2nd hidden layer: ";
+  mlp.printArchitecture();
   
   //!! ------------------------------------------------------------
   //!! LAYER

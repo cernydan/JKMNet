@@ -122,3 +122,23 @@ void MLP::setNumInputs(unsigned inputs) {
 
     numLayers = nNeurons.size();
 }
+
+/**
+ * Get the number of neurons at a specific layer index
+ */
+unsigned MLP::getNumNeuronsInLayers(std::size_t index) {
+    if (index >= nNeurons.size()) {
+        throw std::out_of_range("Layer index out of range");
+    }
+    return nNeurons[index];
+}
+
+/**
+ * Set the number of neurons at a specific layer index
+ */
+void MLP::setNumNeuronsInLayers(std::size_t index, unsigned count) {
+    if (index >= nNeurons.size()) {
+        throw std::out_of_range("Layer index out of range");
+    }
+    nNeurons[index] = count;
+}

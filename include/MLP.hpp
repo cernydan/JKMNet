@@ -26,6 +26,10 @@ class MLP {
         unsigned getNumInputs();  //!< Getter for the number of inputs
         void setNumInputs(unsigned inputs);  //!< Setter for the number of inputs
 
+        //!< Number of neurons at specific layer 
+        unsigned getNumNeuronsInLayers(std::size_t index);  //!< Getter for the number of neurons at specific layer
+        void setNumNeuronsInLayers(std::size_t index, unsigned count);  //!< Setter for the number of neurons at specific layer
+
     protected:
 
     private:
