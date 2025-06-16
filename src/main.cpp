@@ -1,19 +1,10 @@
-// ********* 13. 5. 2025 *********
-// **DONE**: Create getter and setter for 'numLayers' (in MLP).
-// **DONE**: Create getter and setter for 'weights' and 'inputs' (in Layer) and update the code.
-// **DONE**: Define activation functions usinf 'switch()'. 
-// **DONE**: Calculate activations as 'weights * inputs + bias'.
-// **DONE**: Initialize 'bias' to 1.
-// **DONE**: Solve the Eigen library errors.
-// **DONE**: Check and update activation functions.
-// *******************************
-
 // ********* 10. 6. 2025 *********
 // TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
 // TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
 // **DONE**: Change 'bias' to be a part of inputs
 // TODO: Getter and setter for 'weights' (in Layer)
-// TODO: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
+// **DONE**: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
+// **DONE**: Update weights based on the gradient (in Layer)
 // **DONE**: Split 'calculateActivation' into two methods (in Layer)
 // TODO: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
 // **DONE**: Add more activation functions based on Maca's article [MK] (in Layer)

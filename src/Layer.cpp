@@ -2,7 +2,6 @@
 #include <iostream>
 #include <random>
 #include <cmath>
-#include "eigen-3.4/Eigen/Dense"
 
 using namespace std;
 
@@ -97,19 +96,25 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
         case weight_init_type::RANDOM: {
             // Random initialization between minVal and maxVal
             weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
+            
             // Scale to desired range
-            // TODO: Check!!
-            weights = weights.array() * (maxVal - minVal) / 2.0 + (maxVal + minVal) / 2.0;
-            break;
+            if (minVal != -1.0 || maxVal != 1.0) {
+                weights = minVal + (weights.array() + 1.0) * 0.5 * (maxVal - minVal);
+            }
 
+            break;
         }
         
         case weight_init_type::LHS: {
             // Latin Hypercube Sampling initialization
             // TODO: Change!!
             weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
+            
             // Scale to desired range
-            weights = weights.array() * (maxVal - minVal) / 2.0 + (maxVal + minVal) / 2.0;
+            if (minVal != -1.0 || maxVal != 1.0) {
+                weights = minVal + (weights.array() + 1.0) * 0.5 * (maxVal - minVal);
+            }
+
             break;
         }
         
@@ -140,6 +145,20 @@ void Layer::setInputs(const Eigen::VectorXd& newInputs) {
 }
 
 /**
+ * Getter for the gradient matrix of the layer
+ */
+Eigen::MatrixXd Layer::getGradient() {
+  return weightGrad;
+}
+
+/**
+ * Setter for the gradient matrix of the layer
+ */
+void Layer::setGradient(const Eigen::MatrixXd& grad) {
+  weightGrad = grad;
+}
+
+/**
  * Getter for the weight matrix of the layer
  */
 Eigen::MatrixXd Layer::getWeights() {
@@ -151,6 +170,13 @@ Eigen::MatrixXd Layer::getWeights() {
  */
 void Layer::setWeights(const Eigen::MatrixXd& newWeights) {
     weights = newWeights;
+}
+
+/**
+ * Apply a gradient calculation: W = W – η·∂E/∂W
+ */
+void Layer::updateWeights(double learningRate) {
+  weights -= learningRate * weightGrad;
 }
 
 /**

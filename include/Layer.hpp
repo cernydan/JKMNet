@@ -2,13 +2,13 @@
 #define LAYER_HPP
 
 #include "eigen-3.4/Eigen/Dense"
-#include <cmath>
 
 enum class weight_init_type
 {
     RANDOM,
     LHS
 }; //!< All weight initialization techniques
+
 enum class activ_func_type
 {
     RELU,
@@ -57,11 +57,15 @@ public:
     void initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type initType = weight_init_type::RANDOM, double minVal = -1.0, double maxVal = 1.0); //!< Initialize the layer with chosen weight initialization technique
     void initWeights(unsigned numNeurons, unsigned numInputs, weight_init_type initType, double minVal, double maxVal);                                       //!< Initialize weights using specified technique
 
-    Eigen::VectorXd getInputs();                      //!< Getter for inputs
-    void setInputs(const Eigen::VectorXd &newInputs); //!< Setter for inputs
+    Eigen::VectorXd getInputs();  //!< Getter for inputs
+    void setInputs(const Eigen::VectorXd &newInputs);  //!< Setter for inputs
 
-    Eigen::MatrixXd getWeights();                       //!< Getter for weights
-    void setWeights(const Eigen::MatrixXd &newWeights); //!< Setter for weights
+    Eigen::MatrixXd getGradient();  //!< Getter for gradient
+    void setGradient(const Eigen::MatrixXd& grad);  //!< Getter for gradient 
+
+    Eigen::MatrixXd getWeights();  //!< Getter for weights
+    void setWeights(const Eigen::MatrixXd &newWeights);  //!< Setter for weights
+    void updateWeights(double learningRate);  //!< Apply a gradient calculation: W = W – η·(∂E/∂W)
 
     Eigen::VectorXd calculateWeightedSum();                                                                     //!< Calculate the weighted sum (linear combination)
     Eigen::VectorXd applyActivationFunction(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply activation function to weighted sum
@@ -71,11 +75,13 @@ public:
 
 protected:
 private:
-    Eigen::MatrixXd weights; //!< The weight matrix for the layer
+    Eigen::MatrixXd weights;  //!< The weight matrix for the layer
     Eigen::VectorXd inputs;  //!< The input vector to the layer
     Eigen::VectorXd output;  //!< The output vector of the layer
-                             // Eigen::VectorXd activations;  //!< The activation vector of the layer
+    // Eigen::VectorXd activations;  //!< The activation vector of the layer
     // Eigen::VectorXd bias;  //!< The bias vector
+
+    Eigen::MatrixXd weightGrad;  //!< The gradient matrix for the layer (∂E/∂W)
 };
 
 #endif // LAYER_HPP
