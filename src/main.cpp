@@ -8,7 +8,8 @@
 // **DONE**: Split 'calculateActivation' into two methods (in Layer)
 // **DONE**: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
 // **DONE**: Add more activation functions based on Maca's article [MK] (in Layer)
-// TODO: Getter and setter for 'numInputs', 'numLayers', vector of 'numNeuronsInLayers' (in MLP)
+// **DONE**: Getter and setter for 'numInputs', 'numLayers' (in MLP)
+// TODO: Getter and setter for vector of 'numNeuronsInLayers' (in MLP)
 // TODO: Save 'weights' from previous iterations 
 // *******************************
 
@@ -38,6 +39,10 @@ int main() {
   //!! ARCHITECTURE
   //!! ------------------------------------------------------------
 
+  std::cout << "------------" << std::endl;
+  std::cout << "--  MLP --" << std::endl;
+  std::cout << "------------" << std::endl;
+
   // Print the current architecture (using the getter)
   std::cout << "Getter Architecture: ";
   std::vector<unsigned> architecture = mlp.getArchitecture();
@@ -55,31 +60,48 @@ int main() {
   mlp.printArchitecture();
 
   // Set a new architecture
-  std::vector<unsigned> newArchitecture1 = {50, 32, 16, 5}; // Example: 50 inputs, 32/16 hidden neurons, 5 outputs
+  std::vector<unsigned> newArchitecture1 = {50, 32, 16, 3}; // Example: 50 inputs, 32/16 hidden neurons, 5 outputs
   mlp.setArchitecture(newArchitecture1);
   std::cout << "Architecture 1: ";
   // Print the updated architecture
   mlp.printArchitecture();
 
-  // // Set a new architecture
-  // std::vector<unsigned> newArchitecture2 = {100, 20, 10, 6, 5}; // Example: 100 inputs, 20/10/6 hidden neurons, 5 outputs
-  // mlp.setArchitecture(newArchitecture2);
-  // std::cout << "Architecture 2: ";
-  // // Print the updated architecture
-  // mlp.printArchitecture();
+  // Set a new architecture
+  std::vector<unsigned> newArchitecture2 = {10, 20, 30, 6, 7}; // Example: 100 inputs, 20/10/6 hidden neurons, 5 outputs
+  mlp.setArchitecture(newArchitecture2);
+  std::cout << "Architecture 2: ";
+  // Print the updated architecture
+  mlp.printArchitecture();
 
   // Get the number of layers
   size_t numLayers = mlp.getNumLayers();
   std::cout << "Number of layers: " << numLayers << std::endl;
 
+  // Get the number of inputs
+  unsigned numInputs = mlp.getNumInputs();
+  std::cout << "Number of inputs: " << numInputs << std::endl;
+
   // Set the number of layers
+  std::cout << "Number of layers before setting: " << mlp.getNumLayers() << std::endl;
   mlp.setNumLayers(999);
   std::cout << "Number of layers after setting: " << mlp.getNumLayers() << std::endl;
 
+  // Set the number of inputs
+  mlp.setNumInputs(100);
+  std::cout << "Number of inputs after setting: " << mlp.getNumInputs() << std::endl;
 
+  // Print the updated architecture
+  std::cout << "Architecture after setting inputs: ";
+  mlp.printArchitecture();
+
+  
   //!! ------------------------------------------------------------
   //!! LAYER
   //!! ------------------------------------------------------------
+
+  std::cout << "------------" << std::endl;
+  std::cout << "--  LAYER --" << std::endl;
+  std::cout << "------------" << std::endl;
 
   // Initialize the layer: 5 inputs (including bias!), 3 neurons in the layer (others are default)
   //layer.initLayer(5, 3); 
@@ -100,6 +122,7 @@ int main() {
   Eigen::VectorXd reluActivations = layer.calculateLayerOutput(activ_func_type::RELU);
   std::cout << "ReLU Activations: " << reluActivations.transpose() << std::endl;
 
+/*
   // Calculate activations using Sigmoid
   Eigen::VectorXd sigmoidOutput = layer.calculateLayerOutput(activ_func_type::SIGMOID);
   std::cout << "Sigmoid Activations: " << sigmoidOutput.transpose() << std::endl;
@@ -147,6 +170,7 @@ int main() {
   // Calculate activations using WAWE 
   Eigen::VectorXd waveOutput = layer.calculateLayerOutput(activ_func_type::WAVE);
   std::cout << "WAWE Activations: " << waveOutput.transpose() << std::endl;
+*/
 
   // Get and print the output of the layer
   Eigen::VectorXd output = layer.getOutput();
