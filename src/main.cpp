@@ -12,6 +12,12 @@
 // TODO: Save 'weights' from previous iterations 
 // *******************************
 
+// ********* 16. 6. 2025 *********
+// TODO: Test large values of activations for NA's in f(a), e.g., 'a' in (-10 000, 10 000)
+// regularizace - vahy, ktere daji velke aktivace jsou penalizovane (aby nebyl model preuceny)
+// *******************************
+
+
 #include "JKMNet.hpp"
 #include "MLP.hpp"
 #include "Layer.hpp"
