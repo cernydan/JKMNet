@@ -93,8 +93,9 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
     //weights = Eigen::MatrixXd(numNeurons, numInputs);
     
     switch (initType) {
-        case weight_init_type::RANDOM: {
-            // Random initialization between minVal and maxVal
+        
+        // Random initialization between minVal and maxVal
+        case weight_init_type::RANDOM: { 
             weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
             
             // Scale to desired range
@@ -105,14 +106,39 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
             break;
         }
         
+        // Latin Hypercube Sampling initialization
         case weight_init_type::LHS: {
-            // Latin Hypercube Sampling initialization
-            // TODO: Change!!
-            weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
-            
-            // Scale to desired range
-            if (minVal != -1.0 || maxVal != 1.0) {
-                weights = minVal + (weights.array() + 1.0) * 0.5 * (maxVal - minVal);
+            // one shared random number generator
+            static std::mt19937 gen{std::random_device{}()};
+
+            // use size_t for all sizes and indices
+            const std::size_t rows = static_cast<std::size_t>(numNeurons);
+            const std::size_t cols = static_cast<std::size_t>(numInputs);
+            const std::size_t totalWeights = rows * cols;
+            const double span = maxVal - minVal;
+
+            // reserve space up front
+            std::vector<double> samples;
+            samples.reserve(totalWeights);
+
+            // for each stratum (subinterval), draw one point
+            for (std::size_t i = 0; i < totalWeights; ++i) {
+                double a = minVal + span * (double(i) / double(totalWeights));
+                double b = minVal + span * (double(i + 1) / double(totalWeights));
+                std::uniform_real_distribution<double> dist(a, b);
+                samples.push_back(dist(gen));
+            }
+
+            // shuffle so weights aren’t tied to particular strata (subinterval)
+            std::shuffle(samples.begin(), samples.end(), gen);
+
+            // write back into the matrix (row-major)
+            weights.resize(rows, cols);
+            std::size_t idx = 0;
+            for (std::size_t r = 0; r < rows; ++r) {
+                for (std::size_t c = 0; c < cols; ++c) {
+                    weights(r, c) = samples[idx++];
+                }
             }
 
             break;
@@ -124,6 +150,7 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
             weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
             // Scale to desired range
             weights = weights.array() * (maxVal - minVal) / 2.0 + (maxVal + minVal) / 2.0;
+            
             break;
     }
 }

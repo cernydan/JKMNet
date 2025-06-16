@@ -6,7 +6,7 @@
 // **DONE**: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
 // **DONE**: Update weights based on the gradient (in Layer)
 // **DONE**: Split 'calculateActivation' into two methods (in Layer)
-// TODO: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
+// **DONE**: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
 // **DONE**: Add more activation functions based on Maca's article [MK] (in Layer)
 // TODO: Getter and setter for 'numInputs', 'numLayers', vector of 'numNeuronsInLayers' (in MLP)
 // TODO: Save 'weights' from previous iterations 
@@ -85,7 +85,7 @@ int main() {
   //layer.initLayer(5, 3); 
 
   // Initialize the layer: 5 inputs (including bias!), 3 neurons, random weights between 0.0 and 1.0
-  layer.initLayer(5, 3, weight_init_type::RANDOM, 0.0, 1.0);
+  layer.initLayer(5, 3, weight_init_type::LHS, 0.0, 1.0);
 
   // Example input
   Eigen::VectorXd actualInputs(5);
