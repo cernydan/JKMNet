@@ -81,7 +81,7 @@ private:
     // Eigen::VectorXd activations;  //!< The activation vector of the layer
     // Eigen::VectorXd bias;  //!< The bias vector
 
-    Eigen::MatrixXd weightGrad;  //!< The gradient matrix for the layer (∂E/∂W)
+    Eigen::MatrixXd weightGrad;  //!< The backpropagation gradient matrix for the layer (∂E/∂W)
 };
 
 #endif // LAYER_HPP

@@ -88,11 +88,11 @@ void MLP::setNumLayers(size_t layers) {
   
     if (nNeurons.size() != layers) {
         // Error message if number of layers and architecture do not match
-        std::cerr << "-> Error: Number of layers does not match the architecture!" << std::endl;
+        std::cerr << "-> [Error]: Number of layers does not match the architecture!" << std::endl;
     }
     else { 
         // Positive feedback message
-        std::cout << "-> Good: Number of layers matches the architecture." << std::endl;
+        std::cout << "-> [Info]: Number of layers matches the architecture." << std::endl;
     }
 }
 
@@ -128,7 +128,7 @@ void MLP::setNumInputs(unsigned inputs) {
  */
 unsigned MLP::getNumNeuronsInLayers(std::size_t index) {
     if (index >= nNeurons.size()) {
-        throw std::out_of_range("Layer index out of range");
+        throw std::out_of_range("[Error]: Layer index out of range");
     }
     return nNeurons[index];
 }
@@ -138,7 +138,7 @@ unsigned MLP::getNumNeuronsInLayers(std::size_t index) {
  */
 void MLP::setNumNeuronsInLayers(std::size_t index, unsigned count) {
     if (index >= nNeurons.size()) {
-        throw std::out_of_range("Layer index out of range");
+        throw std::out_of_range("[Error]: Layer index out of range");
     }
     nNeurons[index] = count;
 }

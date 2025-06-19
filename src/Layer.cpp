@@ -12,7 +12,8 @@ Layer::Layer(): weights(),
         inputs(),
         //activations(),
         //bias(),
-        output() {
+        output(),
+        weightGrad() {
 
 }
 
@@ -30,13 +31,15 @@ Layer::Layer(const Layer& other): weights(),
         inputs(),
         //activations(),
         //bias(), 
-        output() {
+        output(),
+        weightGrad() {
 
     weights = other.weights;
     inputs = other.inputs;
     //activations= other.activations;
     //bias = other.bias; 
-    output= other.output;
+    output = other.output;
+    weightGrad = other.weightGrad;
 
 }
 
@@ -50,7 +53,8 @@ Layer& Layer::operator=(const Layer& other){
     inputs = other.inputs;
     //activations= other.activations;
     //bias = other.bias; 
-    output= other.output;
+    output = other.output;
+    weightGrad = other.weightGrad;
     
   }
   return *this;
@@ -82,6 +86,9 @@ void Layer::initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type 
     // Initialize output 
     output = Eigen::VectorXd(numNeurons);
     output.setZero();  // Set all to zero
+
+    // Initialize BP gradient
+    weightGrad.setZero(numNeurons, numInputs);
 
 }
 
@@ -145,7 +152,7 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
         }
         
         default:
-            std::cerr << "Error: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
+            std::cerr << "[Error]: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
             // Select random initialization
             weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
             // Scale to desired range
@@ -285,8 +292,13 @@ Eigen::VectorXd Layer::applyActivationFunction(const Eigen::VectorXd& weightedSu
             break;
 
         default:
-            std::cerr << "Error: Unknown activation function type!" << std::endl;
+            std::cerr << "[Error]: Unknown activation function type!" << std::endl;
             break;
+    }
+
+    // Detect any NaN or infinite
+    if (!activatedOutput.array().isFinite().all()) {
+        std::cerr << "[Warning] Non-finite activations detected!\n";
     }
 
     return activatedOutput;
