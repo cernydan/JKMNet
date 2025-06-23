@@ -6,7 +6,8 @@
 enum class weight_init_type
 {
     RANDOM,
-    LHS
+    LHS,
+    LHS2
 }; //!< All weight initialization techniques
 
 enum class activ_func_type

@@ -124,6 +124,9 @@ int main() {
 
   // Initialize the layer: 5 inputs (including bias!), 3 neurons, random weights between 0.0 and 1.0
   layer.initLayer(5, 3, weight_init_type::LHS, 0.0, 1.0);
+ // Print the weights matrix
+  Eigen::MatrixXd printWeights = layer.getWeights();
+  std::cout << "Weights initialized to:\n" << printWeights << std::endl;
 
   // Example input
   Eigen::VectorXd actualInputs(5);
