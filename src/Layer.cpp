@@ -152,39 +152,36 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
         }
         // Marta - Latin hypercube sampling by columns
         case weight_init_type::LHS2: {
-    float range = maxVal - minVal;
-    float range_interval = range / static_cast<float>(numNeurons);
+            float range = maxVal - minVal;
+            float range_interval = range / static_cast<float>(numNeurons);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
-    weights.resize(numNeurons, numInputs);  // output matrix
+            weights.resize(numNeurons, numInputs);  // output matrix
 
-    for (unsigned int col = 0; col < numInputs; ++col) {
-        std::vector<float> column(numNeurons);
+            for (unsigned int col = 0; col < numInputs; ++col) {
+                std::vector<float> column(numNeurons);
 
-        // sampling to one column
-        for (unsigned int i = 0; i < numNeurons; ++i) {
-            float sample = minVal + (i + dist(gen)) * range_interval;
-            column[i] = sample;
+                // sampling to one column
+                for (unsigned int i = 0; i < numNeurons; ++i) {
+                    float sample = minVal + (i + dist(gen)) * range_interval;
+                    column[i] = sample;
+                }
+
+                // shuffle the weights in column
+                std::shuffle(column.begin(), column.end(), gen);
+
+                // fill the column of weight matrix
+                for (unsigned int row = 0; row < numNeurons; ++row) {
+                    weights(row, col) = column[row];
+                }
+            }
+
+            break;
         }
-
-        // shuffle the weights in column
-        std::shuffle(column.begin(), column.end(), gen);
-
-        // fill the column of weight matrix
-        for (unsigned int row = 0; row < numNeurons; ++row) {
-            weights(row, col) = column[row];
-        }
-    }
-
-    break;
-
-
-
-        }
-        
+               
         default:
             std::cerr << "[Error]: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
             // Select random initialization

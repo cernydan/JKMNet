@@ -2,12 +2,13 @@
 // TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
 // TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
 // **DONE**: Change 'bias' to be a part of inputs
-// **DONE**(?); Getter and setter for 'weights' (in Layer)
+// **DONE**(?): Getter and setter for 'weights' (in Layer)
 // **DONE**: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
 // **DONE**: Update weights based on the gradient (in Layer)
+// TODO: Use 'updateWeights' method
 // **DONE**: Split 'calculateActivation' into two methods (in Layer)
-// **DONE**: Method for initialization of weights - 'random' and also 'LHS' (in Layer)
-// **DONE**: Add more activation functions based on Maca's article [MK] (in Layer)
+// **DONE**: Method for initialization of weights - 'random' and also 'LHS' and 'LHS2' (in Layer)
+// **DONE**: Add more activation functions [MK] (in Layer)
 // **DONE**: Getter and setter for 'numInputs', 'numLayers' (in MLP)
 // **DONE**: Getter and setter for vector of 'numNeuronsInLayers' (in MLP)
 // TODO: Save 'weights' from previous iterations (for Adam optimizer)
@@ -17,6 +18,11 @@
 // **DONE**: Detect any NaN or infinite values in acivation (in Layer)
 // TODO: Test large values of activations for NA's in f(a), e.g. 'a' in (-10 000, 10 000)
 // TODO: Add regularization - weights that give large activations should be penalized (so that the model is not overtrained)
+// *******************************
+
+// ********* 24. 6. 2025 *********
+// TODO: Add bias at the end of inputs (better) vs. change the last input to bias (currently)
+
 // *******************************
 
 
