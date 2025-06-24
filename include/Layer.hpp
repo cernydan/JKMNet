@@ -81,7 +81,7 @@ private:
     Eigen::VectorXd output;  //!< The output vector of the layer
     // Eigen::VectorXd activations;  //!< The activation vector of the layer
     // Eigen::VectorXd bias;  //!< The bias vector
-    activ_func_type activ_func;
+    activ_func_type activ_func;  //!< The type of activation function
  
     Eigen::MatrixXd weightGrad;  //!< The backpropagation gradient matrix for the layer (∂E/∂W)
 };

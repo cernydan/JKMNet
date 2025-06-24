@@ -13,6 +13,7 @@ Layer::Layer(): weights(),
         //activations(),
         //bias(),
         output(),
+        activ_func(),
         weightGrad() {
 
 }
@@ -32,6 +33,7 @@ Layer::Layer(const Layer& other): weights(),
         //activations(),
         //bias(), 
         output(),
+        activ_func(),
         weightGrad() {
 
     weights = other.weights;
@@ -39,6 +41,7 @@ Layer::Layer(const Layer& other): weights(),
     //activations= other.activations;
     //bias = other.bias; 
     output = other.output;
+    activ_func = other.activ_func;
     weightGrad = other.weightGrad;
 
 }
@@ -54,6 +57,7 @@ Layer& Layer::operator=(const Layer& other){
     //activations= other.activations;
     //bias = other.bias; 
     output = other.output;
+    activ_func = other.activ_func;
     weightGrad = other.weightGrad;
     
   }

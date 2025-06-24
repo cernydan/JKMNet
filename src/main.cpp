@@ -21,7 +21,7 @@
 
 // ********* 24. 6. 2025 *********
 // **DONE**: Add bias to inputs (vs. change the last input to bias (currently)) (in Layer)
-// TODO: Add 'activ_func' into constructor, etc. (in Layer)
+// **DONE**: Add 'activ_func' into constructor, etc. (in Layer)
 // TODO: Initialize 'activ_func' as some default function (e.g. ReLU) (in Layer)
 // TODO: Add 'nNeurons' and 'Inps' as private variables (in MLP)
 // TODO: Getter and setter for 'Inps' (in MLP)
