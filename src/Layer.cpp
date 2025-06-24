@@ -68,12 +68,12 @@ void Layer::initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type 
 
     // Initialize weights
     //weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
-    initWeights(numNeurons, numInputs, initType, minVal, maxVal);
+    initWeights(numNeurons, numInputs + 1, initType, minVal, maxVal);
 
-    // Initialize inputs (last element will always be 1.0 for bias)
-    inputs = Eigen::VectorXd(numInputs);
-    inputs.setZero();  // Set all to zero first
-    inputs(numInputs - 1) = 1.0;  // Set last element (bias) to 1.0
+    // Initialize inputs (add the last element as 1.0 for bias)
+    inputs = Eigen::VectorXd(numInputs + 1);
+    inputs.head(numInputs).setZero();   // all real inputs start at 0
+    inputs(numInputs) = 1.0;            // bias input = 1
     
     // Initialize bias
     //bias = Eigen::VectorXd(numNeurons);
@@ -204,9 +204,9 @@ Eigen::VectorXd Layer::getInputs() {
  * Setter for the input vector to the layer
  */
 void Layer::setInputs(const Eigen::VectorXd& newInputs) {
-   
-    inputs = newInputs;
-    inputs(inputs.size() - 1) = 1.0;  // Ensure bias input is always 1.0
+    inputs = Eigen::VectorXd(newInputs.size() + 1);  // inputs + bias
+    inputs.head(newInputs.size()) = newInputs;  // copy real inputs
+    inputs(newInputs.size()) = 1.0;         // bias = 1
 }
 
 /**
@@ -245,13 +245,13 @@ void Layer::updateWeights(double learningRate) {
 }
 
 /**
- * Calculate the weighted sum (linear combination of inputs)
+ * Calculate the weighted sum (linear combination of inputs), i.e. calculate activations
  */
 Eigen::VectorXd Layer::calculateWeightedSum() {
     //std::cout << "weights dimensions: " << weights.rows() << "x" << weights.cols() << std::endl;
     //std::cout << "inputs dimensions: " << inputs.size() << std::endl;
     //std::cout << "bias dimensions: " << bias.size() << std::endl;
-    Eigen::VectorXd activation = weights * inputs ;//+ bias;  // Compute the weighted sum
+    Eigen::VectorXd activation = weights * inputs ;  // Compute the weighted sum, i.e. calculate activations
 
     return activation;
 }
