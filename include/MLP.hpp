@@ -31,9 +31,11 @@ class MLP {
         unsigned getNumNeuronsInLayers(std::size_t index);  //!< Getter for the number of neurons at specific layer
         void setNumNeuronsInLayers(std::size_t index, unsigned count);  //!< Setter for the number of neurons at specific layer
 
-        // Inputs
+        // Getter and Setter for inputs
         Eigen::VectorXd& getInps();  //!< Getter for the inputs
         void setInps(Eigen::VectorXd& inputs);   //!< Setter for the inputs
+
+        bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
     protected:
 

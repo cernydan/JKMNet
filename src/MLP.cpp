@@ -159,3 +159,33 @@ void MLP::setInps(Eigen::VectorXd& inputs) {
     Inps.head(inputs.size()) = inputs;       
     Inps(inputs.size()) = 1.0;           
 }
+
+/**
+ * Validate the size of the inputs compared to nNeurons[0]
+ */
+bool MLP::validateInputSize() {
+    // There has to be an input layer
+    if (nNeurons.empty()) {
+        std::cerr << "[MLP] No input layer defined!\n";
+        return false;
+    }
+
+    // Inps must have at least the bias slot
+    if (Inps.size() < 1) {
+        std::cerr << "[MLP] Inps is empty!\n";
+        return false;
+    }
+
+    // realInputs = total slots minus the bias slot
+    auto realInputs = Inps.size() - 1;
+
+    // Compare to nNeurons[0]
+    if (realInputs != nNeurons[0]) {
+        std::cerr << "[MLP] Mismatch: nNeurons[0] = "
+                  << nNeurons[0] << " but got " << realInputs
+                  << " real inputs (Inps.size() = " << Inps.size() << ")\n";
+        return false;
+    }
+
+    return true;
+}

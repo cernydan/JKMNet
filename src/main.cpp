@@ -25,7 +25,7 @@
 // **DONE**: Initialize 'activ_func' as some default function (e.g. ReLU) (in Layer)
 // **DONE**: Add 'nNeurons' and 'Inps' as private variables (in MLP)
 // **DONE**: Getter and setter for 'Inps' (in MLP)
-// TODO: Test size of 'nNeurons'[0] vs. size of 'Inps' (in MLP)
+// **DONE**: Test size of 'nNeurons'[0] vs. size of 'Inps' (in MLP)
 // TODO: Add vector of activation functions for each neuron (in MLP)
 // TODO: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
 // TODO: Add vector of weights initialization for each neuron (in MLP)
@@ -133,28 +133,32 @@ int main() {
   std::cout << "------------" << std::endl;
 
   // Define new architecture
-  std::vector<unsigned> MyArchitecture = {16, 8, 1};
+  std::vector<unsigned> MyArchitecture = {8, 6, 1};
   mlp.setArchitecture(MyArchitecture);
   std::cout << "MyArchitecture: ";
   // Print the updated architecture
   mlp.printArchitecture();
 
-  // Create a sample input vector of length 16
-  Eigen::VectorXd MyInps(16);
-  // Fill MyInps with some artificial values:
-  for (int i = 0; i < MyInps.size(); ++i) {
-      MyInps[i] = i * 0.1; 
-  }
-
+  // Create random input vector of given length 
+  Eigen::VectorXd MyInps = Eigen::VectorXd::Random(8);
+  
   // Call the setter to load inputs (bias will be appended automatically)
   mlp.setInps(MyInps);
 
   // Retrieve the internal Inps (real inputs + 1 bias)
   const Eigen::VectorXd& inpsWithBias = mlp.getInps();
 
-  // 5) Print to verify
-  std::cout << "Inps (with bias) size: " << inpsWithBias.size() << "\n";
-  std::cout << "Values:\n" << inpsWithBias.transpose() << std::endl;
+  // Print
+  std::cout << "Inps size (with bias): " << inpsWithBias.size() << "\n";
+  std::cout << "Inps values:\n" << inpsWithBias.transpose() << std::endl;
+
+  // Validate input size
+  // check with: Eigen::VectorXd MyInps = Eigen::VectorXd::Random(10);
+  if (!mlp.validateInputSize()) {
+          std::cerr << "Input vector size does not match network definition!\n";
+          return 1;
+  }
+  std::cout << "Input size validated.\n";
 
   //!! ------------------------------------------------------------
   //!! LAYER
