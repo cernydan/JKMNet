@@ -2,6 +2,7 @@
 #define MLP_HPP
 
 #include <vector>
+#include "eigen-3.4/Eigen/Dense"
 
 using namespace std;
 
@@ -30,12 +31,16 @@ class MLP {
         unsigned getNumNeuronsInLayers(std::size_t index);  //!< Getter for the number of neurons at specific layer
         void setNumNeuronsInLayers(std::size_t index, unsigned count);  //!< Setter for the number of neurons at specific layer
 
+        // Inputs
+        Eigen::VectorXd& getInps();  //!< Getter for the inputs
+        void setInps(Eigen::VectorXd& inputs);   //!< Setter for the inputs
+
     protected:
 
     private:
-        std::vector<unsigned> nNeurons;  //!< Number of neurons per layer
+        std::vector<unsigned> nNeurons;  //!< The vector of number of neurons per layer
         size_t numLayers;  //!< Cache of nNeurons.size()
-        
+        Eigen::VectorXd Inps;  //!< The vector of inputs   
 
 };
 

@@ -23,8 +23,8 @@
 // **DONE**: Add bias to inputs (vs. change the last input to bias (currently)) (in Layer)
 // **DONE**: Add 'activ_func' into constructor, etc. (in Layer)
 // **DONE**: Initialize 'activ_func' as some default function (e.g. ReLU) (in Layer)
-// TODO: Add 'nNeurons' and 'Inps' as private variables (in MLP)
-// TODO: Getter and setter for 'Inps' (in MLP)
+// **DONE**: Add 'nNeurons' and 'Inps' as private variables (in MLP)
+// **DONE**: Getter and setter for 'Inps' (in MLP)
 // TODO: Test size of 'nNeurons'[0] vs. size of 'Inps' (in MLP)
 // TODO: Add vector of activation functions for each neuron (in MLP)
 // TODO: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
@@ -128,6 +128,34 @@ int main() {
   std::cout << "Architecture after changing neurons at 2nd hidden layer: ";
   mlp.printArchitecture();
   
+  std::cout << "------------" << std::endl;
+  std::cout << "Testing real inputs " << std::endl;
+  std::cout << "------------" << std::endl;
+
+  // Define new architecture
+  std::vector<unsigned> MyArchitecture = {16, 8, 1};
+  mlp.setArchitecture(MyArchitecture);
+  std::cout << "MyArchitecture: ";
+  // Print the updated architecture
+  mlp.printArchitecture();
+
+  // Create a sample input vector of length 16
+  Eigen::VectorXd MyInps(16);
+  // Fill MyInps with some artificial values:
+  for (int i = 0; i < MyInps.size(); ++i) {
+      MyInps[i] = i * 0.1; 
+  }
+
+  // Call the setter to load inputs (bias will be appended automatically)
+  mlp.setInps(MyInps);
+
+  // Retrieve the internal Inps (real inputs + 1 bias)
+  const Eigen::VectorXd& inpsWithBias = mlp.getInps();
+
+  // 5) Print to verify
+  std::cout << "Inps (with bias) size: " << inpsWithBias.size() << "\n";
+  std::cout << "Values:\n" << inpsWithBias.transpose() << std::endl;
+
   //!! ------------------------------------------------------------
   //!! LAYER
   //!! ------------------------------------------------------------

@@ -142,3 +142,20 @@ void MLP::setNumNeuronsInLayers(std::size_t index, unsigned count) {
     }
     nNeurons[index] = count;
 }
+
+/**
+ * Getter for the inputs
+ */
+Eigen::VectorXd& MLP::getInps() {
+    return Inps;
+}
+
+/**
+ * Setter for the inputs
+ */
+void MLP::setInps(Eigen::VectorXd& inputs) {
+    // Resize to (real inputs + bias):
+    Inps.resize(inputs.size() + 1);
+    Inps.head(inputs.size()) = inputs;       
+    Inps(inputs.size()) = 1.0;           
+}
