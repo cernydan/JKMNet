@@ -35,6 +35,7 @@ class MLP {
     private:
         std::vector<unsigned> nNeurons;  //!< Number of neurons per layer
         size_t numLayers;  //!< Cache of nNeurons.size()
+        
 
 };
 

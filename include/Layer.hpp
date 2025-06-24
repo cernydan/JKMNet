@@ -68,8 +68,8 @@ public:
     void setWeights(const Eigen::MatrixXd &newWeights);  //!< Setter for weights
     void updateWeights(double learningRate);  //!< Apply a gradient calculation: W = W – η·(∂E/∂W)
 
-    Eigen::VectorXd calculateWeightedSum();                                                                     //!< Calculate the weighted sum (linear combination)
-    Eigen::VectorXd applyActivationFunction(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply activation function to weighted sum
+    Eigen::VectorXd calculateWeightedSum();  //!< Calculate the weighted sum (linear combination) - calculate activations
+    Eigen::VectorXd setActivationFunction(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply activation function to weighted sum
     Eigen::VectorXd calculateLayerOutput(activ_func_type activFuncType);                                        //!< Calculate complete layer output
 
     Eigen::VectorXd getOutput(); //!< Getter for output
@@ -81,7 +81,8 @@ private:
     Eigen::VectorXd output;  //!< The output vector of the layer
     // Eigen::VectorXd activations;  //!< The activation vector of the layer
     // Eigen::VectorXd bias;  //!< The bias vector
-
+    activ_func_type activ_func;
+ 
     Eigen::MatrixXd weightGrad;  //!< The backpropagation gradient matrix for the layer (∂E/∂W)
 };
 

@@ -5,13 +5,12 @@
 // **DONE**(?): Getter and setter for 'weights' (in Layer)
 // **DONE**: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
 // **DONE**: Update weights based on the gradient (in Layer)
-// TODO: Use 'updateWeights' method
 // **DONE**: Split 'calculateActivation' into two methods (in Layer)
 // **DONE**: Method for initialization of weights - 'random' and also 'LHS' and 'LHS2' (in Layer)
 // **DONE**: Add more activation functions [MK] (in Layer)
 // **DONE**: Getter and setter for 'numInputs', 'numLayers' (in MLP)
 // **DONE**: Getter and setter for vector of 'numNeuronsInLayers' (in MLP)
-// TODO: Save 'weights' from previous iterations (for Adam optimizer)
+// TODO: Save 'weights' from previous iterations
 // *******************************
 
 // ********* 16. 6. 2025 *********
@@ -21,8 +20,20 @@
 // *******************************
 
 // ********* 24. 6. 2025 *********
-// TODO: Add bias at the end of inputs (better) vs. change the last input to bias (currently)
-
+// TODO: Add bias to inputs (vs. change the last input to bias (currently)) (in Layer)
+// TODO: Add 'activ_func' into constructor, etc. (in Layer)
+// TODO: Initialize 'activ_func' as some default function (e.g. ReLU) (in Layer)
+// TODO: Add 'nNeurons' and 'Inps' as private variables (in MLP)
+// TODO: Getter and setter for 'Inps' (in MLP)
+// TODO: Test size of 'nNeurons'[0] vs. size of 'Inps' (in MLP)
+// TODO: Add vector of activation functions for each neuron (in MLP)
+// TODO: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
+// TODO: Add vector of weights initialization for each neuron (in MLP)
+// TODO: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
+// TODO: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
+// TODO: Create 'runMLP' method which runs the MLP without initialization (in MLP)
+// TODO: Test that 'runMLP' produces the same results at all runs (in main)
+// TODO: Getter and setter for 'weights' (in MLP)
 // *******************************
 
 
@@ -129,10 +140,22 @@ int main() {
   //layer.initLayer(5, 3); 
 
   // Initialize the layer: 5 inputs (including bias!), 3 neurons, random weights between 0.0 and 1.0
+  layer.initLayer(5, 3, weight_init_type::RANDOM, 0.0, 1.0);
+  // Print the weights matrix
+  Eigen::MatrixXd printWeightsR = layer.getWeights();
+  std::cout << "Weights initialized to (RAND):\n" << printWeightsR << std::endl;
+
+/*
   layer.initLayer(5, 3, weight_init_type::LHS, 0.0, 1.0);
- // Print the weights matrix
-  Eigen::MatrixXd printWeights = layer.getWeights();
-  std::cout << "Weights initialized to:\n" << printWeights << std::endl;
+  // Print the weights matrix
+  Eigen::MatrixXd printWeightsL = layer.getWeights();
+  std::cout << "Weights initialized to (LHS):\n" << printWeightsL << std::endl;
+
+  layer.initLayer(5, 3, weight_init_type::LHS2, 0.0, 1.0);
+  // Print the weights matrix
+  Eigen::MatrixXd printWeightsL2 = layer.getWeights();
+  std::cout << "Weights initialized to (LHS2):\n" << printWeightsL2 << std::endl;
+*/
 
   // Example input
   Eigen::VectorXd actualInputs(5);

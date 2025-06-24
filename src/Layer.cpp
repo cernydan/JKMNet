@@ -259,7 +259,7 @@ Eigen::VectorXd Layer::calculateWeightedSum() {
 /**
  * Apply activation function to the weighted sum
  */
-Eigen::VectorXd Layer::applyActivationFunction(const Eigen::VectorXd& weightedSum, activ_func_type activFuncType) {
+Eigen::VectorXd Layer::setActivationFunction(const Eigen::VectorXd& weightedSum, activ_func_type activFuncType) {
     Eigen::VectorXd activatedOutput = weightedSum;  // Copy the weighted sum
 
     // Apply the activation function based on the activation function type
@@ -340,7 +340,7 @@ Eigen::VectorXd Layer::applyActivationFunction(const Eigen::VectorXd& weightedSu
  */
 Eigen::VectorXd Layer::calculateLayerOutput(activ_func_type activFuncType) {
     Eigen::VectorXd weightedSum = calculateWeightedSum();
-    output = applyActivationFunction(weightedSum, activFuncType);
+    output = setActivationFunction(weightedSum, activFuncType);
 
     return output;
 }
