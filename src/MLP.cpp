@@ -113,6 +113,42 @@ void MLP::printActivations() {
 }
 
 /**
+ *  Getter: Returns the weight initialization type for each layer
+ */
+std::vector<weight_init_type> MLP::getWInitType() {
+    return wInitTypes;
+}
+
+/**
+ *  Setter: Sets the weight initialization type
+ */
+void MLP::setWInitType(std::vector<weight_init_type>& wInits) {
+    if (wInits.size() != nNeurons.size()) {
+        throw std::invalid_argument(
+          "[MLP] wInitTypes length must equal number of layers (" +
+          std::to_string(nNeurons.size()) + ")");
+    }
+    wInitTypes = wInits;
+}
+
+/**
+ *  Print the weight initialization type
+ */
+void MLP::printWInitType() {
+    if (wInitTypes.empty()) {
+        std::cout << "No weight init types set.\n";
+        return;
+    }
+    std::cout << "Weight initialization per layer:\n";
+    for (size_t i = 0; i < wInitTypes.size(); ++i) {
+        std::cout << "  Layer " << i
+                  << " (" << nNeurons[i] << " neurons): "
+                  << Layer::wInitTypeName(wInitTypes[i]) 
+                  << "\n";
+    }
+}
+
+/**
  * Getter for the number of layers
  */
 size_t MLP::getNumLayers() {

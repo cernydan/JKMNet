@@ -1,20 +1,7 @@
-// ********* 10. 6. 2025 *********
+// ********* old *********
 // TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
 // TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
-// **DONE**: Change 'bias' to be a part of inputs
-// **DONE**(?): Getter and setter for 'weights' (in Layer)
-// **DONE**: Getter and setter for 'gradient' (calculation of model's error for backpropagation and optimization of weights) (in Layer)
-// **DONE**: Update weights based on the gradient (in Layer)
-// **DONE**: Split 'calculateActivation' into two methods (in Layer)
-// **DONE**: Method for initialization of weights - 'random' and also 'LHS' and 'LHS2' (in Layer)
-// **DONE**: Add more activation functions [MK] (in Layer)
-// **DONE**: Getter and setter for 'numInputs', 'numLayers' (in MLP)
-// **DONE**: Getter and setter for vector of 'numNeuronsInLayers' (in MLP)
 // TODO: Save 'weights' from previous iterations
-// *******************************
-
-// ********* 16. 6. 2025 *********
-// **DONE**: Detect any NaN or infinite values in acivation (in Layer)
 // TODO: Test large values of activations for NA's in f(a), e.g. 'a' in (-10 000, 10 000)
 // TODO: Add regularization - weights that give large activations should be penalized (so that the model is not overtrained)
 // *******************************
@@ -28,8 +15,8 @@
 // **DONE**: Test size of 'nNeurons'[0] vs. size of 'Inps' (in MLP)
 // **DONE**: Add vector of activation functions for each neuron (in MLP)
 // **DONE**: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
-// TODO: Add vector of weights initialization for each neuron (in MLP)
-// TODO: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
+// **DONE**: Add vector of weights initialization for each neuron (in MLP)
+// **DONE**: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
 // TODO: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
 // TODO: Create 'runMLP' method which runs the MLP without initialization (in MLP)
 // TODO: Test that 'runMLP' produces the same results at all runs (in main)
@@ -145,14 +132,25 @@ int main() {
   };
   mlp.setActivations(funcs);
 
-  // Print the updated architecture and activation functions
+  // Define weight initialization for each layer
+  std::vector<weight_init_type> wInits = {
+        weight_init_type::RANDOM,
+        weight_init_type::LHS,
+        //weight_init_type::LHS,
+        weight_init_type::LHS2
+  };
+  mlp.setWInitType(wInits);
+
+  // Print the updated architecture, activation functions and weight initialization types
   std::cout << "MyArchitecture: ";
   mlp.printArchitecture();
   mlp.printActivations();
+  mlp.printWInitType();
 
   // Create random input vector of given length 
   Eigen::VectorXd MyInps = Eigen::VectorXd::Random(8);
-  
+  // Eigen::VectorXd MyInps = Eigen::VectorXd::Random(10);
+
   // Call the setter to load inputs (bias will be appended automatically)
   mlp.setInps(MyInps);
 
@@ -164,17 +162,13 @@ int main() {
   std::cout << "Inps values:\n" << inpsWithBias.transpose() << std::endl;
 
   // Validate input size
-  // check with for example: Eigen::VectorXd MyInps = Eigen::VectorXd::Random(10);
   if (!mlp.validateInputSize()) {
           std::cerr << "Input vector size does not match network definition!\n";
           return 1;
   }
   std::cout << "Input size validated.\n";
 
-    
   
-
-
   //!! ------------------------------------------------------------
   //!! LAYER
   //!! ------------------------------------------------------------

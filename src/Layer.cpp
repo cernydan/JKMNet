@@ -89,6 +89,18 @@ std::string Layer::activationName(activ_func_type f) {
 }
 
 /**
+ * Mapping weight_init_type from enum to string
+ */
+std::string Layer::wInitTypeName(weight_init_type w) {
+    switch (w) {
+        case weight_init_type::RANDOM: return "RANDOM";
+        case weight_init_type::LHS: return "LHS";
+        case weight_init_type::LHS2: return "LHS2";
+    }
+    return "Unknown";
+}
+
+/**
  * Initialize the layer with the specified number of neurons and input size
  */
 void Layer::initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type initType, double minVal, double maxVal) {

@@ -26,6 +26,11 @@ class MLP {
         void setActivations(std::vector<activ_func_type>& funcs);  //!< Setter for the activation function
         void printActivations();  //!< Print the activation function
 
+         // Weight‐init types per layer 
+        std::vector<weight_init_type> getWInitType();  //!< Getter for the weight initialization type
+        void setWInitType(std::vector<weight_init_type>& wInits);  //!< Setter for the weight initialization type
+        void printWInitType();  //!< Print the weight initialization type
+
         //!< Number of layers
         size_t getNumLayers();  //!< Getter for the number of layers
         void setNumLayers(size_t layers);  //!< Setter for the number of layers
@@ -51,6 +56,7 @@ class MLP {
         size_t numLayers;  //!< Cache of nNeurons.size()
         Eigen::VectorXd Inps;  //!< The vector of inputs  
         std::vector<activ_func_type> activFuncs;  //!< Vector of activation functions for each layer 
+        std::vector<weight_init_type> wInitTypes;   //!< Vector of weights initialization for each layer
 
 };
 
