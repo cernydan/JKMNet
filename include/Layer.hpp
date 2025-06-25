@@ -54,9 +54,14 @@ public:
                                           //!< The move copy constructor
                                           //!< The move assignment operator
 
-    // void initLayer(unsigned numInputs, unsigned numNeurons);  //!< Initialize the layer with the specified number of neurons and input size
-    void initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type initType = weight_init_type::RANDOM, double minVal = -1.0, double maxVal = 1.0); //!< Initialize the layer with chosen weight initialization technique
-    void initWeights(unsigned numNeurons, unsigned numInputs, weight_init_type initType, double minVal, double maxVal);                                       //!< Initialize weights using specified technique
+    //!< Initialize a fully-connected layer 
+    void initLayer(unsigned numFeatures, 
+        unsigned numNeurons,
+        weight_init_type initType = weight_init_type::RANDOM, 
+        activ_func_type  activFunc = activ_func_type::RELU,
+        double minVal = 0.0,
+        double maxVal = 1.0);   
+    void initWeights(unsigned numNeurons, unsigned numInputs, weight_init_type initType, double minVal, double maxVal);   //!< Initialize weights using specified technique
 
     Eigen::VectorXd getInputs();  //!< Getter for inputs
     void setInputs(const Eigen::VectorXd &newInputs);  //!< Setter for inputs

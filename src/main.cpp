@@ -17,7 +17,7 @@
 // **DONE**: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
 // **DONE**: Add vector of weights initialization for each neuron (in MLP)
 // **DONE**: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
-// TODO: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
+// **DONE**: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
 // TODO: Create 'runMLP' method which runs the MLP without initialization (in MLP)
 // TODO: Test that 'runMLP' produces the same results at all runs (in main)
 // TODO: Getter and setter for 'weights' (in MLP)
@@ -120,7 +120,7 @@ int main() {
   std::cout << "------------" << std::endl;
 
   // Define new architecture
-  std::vector<unsigned> MyArchitecture = {8, 6, 1};
+  std::vector<unsigned> MyArchitecture = {8, 6, 2};
   mlp.setArchitecture(MyArchitecture);
 
   // Define activation functions for each layer
@@ -142,7 +142,7 @@ int main() {
   mlp.setWInitType(wInits);
 
   // Print the updated architecture, activation functions and weight initialization types
-  std::cout << "MyArchitecture: ";
+  std::cout << "Real Architecture: ";
   mlp.printArchitecture();
   mlp.printActivations();
   mlp.printWInitType();
@@ -157,16 +157,23 @@ int main() {
   // Retrieve the internal Inps (real inputs + 1 bias)
   const Eigen::VectorXd& inpsWithBias = mlp.getInps();
 
-  // Print
-  std::cout << "Inps size (with bias): " << inpsWithBias.size() << "\n";
-  std::cout << "Inps values:\n" << inpsWithBias.transpose() << std::endl;
-
   // Validate input size
   if (!mlp.validateInputSize()) {
-          std::cerr << "Input vector size does not match network definition!\n";
+          std::cerr << "[Error]: Input vector size does not match architecture!\n";
           return 1;
   }
-  std::cout << "Input size validated.\n";
+  std::cout << "[Ok]: Input size validated.\n";
+
+  // Print input size and values
+  std::cout << "Inps size (with bias): " << inpsWithBias.size() << "\n";
+  std::cout << "Inps values:\n " << inpsWithBias.transpose() << std::endl;
+
+  // Forward pass
+  Eigen::VectorXd MyOut = mlp.initMLP(MyInps);
+
+  // Print output size and values
+  std::cout << "Output size: " << MyOut.size() << "\n";
+  std::cout << "Output values:\n " << MyOut.transpose() << std::endl;
 
   
   //!! ------------------------------------------------------------
@@ -181,7 +188,7 @@ int main() {
   //layer.initLayer(5, 3); 
 
   // Initialize the layer: 5 inputs (including bias!), 3 neurons, random weights between 0.0 and 1.0
-  layer.initLayer(5, 3, weight_init_type::RANDOM, 0.0, 1.0);
+  layer.initLayer(5, 3, weight_init_type::RANDOM,  activ_func_type::RELU, 0.0, 1.0);
   // Print the weights matrix
   Eigen::MatrixXd printWeightsR = layer.getWeights();
   std::cout << "Weights initialized to (RAND):\n" << printWeightsR << std::endl;

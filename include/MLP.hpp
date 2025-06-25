@@ -49,6 +49,8 @@ class MLP {
 
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
+        Eigen::VectorXd initMLP(Eigen::VectorXd& input);  //!< Forward pass through all layers
+
     protected:
 
     private:
@@ -57,6 +59,7 @@ class MLP {
         Eigen::VectorXd Inps;  //!< The vector of inputs  
         std::vector<activ_func_type> activFuncs;  //!< Vector of activation functions for each layer 
         std::vector<weight_init_type> wInitTypes;   //!< Vector of weights initialization for each layer
+        std::vector<Layer> layers_;  //!< Private member of the class Layer to store each layer’s state
 
 };
 

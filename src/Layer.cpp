@@ -103,7 +103,15 @@ std::string Layer::wInitTypeName(weight_init_type w) {
 /**
  * Initialize the layer with the specified number of neurons and input size
  */
-void Layer::initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type initType, double minVal, double maxVal) {
+void Layer::initLayer(unsigned numInputs,
+                      unsigned numNeurons,
+                      weight_init_type initType,
+                      activ_func_type  activFunc,
+                      double           minVal,
+                      double           maxVal) 
+{
+
+    activ_func = activFunc;
 
     // Initialize weights
     //weights = Eigen::MatrixXd::Random(numNeurons, numInputs);

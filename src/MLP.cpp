@@ -264,3 +264,40 @@ bool MLP::validateInputSize() {
 
     return true;
 }
+
+
+Eigen::VectorXd MLP::initMLP(Eigen::VectorXd& input) {
+    if (nNeurons.empty() || activFuncs.size() != nNeurons.size() || wInitTypes.size() != nNeurons.size())
+        throw std::logic_error("MLP not fully configured (architecture/activ/weight init mismatch)");
+
+    layers_.clear();
+    layers_.reserve(nNeurons.size());
+
+    // Layer[0] from real inputs
+    layers_.emplace_back();
+    layers_[0].initLayer(
+        /*numInputs=*/ input.size(),
+        /*numNeurons=*/ nNeurons[0],
+        /*wInitType=*/ wInitTypes[0],
+        /*func=*/ activFuncs[0]
+    );
+    layers_[0].setInputs(input);
+    layers_[0].calculateLayerOutput(activFuncs[0]);
+    Eigen::VectorXd curr = layers_[0].getOutput();
+
+    // Remaining layers in a for loop
+    for (size_t i = 1; i < nNeurons.size(); ++i) {
+        layers_.emplace_back();
+        layers_[i].initLayer(
+            curr.size(),
+            nNeurons[i],
+            wInitTypes[i],
+            activFuncs[i]
+        );
+        layers_[i].setInputs(curr);
+        layers_[i].calculateLayerOutput(activFuncs[i]);
+        curr = layers_[i].getOutput();
+    }
+   
+    return curr;
+}
