@@ -66,6 +66,29 @@ Layer& Layer::operator=(const Layer& other){
 }
 
 /**
+ * Mapping activ_func_type from enum to string
+ */
+std::string Layer::activationName(activ_func_type f) {
+    switch (f) {
+      case activ_func_type::RELU: return "RELU";
+      case activ_func_type::SIGMOID: return "SIGMOID";
+      case activ_func_type::LINEAR: return "LINEAR";
+      case activ_func_type::TANH: return "TANH";
+      case activ_func_type::GAUSSIAN: return "GAUSSIAN";
+      case activ_func_type::IABS: return "IABS";
+      case activ_func_type::LOGLOG: return "LOGLOG";
+      case activ_func_type::CLOGLOG: return "CLOGLOG";
+      case activ_func_type::CLOGLOGM: return "CLOGLOGM";
+      case activ_func_type::ROOTSIG: return "ROOTSIG";
+      case activ_func_type::LOGSIG: return "LOGSIG";
+      case activ_func_type::SECH: return "SECH";
+      case activ_func_type::WAVE: return "WAVE";
+
+    }
+    return "Unknown";
+}
+
+/**
  * Initialize the layer with the specified number of neurons and input size
  */
 void Layer::initLayer(unsigned numInputs, unsigned numNeurons, weight_init_type initType, double minVal, double maxVal) {

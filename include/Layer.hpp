@@ -74,6 +74,8 @@ public:
 
     Eigen::VectorXd getOutput(); //!< Getter for output
 
+    static std::string activationName(activ_func_type f);  //!< Mapping activ_func_type from enum to string
+
 protected:
 private:
     Eigen::MatrixXd weights;  //!< The weight matrix for the layer

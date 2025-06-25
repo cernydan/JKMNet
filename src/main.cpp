@@ -26,8 +26,8 @@
 // **DONE**: Add 'nNeurons' and 'Inps' as private variables (in MLP)
 // **DONE**: Getter and setter for 'Inps' (in MLP)
 // **DONE**: Test size of 'nNeurons'[0] vs. size of 'Inps' (in MLP)
-// TODO: Add vector of activation functions for each neuron (in MLP)
-// TODO: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
+// **DONE**: Add vector of activation functions for each neuron (in MLP)
+// **DONE**: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
 // TODO: Add vector of weights initialization for each neuron (in MLP)
 // TODO: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
 // TODO: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
@@ -135,9 +135,20 @@ int main() {
   // Define new architecture
   std::vector<unsigned> MyArchitecture = {8, 6, 1};
   mlp.setArchitecture(MyArchitecture);
+
+  // Define activation functions for each layer
+  std::vector<activ_func_type> funcs = {
+        activ_func_type::RELU,    // input layer
+        activ_func_type::TANH,    // 1st hidden layer
+        // activ_func_type::SIGMOID,  // 2nd hidden layer
+        activ_func_type::SIGMOID  // output layer
+  };
+  mlp.setActivations(funcs);
+
+  // Print the updated architecture and activation functions
   std::cout << "MyArchitecture: ";
-  // Print the updated architecture
   mlp.printArchitecture();
+  mlp.printActivations();
 
   // Create random input vector of given length 
   Eigen::VectorXd MyInps = Eigen::VectorXd::Random(8);
@@ -153,12 +164,16 @@ int main() {
   std::cout << "Inps values:\n" << inpsWithBias.transpose() << std::endl;
 
   // Validate input size
-  // check with: Eigen::VectorXd MyInps = Eigen::VectorXd::Random(10);
+  // check with for example: Eigen::VectorXd MyInps = Eigen::VectorXd::Random(10);
   if (!mlp.validateInputSize()) {
           std::cerr << "Input vector size does not match network definition!\n";
           return 1;
   }
   std::cout << "Input size validated.\n";
+
+    
+  
+
 
   //!! ------------------------------------------------------------
   //!! LAYER

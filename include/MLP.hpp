@@ -4,6 +4,8 @@
 #include <vector>
 #include "eigen-3.4/Eigen/Dense"
 
+#include "Layer.hpp" 
+
 using namespace std;
 
 class MLP {
@@ -18,6 +20,11 @@ class MLP {
         std::vector<unsigned> getArchitecture();  //!< Getter for the architecture
         void setArchitecture(std::vector<unsigned>& architecture);  //!< Setter for the architecture
         void printArchitecture();  //!< Print the architecture
+
+        // Activations for each layer
+        std::vector<activ_func_type> getActivations();  //!< Getter for the activation function
+        void setActivations(std::vector<activ_func_type>& funcs);  //!< Setter for the activation function
+        void printActivations();  //!< Print the activation function
 
         //!< Number of layers
         size_t getNumLayers();  //!< Getter for the number of layers
@@ -42,7 +49,8 @@ class MLP {
     private:
         std::vector<unsigned> nNeurons;  //!< The vector of number of neurons per layer
         size_t numLayers;  //!< Cache of nNeurons.size()
-        Eigen::VectorXd Inps;  //!< The vector of inputs   
+        Eigen::VectorXd Inps;  //!< The vector of inputs  
+        std::vector<activ_func_type> activFuncs;  //!< Vector of activation functions for each layer 
 
 };
 

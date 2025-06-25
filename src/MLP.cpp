@@ -53,6 +53,11 @@ std::vector<unsigned> MLP::getArchitecture() {
  */
 void MLP::setArchitecture(std::vector<unsigned>& architecture) {
     nNeurons = architecture;
+
+    // if user hasn’t supplied activations yet, give them a default (e.g. ReLU)
+    if (activFuncs.size() != architecture.size()) {
+        activFuncs.assign(architecture.size(), activ_func_type::RELU);
+    }
 }
 
 /**
@@ -71,6 +76,40 @@ void MLP::printArchitecture() {
     }
 
     std::cout << std::endl;
+}
+
+/**
+ *  Getter: Returns the current activation functions for each layer
+ */
+std::vector<activ_func_type> MLP::getActivations() {
+    return activFuncs;
+}
+
+/**
+ *  Setter: Sets the activation functions
+ */
+void MLP::setActivations(std::vector<activ_func_type>& funcs) {
+    if (funcs.size() != nNeurons.size()) {
+        throw std::invalid_argument("[MLP] Activation vector length must match number of layers");
+    }
+    activFuncs = funcs;
+}
+
+/**
+ *  Print the activation functions
+ */
+void MLP::printActivations() {
+    if (activFuncs.empty()) {
+        std::cout << "No activation functions set.\n";
+        return;
+    }
+    std::cout << "Activations per layer:\n";
+    for (size_t i = 0; i < activFuncs.size(); ++i) {
+        std::cout << "  Layer " << i
+                  << " (" << nNeurons[i] << " neurons): "
+                  << Layer::activationName(activFuncs[i]) 
+                  << "\n";
+    }
 }
 
 /**
