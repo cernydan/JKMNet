@@ -265,7 +265,9 @@ bool MLP::validateInputSize() {
     return true;
 }
 
-
+/**
+ * Forward pass through all layers
+ */
 Eigen::VectorXd MLP::initMLP(Eigen::VectorXd& input) {
     if (nNeurons.empty() || activFuncs.size() != nNeurons.size() || wInitTypes.size() != nNeurons.size())
         throw std::logic_error("MLP not fully configured (architecture/activ/weight init mismatch)");
