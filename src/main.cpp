@@ -11,7 +11,7 @@
 // **DONE**: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
 // **DONE**: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
 // **DONE**: Create 'runMLP' method which runs the MLP without initialization (in MLP)
-// TODO: Test that 'runMLP' produces the same results at all runs (in main)
+// **DONE**: Test that 'runMLP' produces the same results at all runs (in main)
 // TODO: Getter and setter for 'weights' (in MLP)
 // *******************************
 
@@ -185,6 +185,13 @@ int main() {
   std::cout << "Run output size: " << MyRunOut.size() << "\n";
   std::cout << "Init output values:\n " << MyInitOut.transpose() << std::endl;
   std::cout << "Run output values:\n " << MyRunOut.transpose() << std::endl;
+
+  // Check if 'runMLP' produces the same results over several times
+  if (mlp.testRepeatable(MyInps, 20, 1e-8)) {  // run 20x
+      std::cout << "[Ok]: runMLP is repeatable \n";
+  } else {
+      std::cerr << "[Error]: runMLP produced different outputs\n";
+  }
 
   //!! ------------------------------------------------------------
   //!! LAYER

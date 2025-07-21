@@ -57,6 +57,7 @@ class MLP {
         Eigen::VectorXd initMLP(const Eigen::VectorXd& input);  //!< Forward pass through all layers     
         Eigen::VectorXd runMLP(const Eigen::VectorXd& input);  //!< Forward pass reusing existing weights
         bool compareInitAndRun(const Eigen::VectorXd& input, double tol = 1e-6) const;  //!< Compare if 'initMLP' and 'runMLP' produce the same output
+        bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8) const; //!< Repeatability check for 'runMLP'
 
     protected:
 

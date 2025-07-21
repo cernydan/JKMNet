@@ -334,3 +334,21 @@ bool MLP::compareInitAndRun(const Eigen::VectorXd& input, double tol) const {
 
     return outInit.isApprox(outRun, tol);
 }
+
+/**
+ * Test that 'runMLP' produces the same results over times
+ */
+bool MLP::testRepeatable(const Eigen::VectorXd& input, int repeats, double tol) const {
+    // Initialize once to get the baseline output
+    MLP tmp = *this;
+    Eigen::VectorXd baseline = tmp.initMLP(input);
+
+    // Repeat run several times and compare
+    for (int i = 0; i < repeats; ++i) {
+        Eigen::VectorXd out = tmp.runMLP(input);
+        if (!out.isApprox(baseline, tol)) {
+            return false;
+        }
+    }
+    return true;
+}
