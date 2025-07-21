@@ -12,7 +12,7 @@
 // **DONE**: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
 // **DONE**: Create 'runMLP' method which runs the MLP without initialization (in MLP)
 // **DONE**: Test that 'runMLP' produces the same results at all runs (in main)
-// TODO: Getter and setter for 'weights' (in MLP)
+// **DONE**: Getter and setter for 'weights' (in MLP)
 // *******************************
 
 // ********* old *********
@@ -192,6 +192,32 @@ int main() {
   } else {
       std::cerr << "[Error]: runMLP produced different outputs\n";
   }
+
+  std::cout << "------------" << std::endl;
+  std::cout << "Observing weights " << std::endl;
+  std::cout << "------------" << std::endl;
+
+  std::cout << "Architecture: ";
+  mlp.printArchitecture();
+
+  // Get and print each layer’s weights
+  size_t L = MyArchitecture.size();
+  for (size_t i = 0; i < L; ++i) {
+      Eigen::MatrixXd W = mlp.getWeights(i);
+      std::cout << "Layer " << i 
+                << " weight matrix (" << W.rows() << "×" << W.cols() << "):\n"  
+                // W.rows(): number of neurons in the current layer
+                // W.cols(): number of inputs coming into that layer (i.e. the size of the previous layer’s output) plus one extra column for the bias weight
+                << W << "\n\n";
+  }
+
+  // // Modify the first layer’s weights (e.g., scale them) and verify the change
+  // Eigen::MatrixXd W0 = mlp.getWeights(0);
+  // W0 *= 0.5;  // scale all weights by 0.5
+  // mlp.setWeights(0, W0);  // write them back
+  // Eigen::MatrixXd W0b = mlp.getWeights(0);
+  // std::cout << "Layer 0 weights after scaling:\n" << W0b << "\n";
+
 
   //!! ------------------------------------------------------------
   //!! LAYER

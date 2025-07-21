@@ -234,6 +234,24 @@ void MLP::setInps(Eigen::VectorXd& inputs) {
 }
 
 /**
+ * Getter for the weights
+ */
+Eigen::MatrixXd MLP::getWeights(size_t idx) {
+    if (idx >= layers_.size())
+      throw std::out_of_range("Layer index out of range in getWeights");
+    return layers_[idx].getWeights();
+}
+
+/**
+ * Setter for the weights
+ */
+void MLP::setWeights(size_t idx, const Eigen::MatrixXd& W) {
+    if (idx >= layers_.size())
+      throw std::out_of_range("Layer index out of range in setWeights");
+    layers_[idx].setWeights(W);
+}
+
+/**
  * Validate the size of the inputs compared to nNeurons[0]
  */
 bool MLP::validateInputSize() {

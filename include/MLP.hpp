@@ -52,6 +52,10 @@ class MLP {
         Eigen::VectorXd& getInps();  //!< Getter for the inputs
         void setInps(Eigen::VectorXd& inputs);   //!< Setter for the inputs
 
+        // Getter and Setter for weigths
+        Eigen::MatrixXd getWeights(size_t layerIndex);  //!< Getter for weights
+        void setWeights(size_t layerIndex, const Eigen::MatrixXd& W);  //!< Setter for weights
+
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
         Eigen::VectorXd initMLP(const Eigen::VectorXd& input);  //!< Forward pass through all layers     
