@@ -11,10 +11,15 @@ using namespace std;
 class MLP {
 
     public:
-        MLP();  //!< The constructor
-        ~MLP();  //!< The destructor     
-        MLP(const MLP& other);  //!< The copy constructor
-        MLP& operator=(const MLP& other);  //!< The assignment operator
+        //MLP();  //!< The constructor
+        //~MLP();  //!< The destructor     
+        //MLP(const MLP& other);  //!< The copy constructor
+        //MLP& operator=(const MLP& other);  //!< The assignment operator
+
+        MLP() = default;  //!< The constructor
+        ~MLP() = default;  //!< The destructor 
+        MLP(const MLP&) = default;  //!< The copy constructor
+        MLP& operator=(const MLP&) = default;   //!< The assignment operator
 
         //!< Architecture (neurons per layer)
         std::vector<unsigned> getArchitecture();  //!< Getter for the architecture
@@ -49,7 +54,9 @@ class MLP {
 
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
-        Eigen::VectorXd initMLP(Eigen::VectorXd& input);  //!< Forward pass through all layers
+        Eigen::VectorXd initMLP(const Eigen::VectorXd& input);  //!< Forward pass through all layers     
+        Eigen::VectorXd runMLP(const Eigen::VectorXd& input);  //!< Forward pass reusing existing weights
+        bool compareInitAndRun(const Eigen::VectorXd& input, double tol = 1e-6) const;  //!< Compare if 'initMLP' and 'runMLP' produce the same output
 
     protected:
 

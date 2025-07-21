@@ -3,43 +3,41 @@
 
 using namespace std;
 
-/**
- * The constructor
- */
-MLP::MLP(): nNeurons(){
-    numLayers = 0;
-}
+// /**
+//  * The constructor
+//  */
+// MLP::MLP(): nNeurons(){
+//     numLayers = 0;
+// }
 
-/**
- * The destructor
- */
-MLP::~MLP(){
+// /**
+//  * The destructor
+//  */
+// MLP::~MLP(){
 
-}
+// }
 
+// /**
+//  * The copy constructor
+//  */
+// MLP::MLP(const MLP& other): nNeurons(){
+//     nNeurons = other.nNeurons;
+//     numLayers = other.numLayers;
 
-/**
- * The copy constructor
- */
-MLP::MLP(const MLP& other): nNeurons(){
-    nNeurons = other.nNeurons;
-    numLayers = other.numLayers;
+// }
 
-}
+// /**
+//  * The assignment operator
+//  */
+// MLP& MLP::operator=(const MLP& other){
+//     if (this == &other) return *this;
+//   else {
+//     nNeurons = other.nNeurons;
+//     numLayers = other.numLayers;
+//   }
+//   return *this;
 
-
-/**
- * The assignment operator
- */
-MLP& MLP::operator=(const MLP& other){
-    if (this == &other) return *this;
-  else {
-    nNeurons = other.nNeurons;
-    numLayers = other.numLayers;
-  }
-  return *this;
-
-}
+// }
 
 /**
  *  Getter: Returns the current architecture (vector of neurons in each layer)
@@ -268,7 +266,7 @@ bool MLP::validateInputSize() {
 /**
  * Forward pass through all layers
  */
-Eigen::VectorXd MLP::initMLP(Eigen::VectorXd& input) {
+Eigen::VectorXd MLP::initMLP(const Eigen::VectorXd& input) {
     if (nNeurons.empty() || activFuncs.size() != nNeurons.size() || wInitTypes.size() != nNeurons.size())
         throw std::logic_error("MLP not fully configured (architecture/activ/weight init mismatch)");
 
@@ -285,21 +283,54 @@ Eigen::VectorXd MLP::initMLP(Eigen::VectorXd& input) {
     );
     layers_[0].setInputs(input);
     layers_[0].calculateLayerOutput(activFuncs[0]);
-    Eigen::VectorXd curr = layers_[0].getOutput();
+    Eigen::VectorXd currentOutput = layers_[0].getOutput();
 
     // Remaining layers in a for loop
     for (size_t i = 1; i < nNeurons.size(); ++i) {
         layers_.emplace_back();
         layers_[i].initLayer(
-            curr.size(),
-            nNeurons[i],
-            wInitTypes[i],
-            activFuncs[i]
+            /*numInputs=*/ currentOutput.size(),
+            /*numNeurons=*/ nNeurons[i],
+            /*wInitType=*/ wInitTypes[i],
+            /*func=*/ activFuncs[i]
         );
-        layers_[i].setInputs(curr);
+        layers_[i].setInputs(currentOutput);
         layers_[i].calculateLayerOutput(activFuncs[i]);
-        curr = layers_[i].getOutput();
+        currentOutput = layers_[i].getOutput();
     }
    
-    return curr;
+    return currentOutput;
+}
+
+/**
+ * Forward pass reusing existing weights
+ */
+Eigen::VectorXd MLP::runMLP(const Eigen::VectorXd& input) {
+    if (layers_.empty())
+        throw std::logic_error("runMLP called before initMLP");
+
+    // First layer
+    layers_[0].setInputs(input);
+    layers_[0].calculateLayerOutput(activFuncs[0]);
+    Eigen::VectorXd currentOutput = layers_[0].getOutput();
+
+    // Remaining layers
+    for (size_t i = 1; i < layers_.size(); ++i) {
+        layers_[i].setInputs(currentOutput);
+        layers_[i].calculateLayerOutput(activFuncs[i]);
+        currentOutput = layers_[i].getOutput();
+    }
+    return currentOutput;
+}
+
+/**
+ * Compare if 'initMLP' and 'runMLP' produce the same output
+ */
+bool MLP::compareInitAndRun(const Eigen::VectorXd& input, double tol) const {
+    // Make a local copy of *this* so we can init on the copy
+    MLP tmp = *this;
+    Eigen::VectorXd outInit = tmp.initMLP(input);
+    Eigen::VectorXd outRun = tmp.runMLP(input);
+
+    return outInit.isApprox(outRun, tol);
 }

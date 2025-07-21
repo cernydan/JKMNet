@@ -1,11 +1,3 @@
-// ********* old *********
-// TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
-// TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
-// TODO: Save 'weights' from previous iterations
-// TODO: Test large values of activations for NA's in f(a), e.g. 'a' in (-10 000, 10 000)
-// TODO: Add regularization - weights that give large activations should be penalized (so that the model is not overtrained)
-// *******************************
-
 // ********* 24. 6. 2025 *********
 // **DONE**: Add bias to inputs (vs. change the last input to bias (currently)) (in Layer)
 // **DONE**: Add 'activ_func' into constructor, etc. (in Layer)
@@ -18,12 +10,20 @@
 // **DONE**: Add vector of weights initialization for each neuron (in MLP)
 // **DONE**: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
 // **DONE**: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
-// TODO: Create 'runMLP' method which runs the MLP without initialization (in MLP)
+// **DONE**: Create 'runMLP' method which runs the MLP without initialization (in MLP)
 // TODO: Test that 'runMLP' produces the same results at all runs (in main)
 // TODO: Getter and setter for 'weights' (in MLP)
 // *******************************
 
+// ********* old *********
+// TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
+// TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
+// TODO: Save 'weights' from previous iterations
+// TODO: Test large values of activations for NA's in f(a), e.g. 'a' in (-10 000, 10 000)
+// TODO: Add regularization - weights that give large activations should be penalized (so that the model is not overtrained)
+// *******************************
 
+#include <ctime>
 #include "JKMNet.hpp"
 #include "MLP.hpp"
 #include "Layer.hpp"
@@ -148,6 +148,7 @@ int main() {
   mlp.printWInitType();
 
   // Create random input vector of given length 
+  std::srand(static_cast<unsigned>(std::time(nullptr)));  // seed using the current time; comment if debugging
   Eigen::VectorXd MyInps = Eigen::VectorXd::Random(8);
   // Eigen::VectorXd MyInps = Eigen::VectorXd::Random(10);
 
@@ -168,14 +169,23 @@ int main() {
   std::cout << "Inps size (with bias): " << inpsWithBias.size() << "\n";
   std::cout << "Inps values:\n " << inpsWithBias.transpose() << std::endl;
 
-  // Forward pass
-  Eigen::VectorXd MyOut = mlp.initMLP(MyInps);
+  // Forward pass - initialize and run
+  Eigen::VectorXd MyInitOut = mlp.initMLP(MyInps);
+  Eigen::VectorXd MyRunOut = mlp.runMLP(MyInps);
+  
+  // Compare 'initMLP' and 'runMLP' outputs
+  if (!mlp.compareInitAndRun(MyInps)) {
+    std::cerr << "[Error]: initMLP vs runMLP outputs disagree \n";
+  } else {
+    std::cout << "[Ok]: initMLP and runMLP outputs match \n";
+  }
 
   // Print output size and values
-  std::cout << "Output size: " << MyOut.size() << "\n";
-  std::cout << "Output values:\n " << MyOut.transpose() << std::endl;
+  std::cout << "Init output size: " << MyInitOut.size() << "\n";
+  std::cout << "Run output size: " << MyRunOut.size() << "\n";
+  std::cout << "Init output values:\n " << MyInitOut.transpose() << std::endl;
+  std::cout << "Run output values:\n " << MyRunOut.transpose() << std::endl;
 
-  
   //!! ------------------------------------------------------------
   //!! LAYER
   //!! ------------------------------------------------------------

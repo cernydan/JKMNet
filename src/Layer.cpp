@@ -164,6 +164,7 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
         case weight_init_type::LHS: {
             // one shared random number generator
             static std::mt19937 gen{std::random_device{}()};
+            // static std::mt19937 gen{ 42 };  // always the same seed for debugging
 
             // use size_t for all sizes and indices
             const std::size_t rows = static_cast<std::size_t>(numNeurons);
