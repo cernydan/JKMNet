@@ -384,6 +384,88 @@ Eigen::VectorXd Layer::setActivationFunction(const Eigen::VectorXd& weightedSum,
 }
 
 /**
+ * Apply derivative of activation function to the weighted sum
+ */
+Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, activ_func_type activFuncType) {
+    Eigen::VectorXd derivatedOutput = weightedSum;  // Copy the weighted sum
+
+    // Apply the derivative based on the activation function type
+    switch (activFuncType) {
+        case activ_func_type::RELU:  // f'(x) = 0 for x <= 0 ; f'(x) = 1 for x > 0
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return x > 0.0 ? 1.0 : 0.0; });
+            break;
+        
+        case activ_func_type::SIGMOID:  // f'(x) = sigmoid(x) * (1 - sigmoid(x))
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return (1.0 / (1.0 + std::exp(-x))) * (1.0 - (1.0 / (1.0 + std::exp(-x)))); });
+            break;
+
+        case activ_func_type::LINEAR:  // f'(x) = 1
+            derivatedOutput.setOnes(); 
+            break;
+
+        case activ_func_type::TANH:  // f'(x) = 1 - tanh(x)^2
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return 1.0 - ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0) * ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0); });
+            break;
+        
+        case activ_func_type::GAUSSIAN:  // f'(x) = -2x * exp(-x^2)
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return -2.0 * x * std::exp(-x * x); });
+            break;
+
+        case activ_func_type::IABS:  // f'(x) = 1 / (1 + |x|)^2  ...not sure
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return 1.0 / ((1.0 + std::abs(x)) * (1.0 + std::abs(x))); });
+            break;  
+
+        case activ_func_type::LOGLOG:  // f'(x) = exp(-exp(-x) - x)
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(-x) - x); });
+            break; 
+        
+        case activ_func_type::CLOGLOG:  // f'(x) = exp(-exp(x) + x)
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(x) + x); });
+            break;
+
+        case activ_func_type::CLOGLOGM:  // f'(x) = 7 * exp(x - 0.7 * exp(x)) / 5.0    (for f(x) = 1 - 2 * exp(-0.7 * exp(x)))
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return 7.0 * std::exp(x - 0.7 * std::exp(x)) / 5.0; });
+            break;
+
+        case activ_func_type::ROOTSIG:  // f'(x) for f(x) = x / (1 + sqrt(1.0 + exp(-x * x)))
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return (1.0 + std::sqrt(1.0 + std::exp(-x * x)) - (x * x * std::exp(-x * x)) / std::sqrt(1.0 + std::exp(-x * x))) / 
+                ((1.0 + std::sqrt(1.0 + std::exp(-x * x))) * (1.0 + std::sqrt(1.0 + std::exp(-x * x)))); });
+            break;
+
+        case activ_func_type::LOGSIG:  // f'(x) = 2 * sigmoid(x)^2 * (1 - sigmoid(x))
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return 2.0 * (1.0 / (1.0 + std::exp(-x))) * (1.0 / (1.0 + std::exp(-x))) * (1.0-(1.0 / (1.0 + std::exp(-x)))); });
+            break;
+
+        case activ_func_type::SECH:  // f'(x) = -sech(x) * tanh(h)
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return - (2.0 / (std::exp(x) + std::exp(-x))) * ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0); });
+            break;
+
+        case activ_func_type::WAVE:  // f'(x) = 2x * (x^2 - 2) * exp(-x^2)
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+            { return 2.0 * x * (x * x - 2.0) * exp(-x * x); });
+            break;
+
+        default:
+            std::cerr << "[Error]: Unknown activation function type!" << std::endl;
+            break;
+    }
+
+    // Detect any NaN or infinite
+    if (!derivatedOutput.array().isFinite().all()) {
+        std::cerr << "[Warning] Non-finite activations detected!\n";
+    }
+
+    return derivatedOutput;
+}
+
+/**
  * Calculate complete layer output (weighted sum + activation function)
  */
 Eigen::VectorXd Layer::calculateLayerOutput(activ_func_type activFuncType) {
@@ -393,10 +475,10 @@ Eigen::VectorXd Layer::calculateLayerOutput(activ_func_type activFuncType) {
     return output;
 }
 
-
 /**
  * Getter for the output vector
  */
 Eigen::VectorXd Layer::getOutput() {
     return output; 
 }
+
