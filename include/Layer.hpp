@@ -75,6 +75,7 @@ public:
 
     Eigen::VectorXd calculateWeightedSum();  //!< Calculate the weighted sum (linear combination) - calculate activations
     Eigen::VectorXd setActivationFunction(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply activation function to weighted sum
+    Eigen::VectorXd setActivFunDeriv(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply derivative of activation function to weighted sum
     Eigen::VectorXd calculateLayerOutput(activ_func_type activFuncType);                                        //!< Calculate complete layer output
 
     Eigen::VectorXd getOutput(); //!< Getter for output
