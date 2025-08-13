@@ -413,12 +413,12 @@ Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, acti
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return -2.0 * x * std::exp(-x * x); });
             break;
 
-        case activ_func_type::IABS:  // f'(x) = 1 / (1 + |x|)^2  ...not sure
+        case activ_func_type::IABS:  // f'(x) = 1 / (1 + |x|)^2  ...not sure // MJ: correct
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
             { return 1.0 / ((1.0 + std::abs(x)) * (1.0 + std::abs(x))); });
             break;  
 
-        case activ_func_type::LOGLOG:  // f'(x) = exp(-exp(-x) - x)
+        case activ_func_type::LOGLOG:  // f'(x) = exp(-exp(-x) - x)  // MJ: f'(x) = exp(-exp(-x)) * exp(-x)
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(-x) - x); });
             break; 
         
@@ -426,12 +426,14 @@ Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, acti
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(x) + x); });
             break;
 
-        case activ_func_type::CLOGLOGM:  // f'(x) = 7 * exp(x - 0.7 * exp(x)) / 5.0    (for f(x) = 1 - 2 * exp(-0.7 * exp(x)))
+        case activ_func_type::CLOGLOGM:  // f'(x) = 7 * exp(x - 0.7 * exp(x)) / 5.0    (for f(x) = 1 - 2 * exp(-0.7 * exp(x)))  
+            // MJ: f'(x) = - 1 / (exp(x) - 1) for x > 0
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
             { return 7.0 * std::exp(x - 0.7 * std::exp(x)) / 5.0; });
             break;
 
-        case activ_func_type::ROOTSIG:  // f'(x) for f(x) = x / (1 + sqrt(1.0 + exp(-x * x)))
+        case activ_func_type::ROOTSIG:  // f'(x) for f(x) = x / (1 + sqrt(1.0 + exp(-x * x)))  
+            // MJ: ( 1 + 2 * sqrt(1 + x^2) - (1 + x^2)^(3/2) ) / ( (1 + x^2)^(3/2) * (1 + sqrt(1 + x^2))^2 )
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
             { return (1.0 + std::sqrt(1.0 + std::exp(-x * x)) - (x * x * std::exp(-x * x)) / std::sqrt(1.0 + std::exp(-x * x))) / 
                 ((1.0 + std::sqrt(1.0 + std::exp(-x * x))) * (1.0 + std::sqrt(1.0 + std::exp(-x * x)))); });
