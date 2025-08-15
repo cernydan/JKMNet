@@ -315,5 +315,34 @@ int main() {
   Eigen::VectorXd output = layer.getOutput();
   std::cout << "Layer Outputs: " << output.transpose() << std::endl;
 
+  std::cout << "------------------" << std::endl;
+  std::cout << "--  Test 13. 8. --" << std::endl;
+  std::cout << "------------------" << std::endl;
+
+  MLP mlpbp;
+    // Set a new architecture
+  std::vector<unsigned> arch = {5,2};
+  mlpbp.setArchitecture(arch);
+  std::cout << "Architecture 1: ";
+  // Print the updated architecture
+  mlpbp.printArchitecture();
+  std::vector<weight_init_type> weiInits = {
+        weight_init_type::RANDOM,weight_init_type::RANDOM
+  };
+  mlpbp.setWInitType(weiInits);
+  mlpbp.printActivations();
+  mlpbp.printWInitType();
+  
+  Eigen::VectorXd initvec(3);
+  mlpbp.initMLP(initvec);
+
+  Eigen::VectorXd inputbp(10);
+  inputbp<<0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0;
+
+  mlpbp.onlineAdam(100,0.01,inputbp,3,2);
+  Eigen::VectorXd testvec(3);
+  testvec<<0.4,0.5,0.6;
+  std::cout<<mlpbp.runMLP(testvec);
+
   return 0;
 }

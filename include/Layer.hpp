@@ -67,18 +67,24 @@ public:
     void setInputs(const Eigen::VectorXd &newInputs);  //!< Setter for inputs
 
     Eigen::MatrixXd getGradient();  //!< Getter for gradient
-    void setGradient(const Eigen::MatrixXd& grad);  //!< Getter for gradient 
+    void setGradient(const Eigen::MatrixXd& grad);  //!< Getter for gradient
+    void calculateGradient(); //!< Calculate gradient
 
     Eigen::MatrixXd getWeights();  //!< Getter for weights
     void setWeights(const Eigen::MatrixXd &newWeights);  //!< Setter for weights
     void updateWeights(double learningRate);  //!< Apply a gradient calculation: W = W – η·(∂E/∂W)
+    void updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi); //!<  Apply a gradient calculation using ADAM algorithm
 
     Eigen::VectorXd calculateWeightedSum();  //!< Calculate the weighted sum (linear combination) - calculate activations
     Eigen::VectorXd setActivationFunction(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply activation function to weighted sum
     Eigen::VectorXd setActivFunDeriv(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply derivative of activation function to weighted sum
     Eigen::VectorXd calculateLayerOutput(activ_func_type activFuncType);                                        //!< Calculate complete layer output
+    void calculateOutput(activ_func_type activFuncType);    //!< Calculate layer output
+    void calculateDeltas(const Eigen::MatrixXd &nextWeights, const Eigen::VectorXd &nextDeltas, activ_func_type activFuncType);  //!< Calculate layer output and deltas for BP
 
     Eigen::VectorXd getOutput(); //!< Getter for output
+    Eigen::VectorXd getDeltas(); //!< Getter for deltas
+    void setDeltas(const Eigen::VectorXd &newDeltas); //!< Setter for deltas
 
     static std::string activationName(activ_func_type f);  //!< Mapping activ_func_type from enum to string
     static std::string wInitTypeName(weight_init_type w);  //!< Mapping weight_init_type from enum to string
@@ -88,12 +94,16 @@ private:
     Eigen::MatrixXd weights;  //!< The weight matrix for the layer
     Eigen::VectorXd inputs;  //!< The input vector to the layer
     Eigen::VectorXd output;  //!< The output vector of the layer
-    // Eigen::VectorXd activations;  //!< The activation vector of the layer
+    Eigen::VectorXd activations;  //!< The activation vector of the layer
     // Eigen::VectorXd bias;  //!< The bias vector
+    Eigen::VectorXd deltas; //!< The deltas vector of the layer
+
 
     activ_func_type activ_func = activ_func_type::RELU;  //!< The type of activation function, where default is RELU
 
     Eigen::MatrixXd weightGrad;  //!< The backpropagation gradient matrix for the layer (∂E/∂W)
+    Eigen::MatrixXd MtForAdam;  //!< Mt parameter for every weight in ADAM algorithm
+    Eigen::MatrixXd VtForAdam;  //!< Vt parameter for every weight in ADAM algorithm
 };
 
 #endif // LAYER_HPP

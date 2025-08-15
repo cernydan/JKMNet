@@ -28,6 +28,9 @@ obj/Layer.o: src/Layer.cpp
 $(TARGET): $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(CPPFLAGS) $(LDFLAGS)
 
+run: $(TARGET)
+	./$(TARGET)
+
 clean:
 	rm -r -f -v obj/*
 	rm -f -v $(TARGET)

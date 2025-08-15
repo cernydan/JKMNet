@@ -56,12 +56,17 @@ class MLP {
         Eigen::MatrixXd getWeights(size_t layerIndex);  //!< Getter for weights
         void setWeights(size_t layerIndex, const Eigen::MatrixXd& W);  //!< Setter for weights
 
+        Eigen::VectorXd& getOutput();   //!< Getter for output
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
         Eigen::VectorXd initMLP(const Eigen::VectorXd& input);  //!< Forward pass through all layers     
         Eigen::VectorXd runMLP(const Eigen::VectorXd& input);  //!< Forward pass reusing existing weights
         bool compareInitAndRun(const Eigen::VectorXd& input, double tol = 1e-6) const;  //!< Compare if 'initMLP' and 'runMLP' produce the same output
         bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8) const; //!< Repeatability check for 'runMLP'
+        void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate); //!< Forward pass and update weights with backpropagation (one input)
+
+        void onlineBP(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow);
+        void onlineAdam(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow);
 
     protected:
 
@@ -72,6 +77,7 @@ class MLP {
         std::vector<activ_func_type> activFuncs;  //!< Vector of activation functions for each layer 
         std::vector<weight_init_type> wInitTypes;   //!< Vector of weights initialization for each layer
         std::vector<Layer> layers_;  //!< Private member of the class Layer to store each layer’s state
+        Eigen::VectorXd output;  //!< The output vector of mlp
 
 };
 
