@@ -127,16 +127,19 @@ void Layer::initLayer(unsigned numInputs,
     //bias.setOnes();  // Set all to one
 
     // Initialize activations
-    //activations = Eigen::VectorXd(numNeurons);
-    //activations.setZero();  // Set all to zero
+    activations = Eigen::VectorXd(numNeurons);
+    activations.setZero();  // Set all to zero
 
     // Initialize output 
     output = Eigen::VectorXd(numNeurons);
     output.setZero();  // Set all to zero
 
     // Initialize BP gradient
-    weightGrad.setZero(numNeurons, numInputs);
+    weightGrad.setZero(numNeurons, numInputs+1);
 
+    // Initialize ADAM parameters
+    MtForAdam.setZero(numNeurons, numInputs+1);
+    VtForAdam.setZero(numNeurons, numInputs+1);
 }
 
 /**
@@ -272,6 +275,13 @@ void Layer::setGradient(const Eigen::MatrixXd& grad) {
 }
 
 /**
+ * Calculation of the gradient matrix
+ */
+void Layer::calculateGradient() {
+    weightGrad = deltas * inputs.transpose();
+}
+
+/**
  * Getter for the weight matrix of the layer
  */
 Eigen::MatrixXd Layer::getWeights() {
@@ -289,7 +299,17 @@ void Layer::setWeights(const Eigen::MatrixXd& newWeights) {
  * Apply a gradient calculation: W = W – η·∂E/∂W
  */
 void Layer::updateWeights(double learningRate) {
-  weights -= learningRate * weightGrad;
+    weights -= learningRate * weightGrad;
+}
+
+/**
+ * Apply a gradient calculation using ADAM algorithm
+ */
+void Layer::updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi) {
+    MtForAdam = beta1 * MtForAdam.array() + (1 - beta1) * weightGrad.array();
+    VtForAdam = beta2 * VtForAdam.array() + (1 - beta2) * weightGrad.array() * weightGrad.array();
+    weights -= learningRate * (MtForAdam.array() / ((1 - std::pow(beta1, iterationNum)) * 
+               (sqrt(VtForAdam.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
 }
 
 /**
@@ -419,7 +439,7 @@ Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, acti
             break;  
 
         case activ_func_type::LOGLOG:  // f'(x) = exp(-exp(-x) - x)  // MJ: f'(x) = exp(-exp(-x)) * exp(-x)
-            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(-x) - x); });
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(-x)) * std::exp(-x);});
             break; 
         
         case activ_func_type::CLOGLOG:  // f'(x) = exp(-exp(x) + x)
@@ -429,14 +449,14 @@ Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, acti
         case activ_func_type::CLOGLOGM:  // f'(x) = 7 * exp(x - 0.7 * exp(x)) / 5.0    (for f(x) = 1 - 2 * exp(-0.7 * exp(x)))  
             // MJ: f'(x) = - 1 / (exp(x) - 1) for x > 0
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
-            { return 7.0 * std::exp(x - 0.7 * std::exp(x)) / 5.0; });
+            { return -1.0 / (std::exp(x)-1.0); });
             break;
 
         case activ_func_type::ROOTSIG:  // f'(x) for f(x) = x / (1 + sqrt(1.0 + exp(-x * x)))  
             // MJ: ( 1 + 2 * sqrt(1 + x^2) - (1 + x^2)^(3/2) ) / ( (1 + x^2)^(3/2) * (1 + sqrt(1 + x^2))^2 )
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
-            { return (1.0 + std::sqrt(1.0 + std::exp(-x * x)) - (x * x * std::exp(-x * x)) / std::sqrt(1.0 + std::exp(-x * x))) / 
-                ((1.0 + std::sqrt(1.0 + std::exp(-x * x))) * (1.0 + std::sqrt(1.0 + std::exp(-x * x)))); });
+            { return (1.0 + 2.0 * sqrt(1.0 + x * x) - std::pow((1.0 + x * x),(3.0/2.0))) / 
+                     (std::pow((1.0 + x * x),(3.0/2.0)) * (1.0 + sqrt(1.0 + x * x)) * (1.0 + sqrt(1.0 + x * x))); });
             break;
 
         case activ_func_type::LOGSIG:  // f'(x) = 2 * sigmoid(x)^2 * (1 - sigmoid(x))
@@ -478,9 +498,41 @@ Eigen::VectorXd Layer::calculateLayerOutput(activ_func_type activFuncType) {
 }
 
 /**
+ * Calculate layer output
+ */
+void Layer::calculateOutput(activ_func_type activFuncType){
+    activations = calculateWeightedSum();
+    output = setActivationFunction(activations, activFuncType);
+}
+
+/**
+ * Calculate layer deltas for backpropagation
+ */
+void Layer::calculateDeltas(const Eigen::MatrixXd &nextWeights, const Eigen::VectorXd &nextDeltas, activ_func_type activFuncType){
+    deltas = setActivFunDeriv(activations,activFuncType).array() * 
+             (nextWeights.leftCols(nextWeights.cols() - 1).transpose() * nextDeltas).array();
+}
+
+
+/**
  * Getter for the output vector
  */
 Eigen::VectorXd Layer::getOutput() {
     return output; 
 }
+
+/**
+ * Getter for the deltas vector
+ */
+Eigen::VectorXd Layer::getDeltas() {
+    return deltas; 
+}
+
+/**
+ * Setter for the deltas vector
+ */
+void Layer::setDeltas(const Eigen::VectorXd &newDeltas){
+    deltas = newDeltas;
+}
+
 

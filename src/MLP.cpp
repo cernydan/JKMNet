@@ -251,6 +251,10 @@ void MLP::setWeights(size_t idx, const Eigen::MatrixXd& W) {
     layers_[idx].setWeights(W);
 }
 
+Eigen::VectorXd& MLP::getOutput(){
+    return output;
+}
+
 /**
  * Validate the size of the inputs compared to nNeurons[0]
  */
@@ -330,7 +334,7 @@ Eigen::VectorXd MLP::runMLP(const Eigen::VectorXd& input) {
     // First layer
     layers_[0].setInputs(input);
     layers_[0].calculateLayerOutput(activFuncs[0]);
-    Eigen::VectorXd currentOutput = layers_[0].getOutput();
+    Eigen::VectorXd currentOutput = layers_[0].getOutput();  //calculateLayerOutput neukládá do layers_.output
 
     // Remaining layers
     for (size_t i = 1; i < layers_.size(); ++i) {
@@ -369,4 +373,114 @@ bool MLP::testRepeatable(const Eigen::VectorXd& input, int repeats, double tol) 
         }
     }
     return true;
+}
+
+/**
+ * Forward pass and update weights with backpropagation (one input)
+ */
+void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate) {
+    if (layers_.empty())
+        throw std::logic_error("runMLP called before initMLP");
+
+    // First layer
+    layers_[0].setInputs(input);
+    layers_[0].calculateOutput(activFuncs[0]);
+
+    // Remaining layers
+    for (size_t i = 1; i < layers_.size(); ++i) {
+        layers_[i].setInputs(layers_[i-1].getOutput());
+        layers_[i].calculateOutput(activFuncs[i]);
+    }
+    output = layers_[layers_.size()-1].getOutput();
+
+    // Output layer BP
+    layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
+    layers_[layers_.size()-1].calculateGradient();
+    layers_[layers_.size()-1].updateWeights(learningRate);
+
+    // Remaining layers BP
+    if(layers_.size() > 1){
+        for(int i = layers_.size() - 2; i >= 0; --i){
+            layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+            layers_[i].calculateGradient();
+            layers_[i].updateWeights(learningRate);
+        }
+    }
+}
+
+// Following functions are for testing BP algorithms, where inputs and desired outputs are in form of window iterating over
+// one time-serie vector. It will be redone for other form of input data and iteration management
+
+void MLP::onlineBP(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow) {
+    if (layers_.empty())
+        throw std::logic_error("runMLP called before initMLP");
+
+    for (int iter = 1; iter < numIter + 1; iter++){
+        for (int win = 0; win<input.size() - (inpWindow + outWindow); win++){
+            Eigen::VectorXd currentInp = input.segment(win,inpWindow);
+            Eigen::VectorXd currentObs = input.segment(win + inpWindow,outWindow);
+            
+            // First layer
+            layers_[0].setInputs(currentInp);
+            layers_[0].calculateOutput(activFuncs[0]);
+
+            // Remaining layers
+            for (size_t i = 1; i < layers_.size(); ++i) {
+                layers_[i].setInputs(layers_[i-1].getOutput());
+                layers_[i].calculateOutput(activFuncs[i]);
+            }
+            output = layers_[layers_.size()-1].getOutput();
+
+            // Output layer BP
+            layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - currentObs);
+            layers_[layers_.size()-1].calculateGradient();
+            layers_[layers_.size()-1].updateWeights(learningRate);
+
+            // Remaining layers BP
+            if(layers_.size() > 1){
+                for(int i = layers_.size() - 2; i >= 0; --i){
+                    layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+                    layers_[i].calculateGradient();
+                    layers_[i].updateWeights(learningRate);
+                }
+            }
+        }
+    }
+}
+
+void MLP::onlineAdam(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow) {
+    if (layers_.empty())
+        throw std::logic_error("runMLP called before initMLP");
+
+    for (int iter = 1; iter < numIter + 1; iter++){
+        for (int win = 0; win<input.size() - (inpWindow + outWindow); win++){
+            Eigen::VectorXd currentInp = input.segment(win,inpWindow);
+            Eigen::VectorXd currentObs = input.segment(win + inpWindow,outWindow);
+            
+            // First layer
+            layers_[0].setInputs(currentInp);
+            layers_[0].calculateOutput(activFuncs[0]);
+
+            // Remaining layers
+            for (size_t i = 1; i < layers_.size(); ++i) {
+                layers_[i].setInputs(layers_[i-1].getOutput());
+                layers_[i].calculateOutput(activFuncs[i]);
+            }
+            output = layers_[layers_.size()-1].getOutput();
+
+            // Output layer BP
+            layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - currentObs);
+            layers_[layers_.size()-1].calculateGradient();
+            layers_[layers_.size()-1].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+
+            // Remaining layers BP
+            if(layers_.size() > 1){
+                for(int i = layers_.size() - 2; i >= 0; --i){
+                    layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+                    layers_[i].calculateGradient();
+                    layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+                }
+            }
+        }
+    }
 }
