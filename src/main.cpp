@@ -24,9 +24,14 @@
 // *******************************
 
 #include <ctime>
+#include <iostream>
+#include <algorithm>
+#include <vector>
+
 #include "JKMNet.hpp"
 #include "MLP.hpp"
 #include "Layer.hpp"
+#include "Data.hpp"
 
 using namespace std;
 
@@ -320,7 +325,7 @@ int main() {
   std::cout << "------------------" << std::endl;
 
   MLP mlpbp;
-    // Set a new architecture
+  // Set a new architecture
   std::vector<unsigned> arch = {5,2};
   mlpbp.setArchitecture(arch);
   std::cout << "Architecture 1: ";
@@ -343,6 +348,63 @@ int main() {
   Eigen::VectorXd testvec(3);
   testvec<<0.4,0.5,0.6;
   std::cout<<mlpbp.runMLP(testvec);
+
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "-- Upload data from file --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  Data data;
+
+  // Filter data by single ID "94206029"
+  std::unordered_set<std::string> ids = {"94206029"};
+
+  // Select which columns to keep
+  std::vector<std::string> keepCols = {"T1", "T2", "T3", "moisture"};
+
+  try {
+      //size_t n = data.loadFilteredCSV("data/inputs/data_all_hourly.csv",  // has "hour_start" column
+      size_t n = data.loadFilteredCSV("data/inputs/data_all_daily.csv",  // has "date" column
+        ids,
+        keepCols,
+        "date", //"hour_start",
+        "ID");
+
+      // Print total number of loaded row
+      std::cout << "Total number of rows: " << n << "\n";
+
+      // Print header names
+      data.printHeader("date");   // or "hour_start"
+
+      const auto& times = data.timestamps();
+      const auto& mat = data.numericData();
+
+      // Print couple of the first rows (5)
+      for (size_t i = 0; i < std::min<size_t>(5, n); ++i) {
+          std::cout << times[i] << " | ";
+          for (int c = 0; c < mat.cols(); ++c) {
+              std::cout << mat(i, c) << (c+1<mat.cols()? " | " : "");
+          }
+          std::cout << "\n";
+      }
+  } catch (std::exception &ex) {
+      std::cerr << "[Error]: " << ex.what() << "\n";
+  }
+
+  // Select only one column (moisture)
+  auto moistureData = data.getColumnValues("moisture");
+  size_t nMoistureData = moistureData.size();
+  if (nMoistureData == 0) { 
+    std::cout << "no data\n"; 
+    return {}; 
+  }
+  Eigen::RowVectorXd first5Moisture;
+  size_t N = std::min<size_t>(5, nMoistureData);
+  {
+      Eigen::Map<const Eigen::VectorXd> mview(moistureData.data(), static_cast<Eigen::Index>(N));
+      first5Moisture = mview.transpose(); 
+  }
+  std::cout << "First 5 moisture values: " << first5Moisture << "\n";
 
   return 0;
 }

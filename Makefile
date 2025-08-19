@@ -6,7 +6,7 @@ TARGET = bin/JKMNet
 CC = g++ 	# compiler
 #CPPFLAGS = -std=c++20 -Wall -pedantic -Iinclude -Iinclude/eigen-3.4 -fopenmp # bad code warnings and include header folder
 CPPFLAGS = -std=c++20 -Wall -pedantic -Iinclude -fopenmp # bad code warnings and include header folder
-OBJ = obj/main.o obj/JKMNet.o  obj/MLP.o obj/Layer.o # TODO
+OBJ = obj/main.o obj/JKMNet.o  obj/MLP.o obj/Layer.o obj/Data.o # TODO
 LDFLAGS := -Llib 
 
 .PHONY: all clean
@@ -24,6 +24,9 @@ obj/MLP.o: src/MLP.cpp
 
 obj/Layer.o: src/Layer.cpp
 	$(CC) -c $< -o obj/Layer.o $(CPPFLAGS)
+
+obj/Data.o: src/Data.cpp
+	$(CC) -c $< -o obj/Data.o $(CPPFLAGS)
 
 $(TARGET): $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(CPPFLAGS) $(LDFLAGS)
