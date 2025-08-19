@@ -3,5 +3,8 @@
 *.o
 *.exe
 
-# VS Code konfigurace
+# VS Code configuration
 .vscode/
+
+# Input data (do not track large/private datasets)
+/data/inputs/
