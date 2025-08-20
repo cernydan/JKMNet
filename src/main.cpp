@@ -320,36 +320,6 @@ int main() {
   Eigen::VectorXd output = layer.getOutput();
   std::cout << "Layer Outputs: " << output.transpose() << std::endl;
 
-  std::cout << "------------------" << std::endl;
-  std::cout << "--  Test 13. 8. --" << std::endl;
-  std::cout << "------------------" << std::endl;
-
-  MLP mlpbp;
-  // Set a new architecture
-  std::vector<unsigned> arch = {5,2};
-  mlpbp.setArchitecture(arch);
-  std::cout << "Architecture 1: ";
-  // Print the updated architecture
-  mlpbp.printArchitecture();
-  std::vector<weight_init_type> weiInits = {
-        weight_init_type::RANDOM,weight_init_type::RANDOM
-  };
-  mlpbp.setWInitType(weiInits);
-  mlpbp.printActivations();
-  mlpbp.printWInitType();
-  
-  Eigen::VectorXd initvec(3);
-  mlpbp.initMLP(initvec);
-
-  Eigen::VectorXd inputbp(10);
-  inputbp<<0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0;
-
-  mlpbp.onlineAdam(100,0.01,inputbp,3,2);
-  Eigen::VectorXd testvec(3);
-  testvec<<0.4,0.5,0.6;
-  std::cout<<mlpbp.runMLP(testvec);
-
-
   std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "-- Upload data from file --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
@@ -405,6 +375,52 @@ int main() {
       first5Moisture = mview.transpose(); 
   }
   std::cout << "First 5 moisture values: " << first5Moisture << "\n";
+
+  std::cout << "------------------" << std::endl;
+  std::cout << "--  Testing Adam for matrix data--" << std::endl;
+  std::cout << "------------------" << std::endl;
+  
+  int numInpVar = 3;             // number of values of each variable used in each pattern
+  unsigned int numOuts = 2;      // number of outputs in each pattern = output neurons
+
+  data.makeCalibMat(numInpVar, numOuts);
+  data.shuffleCalibMat();
+
+  MLP mlpbp;
+  std::vector<unsigned> arch = {2,3,numOuts};
+  mlpbp.setArchitecture(arch);
+  mlpbp.printArchitecture();
+  std::vector<weight_init_type> weiInits = {
+        weight_init_type::RANDOM,weight_init_type::RANDOM,weight_init_type::RANDOM
+  };
+  mlpbp.setWInitType(weiInits);
+  mlpbp.printActivations();
+  mlpbp.printWInitType();
+  Eigen::VectorXd initvec(data.getCalibMat().cols() - numOuts); // number of inputs = calibration matrix row length - number of outputs
+  mlpbp.initMLP(initvec);
+
+  Eigen::MatrixXd M;
+  M = (data.getCalibMat().array().isNaN()).select(0.0, data.getCalibMat()); // change NaN to 0 ... for now
+  mlpbp.onlineAdam(200, 0.001, M);
+
+  Eigen::VectorXd jedna(12);
+  Eigen::VectorXd dva(12);
+  Eigen::VectorXd tri(12);
+  jedna<< 5.35807,5.16797,5.02604,4.79622,4.83268,4.58984,1.64323,2.87695,2.00586,0.243134,0.242252,0.241349;
+  dva<< 12.3822,12.056,11.9596,12.8229,12.459,12.3763,13.6309,13.3034,12.9238,0.148254,0.144221,0.141342;
+  tri<< 9.04362,9.42383,9.86198,9.57552,10.1908,10.696,11.4434,13.3431,14.2383,0.2519,0.248034,0.24362;
+  std::cout<<"\n Testing 3 input vectors from calibration data: \n";
+  std::cout<<"vec1: "<<jedna.transpose()<<"\n";
+  std::cout<<"vec1: "<<dva.transpose()<<"\n";
+  std::cout<<"vec1: "<<tri.transpose()<<"\n \n";
+  std::cout<<"Their measured outputs: \n";
+  std::cout<<"0.240465   0.240071 \n";
+  std::cout<<"0.139811   0.138863 \n";
+  std::cout<<"0.239087   0.235801 \n \n";
+  std::cout<<"Modelled outputs: \n";
+  std::cout<<mlpbp.runMLP(jedna).transpose()<<"\n";
+  std::cout<<mlpbp.runMLP(dva).transpose()<<"\n";
+  std::cout<<mlpbp.runMLP(tri).transpose()<<"\n";
 
   return 0;
 }

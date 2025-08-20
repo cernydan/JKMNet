@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include <algorithm>
+#include <random>
 
 #include "eigen-3.4/Eigen/Dense"
 
@@ -26,6 +28,9 @@ class Data {
         void printHeader(const std::string& timestampColName = "timestamp") const;  //!< Print header line, i.e. timestamp + numeric column names
         std::vector<double> getColumnValues(const std::string& name) const; //!< Return a copy of the values in a selected column by name
 
+        void makeCalibMat(int inpRows, int outRows); //!< Create calibration matrix for backpropagation from data matrix
+        Eigen::MatrixXd getCalibMat();  //!< Getter for calibration matrix
+        std::vector<int> shuffleCalibMat();  //!< Randomly shuffle calibration matrix rows
     protected:
 
     private:
@@ -34,6 +39,7 @@ class Data {
         std::vector<std::string> m_timestamps;  //!< Time string
         Eigen::MatrixXd m_data;  //!< Matrix with numeric columns (rows x cols) filled with variables
         std::vector<std::string> m_colNames;  //!< Column names for m_data
+        Eigen::MatrixXd calibMat; //!< Matrix of inputs and desired outputs for backpropagation
 };
 
 #endif // DATA_HPP

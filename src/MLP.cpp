@@ -408,17 +408,21 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
     }
 }
 
-// Following functions are for testing BP algorithms, where inputs and desired outputs are in form of window iterating over
-// one time-serie vector. It will be redone for other form of input data and iteration management
-
-void MLP::onlineBP(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow) {
+/**
+ * Online backpropagation
+ */
+void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calMat) {
     if (layers_.empty())
-        throw std::logic_error("runMLP called before initMLP");
+        throw std::logic_error("onlineBP called before initMLP");
+
+    int patternNum = calMat.rows();                // number of patterns in calibration matrix
+    int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
+    int outSize = nNeurons.back();                   // number of output neurons
 
     for (int iter = 1; iter < numIter + 1; iter++){
-        for (int win = 0; win<input.size() - (inpWindow + outWindow); win++){
-            Eigen::VectorXd currentInp = input.segment(win,inpWindow);
-            Eigen::VectorXd currentObs = input.segment(win + inpWindow,outWindow);
+        for (int pat = 0; pat < patternNum; pat++){
+            Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
+            Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
             
             // First layer
             layers_[0].setInputs(currentInp);
@@ -448,14 +452,21 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::VectorXd& inpu
     }
 }
 
-void MLP::onlineAdam(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow) {
+/**
+ * Online backpropagation using Adam algorithm
+ */
+void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calMat) {
     if (layers_.empty())
-        throw std::logic_error("runMLP called before initMLP");
+        throw std::logic_error("onlineAdam called before initMLP");
+
+    int patternNum = calMat.rows();                  // number of patterns in calibration matrix
+    int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
+    int outSize = nNeurons.back();                   // number of output neurons
 
     for (int iter = 1; iter < numIter + 1; iter++){
-        for (int win = 0; win<input.size() - (inpWindow + outWindow); win++){
-            Eigen::VectorXd currentInp = input.segment(win,inpWindow);
-            Eigen::VectorXd currentObs = input.segment(win + inpWindow,outWindow);
+        for (int pat = 0; pat < patternNum; pat++){
+            Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
+            Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
             
             // First layer
             layers_[0].setInputs(currentInp);
