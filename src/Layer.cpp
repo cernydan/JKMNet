@@ -316,6 +316,24 @@ void Layer::updateAdam(double learningRate, int iterationNum, double beta1, doub
  * Calculate the weighted sum (linear combination of inputs), i.e. calculate activations
  */
 Eigen::VectorXd Layer::calculateWeightedSum() {
+     // safety check: weights.cols() must match inputs.size()
+    const auto wrows = weights.rows();
+    const auto wcols = weights.cols();
+    const auto insz  = static_cast<int>(inputs.size());
+    if (wcols != insz) {
+        std::cerr << "[Layer::calculateWeightedSum] Dimension mismatch:\n"
+                  << "  weights: " << wrows << " x " << wcols << "\n"
+                  << "  inputs.size(): " << insz << "\n";
+        // print a short sample to help debug
+        if (wrows > 0 && wcols > 0) {
+            std::cerr << "  Example weight(0,0)=" << weights(0,0)
+                      << "  inputs.head(min(5,insz)) = ";
+            for (int k=0; k < std::min(insz, 5); ++k) std::cerr << inputs[k] << ' ';
+            std::cerr << '\n';
+        }
+        throw std::runtime_error("Layer dimension mismatch: weights.cols() != inputs.size()");
+    }
+
     //std::cout << "weights dimensions: " << weights.rows() << "x" << weights.cols() << std::endl;
     //std::cout << "inputs dimensions: " << inputs.size() << std::endl;
     //std::cout << "bias dimensions: " << bias.size() << std::endl;

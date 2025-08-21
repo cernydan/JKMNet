@@ -145,7 +145,6 @@ size_t Data::loadFilteredCSV(const std::string& path,
         std::string ts = trim(fields[idxMap.at(timestampCol)]);
         std::vector<double> numeric;
         numeric.reserve(keepIdx.size());
-        bool parseOk = true;
         for (size_t j = 0; j < keepIdx.size(); ++j) {
             std::string cell = trim(fields[keepIdx[j]]);
             if (cell.empty()) {
@@ -157,7 +156,6 @@ size_t Data::loadFilteredCSV(const std::string& path,
                 } catch (...) {
                     // if parse fails, push NaN and continue
                     numeric.push_back(std::numeric_limits<double>::quiet_NaN());
-                    parseOk = false;
                 }
             }
         }
@@ -257,6 +255,44 @@ void Data::makeCalibMat(int inpRows, int outRows){
         }
         for (int j = 0; j < outRows; j++) {
             calibMat(i, col_idx++) = m_data(i + inpRows + j, DC - 1);
+        }
+    }
+}
+
+/**
+ * Create matrix for backpropagation from data matrix - created by MJ due to errors in Moisture data...
+ */
+void Data::makeCalibMat2(int inpRows, int outRows){
+    if (inpRows <= 0 || outRows <= 0)
+        throw std::invalid_argument("inpRows and outRows must be positive");
+
+    const int totalCols = static_cast<int>(m_data.cols());
+    if (totalCols < 1)
+        throw std::runtime_error("Data has no columns");
+
+    const int inputCols = totalCols - 1; // last column is target
+    if (inputCols <= 0)
+        throw std::runtime_error("Need at least one input column (data must contain at least one feature + target)");
+
+    const int totalRows = static_cast<int>(m_data.rows());
+    const int CR = totalRows - inpRows - outRows + 1;   // number of calibration rows
+    if (CR <= 0)
+        throw std::runtime_error("Not enough rows to build calibration matrix with given inpRows/outRows");
+
+    const int CC = inpRows * inputCols + outRows;  // columns: stacked input-window + outRows
+    calibMat = Eigen::MatrixXd(CR, CC);
+
+    for (int i = 0; i < CR; ++i) {
+        int col_idx = 0;
+        // inputs: for each feature column (except target), stack inpRows values
+        for (int j = 0; j < inputCols; ++j) {
+            for (int k = 0; k < inpRows; ++k) {
+                calibMat(i, col_idx++) = m_data(i + k, j);
+            }
+        }
+        // outputs: take outRows consecutive values from the target column (last column)
+        for (int j = 0; j < outRows; ++j) {
+            calibMat(i, col_idx++) = m_data(i + inpRows + j, totalCols - 1);
         }
     }
 }

@@ -29,6 +29,7 @@ class Data {
         std::vector<double> getColumnValues(const std::string& name) const; //!< Return a copy of the values in a selected column by name
 
         void makeCalibMat(int inpRows, int outRows); //!< Create calibration matrix for backpropagation from data matrix
+        void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix for backpropagation from data matrix
         Eigen::MatrixXd getCalibMat();  //!< Getter for calibration matrix
         std::vector<int> shuffleCalibMat();  //!< Randomly shuffle calibration matrix rows
     protected:

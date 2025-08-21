@@ -132,7 +132,7 @@ int main() {
   std::vector<activ_func_type> funcs = {
         activ_func_type::RELU,    // input layer
         activ_func_type::TANH,    // 1st hidden layer
-        // activ_func_type::SIGMOID,  // 2nd hidden layer
+        //activ_func_type::SIGMOID,  // 2nd hidden layer
         activ_func_type::SIGMOID  // output layer
   };
   mlp.setActivations(funcs);
@@ -368,17 +368,18 @@ int main() {
     std::cout << "no data\n"; 
     return {}; 
   }
-  Eigen::RowVectorXd first5Moisture;
-  size_t N = std::min<size_t>(5, nMoistureData);
+  Eigen::RowVectorXd firstMoisture;
+  size_t N = std::min<size_t>(3, nMoistureData);
   {
       Eigen::Map<const Eigen::VectorXd> mview(moistureData.data(), static_cast<Eigen::Index>(N));
-      first5Moisture = mview.transpose(); 
+      firstMoisture = mview.transpose(); 
   }
-  std::cout << "First 5 moisture values: " << first5Moisture << "\n";
+  std::cout << "First 5 moisture values: " << firstMoisture << "\n";
 
-  std::cout << "------------------" << std::endl;
+
+  std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "--  Testing Adam for matrix data--" << std::endl;
-  std::cout << "------------------" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
   
   int numInpVar = 3;             // number of values of each variable used in each pattern
   unsigned int numOuts = 2;      // number of outputs in each pattern = output neurons
@@ -421,6 +422,7 @@ int main() {
   std::cout<<mlpbp.runMLP(jedna).transpose()<<"\n";
   std::cout<<mlpbp.runMLP(dva).transpose()<<"\n";
   std::cout<<mlpbp.runMLP(tri).transpose()<<"\n";
+
 
   return 0;
 }
