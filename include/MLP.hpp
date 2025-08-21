@@ -65,8 +65,8 @@ class MLP {
         bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8) const; //!< Repeatability check for 'runMLP'
         void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate); //!< Forward pass and update weights with backpropagation (one input)
 
-        void onlineBP(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow);
-        void onlineAdam(int numIter, double learningRate, const Eigen::VectorXd& input, size_t inpWindow, size_t outWindow);
+        void onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calMat);    //!< Online backpropagation
+        void onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calMat);  //!< Online backpropagation using Adam algorithm
 
     protected:
 
@@ -78,7 +78,6 @@ class MLP {
         std::vector<weight_init_type> wInitTypes;   //!< Vector of weights initialization for each layer
         std::vector<Layer> layers_;  //!< Private member of the class Layer to store each layer’s state
         Eigen::VectorXd output;  //!< The output vector of mlp
-
 };
 
 #endif // MLP_H

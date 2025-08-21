@@ -236,3 +236,55 @@ std::vector<double> Data::getColumnValues(const std::string& name) const {
 
     return out;
 }
+
+/**
+ * Create matrix for backpropagation from data matrix
+ */
+void Data::makeCalibMat(int inpRows, int outRows){
+
+    // ! Assuming predicted variable is in last column of data
+    int DC = m_data.cols();                           // number of cols in input data matrix
+    int CR = m_data.rows() - inpRows - outRows + 1;   // number of rows of calibration matrix
+    int CC = inpRows * DC + outRows;                  // number of cols of calibration matrix
+
+    calibMat = Eigen::MatrixXd(CR , CC);
+    for(int i = 0; i < CR; i++){
+        int col_idx = 0;
+        for (int j = 0; j < DC; j++) {
+            for (int k = 0; k < inpRows; k++) {
+                calibMat(i, col_idx++) = m_data(i + k, j);
+            }
+        }
+        for (int j = 0; j < outRows; j++) {
+            calibMat(i, col_idx++) = m_data(i + inpRows + j, DC - 1);
+        }
+    }
+}
+
+/**
+ * Getter for calibration matrix
+ */
+Eigen::MatrixXd Data::getCalibMat(){
+    return calibMat;
+}
+
+/**
+ * Randomly shuffle matrix rows
+ */
+std::vector<int> Data::shuffleCalibMat(){
+    int r = calibMat.rows();
+    std::vector<int> permVec(r);
+    std::iota(permVec.begin(), permVec.end(), 0);
+
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::shuffle(permVec.begin(), permVec.end(), gen);
+
+    Eigen::MatrixXd newmat(r, calibMat.cols());
+    for (int i = 0; i < r; ++i) {
+        newmat.row(i) = calibMat.row(permVec[i]);
+    }
+    calibMat = std::move(newmat);
+
+    return permVec;
+}
