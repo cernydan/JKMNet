@@ -7,6 +7,8 @@
 #include <cctype>
 #include <cmath>
 #include <numeric>
+#include <stdexcept>
+#include <limits>
 
 /**
  * Trim helper function
@@ -176,6 +178,12 @@ size_t Data::loadFilteredCSV(const std::string& path,
     }
     m_timestamps = std::move(times);
 
+    // Initialize scaler vectors to match number of columns
+    Eigen::Index C = m_data.cols();
+    m_scaler.min = Eigen::VectorXd::Zero(C);
+    m_scaler.max = Eigen::VectorXd::Zero(C);
+    m_scaler.fitted = false;
+
     return nrows;
 }
 
@@ -236,6 +244,153 @@ std::vector<double> Data::getColumnValues(const std::string& name) const {
 }
 
 /**
+ * Set which transform to apply (applies to all numeric columns)
+ */
+void Data::setTransform(transform_type t, double alpha, bool excludeLastCol) {
+    m_transform = t;
+    m_alpha = alpha;
+    m_excludeLastCol = excludeLastCol;
+
+    // ensure scaler vectors have correct size (will be filled when applying MINMAX)
+    Eigen::Index cols = m_data.cols();
+    if (cols <= 0) {
+        m_scaler.min.resize(0);
+        m_scaler.max.resize(0);
+        m_scaler.fitted = false;
+    } else {
+        m_scaler.min = Eigen::VectorXd::Zero(cols);
+        m_scaler.max = Eigen::VectorXd::Zero(cols);
+        m_scaler.fitted = false;
+    }
+}
+
+/**
+ * Apply the previously configured transform to m_data
+ */
+void Data::applyTransform() {
+    if (m_transform == transform_type::NONE) return;
+    const Eigen::Index R = m_data.rows();
+    const Eigen::Index C = m_data.cols();
+    if (R == 0 || C == 0) return;
+
+    // helper to decide whether to operate on column c
+    auto shouldTransformCol = [&](int c)->bool {
+        if (!m_excludeLastCol) return true;
+        return c != static_cast<int>(C) - 1;
+    };
+
+    switch (m_transform) {
+        
+        case transform_type::MINMAX:
+        {
+            // compute min/max and scale each column to [0,1]
+            for (Eigen::Index c = 0; c < C; ++c) {
+                if (!shouldTransformCol(static_cast<int>(c))) {
+                    m_scaler.min(c) = 0.0;
+                    m_scaler.max(c) = 1.0;
+                    continue;
+                }
+                double mn = std::numeric_limits<double>::infinity();
+                double mx = -std::numeric_limits<double>::infinity();
+                std::size_t cnt = 0;
+                for (Eigen::Index r = 0; r < R; ++r) {
+                    double v = m_data(r, c);
+                    if (std::isfinite(v)) { mn = std::min(mn, v); mx = std::max(mx, v); ++cnt; }
+                }
+                if (cnt == 0) { mn = 0.0; mx = 1.0; }
+                m_scaler.min(c) = mn;
+                m_scaler.max(c) = mx;
+                double span = (mx - mn); if (span == 0.0) span = 1.0;
+                for (Eigen::Index r = 0; r < R; ++r) {
+                    double &x = m_data(r, c);
+                    if (std::isfinite(x)) x = (x - mn) / span;
+                }
+            }
+            m_scaler.fitted = true;
+            break;
+        }
+
+        case transform_type::NONLINEAR:
+        {
+            double alpha = m_alpha;
+            for (Eigen::Index c = 0; c < C; ++c) {
+                if (!shouldTransformCol(static_cast<int>(c))) continue;
+                for (Eigen::Index r = 0; r < R; ++r) {
+                    double v = m_data(r, c);
+                    if (std::isfinite(v)) {
+                        double t = 1.0 - std::exp(-alpha * v);
+                        m_data(r, c) = std::isfinite(t) ? t : std::numeric_limits<double>::quiet_NaN();
+                    }
+                }
+            }
+            break;
+        }
+
+        default:
+            break;
+    }
+}
+
+/**
+ * Inverse the global transform (to bring predictions back)
+ */
+void Data::inverseTransform() {
+    if (m_transform == transform_type::NONE) return;
+    const Eigen::Index R = m_data.rows();
+    const Eigen::Index C = m_data.cols();
+    if (R == 0 || C == 0) return;
+
+    // small tolerances for numeric clipping
+    //const double eps_clip_low = 1e-12;    // allow tiny negative numbers
+    //const double eps_clip_high = 1e-12;   // allow tiny >1 numbers to be clamped below 1.0
+
+    auto shouldTransformCol = [&](int c)->bool {
+        if (!m_excludeLastCol) return true;
+        return c != static_cast<int>(C) - 1;
+    };
+
+    switch (m_transform) {
+        case transform_type::MINMAX:
+        {
+            if (!m_scaler.fitted) throw std::runtime_error("Scaler not fitted for inverse");
+            for (Eigen::Index c = 0; c < C; ++c) {
+                if (!shouldTransformCol(static_cast<int>(c))) continue;
+                double mn = m_scaler.min(c);
+                double mx = m_scaler.max(c);
+                double span = (mx - mn); if (span == 0.0) span = 1.0;
+                for (Eigen::Index r = 0; r < R; ++r) {
+                    double &x = m_data(r, c);
+                    if (std::isfinite(x)) x = x * span + mn;
+                }
+            }
+            break;
+        }
+
+        case transform_type::NONLINEAR:
+        {
+            const double alpha = m_alpha; 
+            for (Eigen::Index c = 0; c < C; ++c) {
+                if (!shouldTransformCol(static_cast<int>(c))) continue;
+                for (Eigen::Index r = 0; r < R; ++r) {
+                    double &t = m_data(r, c);
+                    if (!std::isfinite(t)) continue;  // preserve NaN/Inf handling
+                    // If t >= 1.0 due to rounding/saturation, nudge it below 1.0
+                    if (t >= 1.0) t = std::nextafter(1.0, 0.0);
+                    // Now safe: compute inverse (allows negative t)
+                    double one_minus = 1.0 - t;  // > 0 here
+                    if (!(one_minus > 0.0)) throw std::runtime_error("inverseGlobalTransform: 1 - D_trans <= 0");
+                    t = -std::log(one_minus) / alpha;
+                }
+            }
+            break;
+        }
+
+        default:
+            break;
+    }
+}
+
+/**
  * Create matrix for backpropagation from data matrix
  */
 void Data::makeCalibMat(int inpRows, int outRows){
@@ -261,6 +416,7 @@ void Data::makeCalibMat(int inpRows, int outRows){
 
 /**
  * Create matrix for backpropagation from data matrix - created by MJ due to errors in Moisture data...
+ * na realna data mi to neslo aplikovat, zatim to neresim, jdu delat neco jineho...
  */
 void Data::makeCalibMat2(int inpRows, int outRows){
     if (inpRows <= 0 || outRows <= 0)

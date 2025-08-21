@@ -378,6 +378,26 @@ int main() {
 
 
   std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "-- Transformation of data --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  std::cout << "Before transform (first row): " << data.numericData().row(0) << "\n";
+  data.setTransform(transform_type::MINMAX);
+  data.applyTransform();
+  std::cout << "After MINMAX transform (first row):  " << data.numericData().row(0) << "\n";
+  data.inverseTransform();
+  std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
+
+  std::cout << "Before transform (first row): " << data.numericData().row(0) << "\n";
+  data.setTransform(transform_type::NONLINEAR, 0.015, false);
+  data.applyTransform();
+  std::cout << "After NONLINEAR transform (first row):  " << data.numericData().row(0) << "\n";
+  data.inverseTransform();
+  std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
+
+
+
+  std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "--  Testing Adam for matrix data--" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
   
