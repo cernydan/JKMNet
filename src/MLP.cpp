@@ -395,14 +395,14 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
 
     // Output layer BP
     layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
-    layers_[layers_.size()-1].calculateGradient();
+    layers_[layers_.size()-1].calculateOnlineGradient();
     layers_[layers_.size()-1].updateWeights(learningRate);
 
     // Remaining layers BP
     if(layers_.size() > 1){
         for(int i = layers_.size() - 2; i >= 0; --i){
             layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
-            layers_[i].calculateGradient();
+            layers_[i].calculateOnlineGradient();
             layers_[i].updateWeights(learningRate);
         }
     }
@@ -415,12 +415,22 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calM
     if (layers_.empty())
         throw std::logic_error("onlineBP called before initMLP");
 
-    int patternNum = calMat.rows();                // number of patterns in calibration matrix
+    if (numIter <= 0)
+        throw std::invalid_argument("numIter must be positive");
+    
+    if (learningRate <= 0.0 || learningRate > 1.0)
+        throw std::invalid_argument("learningRate must be between 0 and 1");
+
+    int numOfPatterns = calMat.rows();                // number of patterns in calibration matrix
     int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
     int outSize = nNeurons.back();                   // number of output neurons
+    int lastLayerIndex = getNumLayers()-1;
+
+    if ((inpSize + outSize) != calMat.rows())
+        throw std::runtime_error("Matrix row length doesnt match the initialized input + output size");
 
     for (int iter = 1; iter < numIter + 1; iter++){
-        for (int pat = 0; pat < patternNum; pat++){
+        for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
             Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
             
@@ -429,22 +439,22 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calM
             layers_[0].calculateOutput(activFuncs[0]);
 
             // Remaining layers
-            for (size_t i = 1; i < layers_.size(); ++i) {
+            for (size_t i = 1; i < getNumLayers(); ++i) {
                 layers_[i].setInputs(layers_[i-1].getOutput());
                 layers_[i].calculateOutput(activFuncs[i]);
             }
-            output = layers_[layers_.size()-1].getOutput();
+            output = layers_[lastLayerIndex].getOutput();
 
             // Output layer BP
-            layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - currentObs);
-            layers_[layers_.size()-1].calculateGradient();
-            layers_[layers_.size()-1].updateWeights(learningRate);
+            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            layers_[lastLayerIndex].calculateOnlineGradient();
+            layers_[lastLayerIndex].updateWeights(learningRate);
 
             // Remaining layers BP
             if(layers_.size() > 1){
-                for(int i = layers_.size() - 2; i >= 0; --i){
+                for(int i = lastLayerIndex - 1; i >= 0; --i){
                     layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
-                    layers_[i].calculateGradient();
+                    layers_[i].calculateOnlineGradient();
                     layers_[i].updateWeights(learningRate);
                 }
             }
@@ -458,13 +468,23 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calM
 void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calMat) {
     if (layers_.empty())
         throw std::logic_error("onlineAdam called before initMLP");
+    
+    if (numIter <= 0)
+        throw std::invalid_argument("numIter must be positive");
+    
+    if (learningRate <= 0.0 || learningRate > 1.0)
+        throw std::invalid_argument("learningRate must be between 0 and 1");
 
-    int patternNum = calMat.rows();                  // number of patterns in calibration matrix
+    int numOfPatterns = calMat.rows();                  // number of patterns in calibration matrix
     int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
     int outSize = nNeurons.back();                   // number of output neurons
+    int lastLayerIndex = getNumLayers()-1;
+
+    if ((inpSize + outSize) != calMat.rows())
+        throw std::runtime_error("Matrix row length doesnt match the initialized input + output size");
 
     for (int iter = 1; iter < numIter + 1; iter++){
-        for (int pat = 0; pat < patternNum; pat++){
+        for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
             Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
             
@@ -473,25 +493,87 @@ void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& ca
             layers_[0].calculateOutput(activFuncs[0]);
 
             // Remaining layers
-            for (size_t i = 1; i < layers_.size(); ++i) {
+            for (size_t i = 1; i < getNumLayers(); ++i) {
                 layers_[i].setInputs(layers_[i-1].getOutput());
                 layers_[i].calculateOutput(activFuncs[i]);
             }
-            output = layers_[layers_.size()-1].getOutput();
+            output = layers_[lastLayerIndex].getOutput();
 
             // Output layer BP
-            layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - currentObs);
-            layers_[layers_.size()-1].calculateGradient();
-            layers_[layers_.size()-1].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            layers_[lastLayerIndex].calculateOnlineGradient();
+            layers_[lastLayerIndex].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
 
             // Remaining layers BP
             if(layers_.size() > 1){
-                for(int i = layers_.size() - 2; i >= 0; --i){
+                for(int i = lastLayerIndex - 1; i >= 0; --i){
                     layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
-                    layers_[i].calculateGradient();
+                    layers_[i].calculateOnlineGradient();
                     layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
                 }
             }
         }
     }
 }
+
+/**
+ * Batch backpropagation using Adam algorithm
+ */
+void MLP::batchAdam(int numIter, int batchSize, double learningRate, const Eigen::MatrixXd& calMat) {
+    if (layers_.empty())
+        throw std::logic_error("batchAdam called before initMLP");
+    
+    if (numIter <= 0 || batchSize <= 0)
+        throw std::invalid_argument("numIter and batchSize must be positive");
+    
+    if (learningRate <= 0.0 || learningRate > 1.0)
+        throw std::invalid_argument("learningRate must be between 0 and 1");
+
+    int numOfPatterns = calMat.rows();                  // number of patterns in calibration matrix
+    int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
+    int outSize = nNeurons.back();                   // number of output neurons
+    int lastLayerIndex = getNumLayers()-1;
+
+    if ((inpSize + outSize) != calMat.cols())
+        throw std::runtime_error("Matrix row length doesnt match the initialized input + output size");
+
+    for (int iter = 1; iter < numIter + 1; iter++){
+        for(int batch = 0; batch < (numOfPatterns + batchSize - 1)/batchSize; batch++){
+            int start = batch * batchSize;
+            int end   = std::min(start + batchSize,numOfPatterns);
+            for (int pat = start; pat < end; pat++){
+
+                Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
+                Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
+                
+                // First layer
+                layers_[0].setInputs(currentInp);
+                layers_[0].calculateOutput(activFuncs[0]);
+
+                // Remaining layers
+                for (size_t i = 1; i < getNumLayers(); ++i) {
+                    layers_[i].setInputs(layers_[i-1].getOutput());
+                    layers_[i].calculateOutput(activFuncs[i]);
+                }
+                output = layers_[lastLayerIndex].getOutput();
+
+                // Output layer gradient
+                layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+                layers_[lastLayerIndex].calculateBatchGradient();
+
+                // Remaining layers BP
+                if(layers_.size() > 1){
+                    for(int i = lastLayerIndex - 1; i >= 0; --i){
+                        layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+                        layers_[i].calculateBatchGradient();
+                    }
+                }
+            }
+            for (int i = 0; i <= lastLayerIndex; i++){
+                layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+                layers_[i].setGradient(layers_[i].getGradient().setZero());
+            }
+        }
+    }
+}
+

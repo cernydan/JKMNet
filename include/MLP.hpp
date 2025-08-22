@@ -67,6 +67,7 @@ class MLP {
 
         void onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calMat);    //!< Online backpropagation
         void onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calMat);  //!< Online backpropagation using Adam algorithm
+        void batchAdam(int numIter, int batchSize, double learningRate, const Eigen::MatrixXd& calMat);  //!< Batch backpropagation using Adam algorithm
 
     protected:
 

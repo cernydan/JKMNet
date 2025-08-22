@@ -68,7 +68,8 @@ public:
 
     Eigen::MatrixXd getGradient();  //!< Getter for gradient
     void setGradient(const Eigen::MatrixXd& grad);  //!< Getter for gradient
-    void calculateGradient(); //!< Calculate gradient
+    void calculateOnlineGradient(); //!< Calculation of the gradient matrix for online backpropagation
+    void calculateBatchGradient(); //!< Calculation of the gradient matrix for batch backpropagation
 
     Eigen::MatrixXd getWeights();  //!< Getter for weights
     void setWeights(const Eigen::MatrixXd &newWeights);  //!< Setter for weights
