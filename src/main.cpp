@@ -422,7 +422,7 @@ int main() {
 
   Eigen::MatrixXd M;
   M = (data.getCalibMat().array().isNaN()).select(0.0, data.getCalibMat()); // change NaN to 0 ... for now
-  mlpbp.onlineAdam(200, 0.001, M);
+  mlpbp.batchAdam(200,20,0.001, M);
 
   Eigen::VectorXd jedna(12);
   Eigen::VectorXd dva(12);

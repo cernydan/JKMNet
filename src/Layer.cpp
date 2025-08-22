@@ -275,10 +275,17 @@ void Layer::setGradient(const Eigen::MatrixXd& grad) {
 }
 
 /**
- * Calculation of the gradient matrix
+ * Calculation of the gradient matrix for online backpropagation
  */
-void Layer::calculateGradient() {
+void Layer::calculateOnlineGradient() {
     weightGrad = deltas * inputs.transpose();
+}
+
+/**
+ * Calculation of the gradient matrix for batch backpropagation
+ */
+void Layer::calculateBatchGradient() {
+    weightGrad += deltas * inputs.transpose();
 }
 
 /**
