@@ -1,28 +1,3 @@
-// ********* 24. 6. 2025 *********
-// **DONE**: Add bias to inputs (vs. change the last input to bias (currently)) (in Layer)
-// **DONE**: Add 'activ_func' into constructor, etc. (in Layer)
-// **DONE**: Initialize 'activ_func' as some default function (e.g. ReLU) (in Layer)
-// **DONE**: Add 'nNeurons' and 'Inps' as private variables (in MLP)
-// **DONE**: Getter and setter for 'Inps' (in MLP)
-// **DONE**: Test size of 'nNeurons'[0] vs. size of 'Inps' (in MLP)
-// **DONE**: Add vector of activation functions for each neuron (in MLP)
-// **DONE**: Test size of vector of activation functions vs. size of 'nNeurons' (in MLP)
-// **DONE**: Add vector of weights initialization for each neuron (in MLP)
-// **DONE**: Test size of vector of weights initialization vs. size of 'nNeurons' (in MLP)
-// **DONE**: Create 'initMLP' method which initializes layer[0] and then the others in a for loop (in MLP)
-// **DONE**: Create 'runMLP' method which runs the MLP without initialization (in MLP)
-// **DONE**: Test that 'runMLP' produces the same results at all runs (in main)
-// **DONE**: Getter and setter for 'weights' (in MLP)
-// *******************************
-
-// ********* old *********
-// TODO: The move copy constructor [PM] (in Layer, MLP, JKMNet)
-// TODO: The move assignment operator [PM] (in Layer, MLP, JKMNet)
-// TODO: Save 'weights' from previous iterations
-// TODO: Test large values of activations for NA's in f(a), e.g. 'a' in (-10 000, 10 000)
-// TODO: Add regularization - weights that give large activations should be penalized (so that the model is not overtrained)
-// *******************************
-
 #include <ctime>
 #include <iostream>
 #include <algorithm>
@@ -32,6 +7,7 @@
 #include "MLP.hpp"
 #include "Layer.hpp"
 #include "Data.hpp"
+#include "Metrics.hpp"
 
 using namespace std;
 
@@ -396,9 +372,8 @@ int main() {
   std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
 
 
-
   std::cout << "\n-------------------------------------------" << std::endl;
-  std::cout << "--  Testing Adam for matrix data--" << std::endl;
+  std::cout << "--  Testing Adam for matrix data --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
   
   int numInpVar = 3;             // number of values of each variable used in each pattern
@@ -442,6 +417,29 @@ int main() {
   std::cout<<mlpbp.runMLP(jedna).transpose()<<"\n";
   std::cout<<mlpbp.runMLP(dva).transpose()<<"\n";
   std::cout<<mlpbp.runMLP(tri).transpose()<<"\n";
+
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "--  Testing criteria (no real data!) --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+  
+  // Outputs as vector
+  Eigen::VectorXd y_true(4), y_pred(4);
+  y_true << 1.0, 2.0, 0.0, 4.0;
+  y_pred << 0.9, 2.1, 0.01, 3.9;
+
+  double mse_v = Metrics::mse(y_true, y_pred);
+  double rmse_v = Metrics::rmse(y_true, y_pred);
+  std::cout << "Outputs as vector: MSE = " << mse_v << ", RMSE = " << rmse_v << "\n";
+  
+  // Outputs as matrix
+  Eigen::MatrixXd Y_true(2,3), Y_pred(2,3);
+  Y_true << 1.0, 2.0, 0.0, 4.0, 2.5, 1.9;
+  Y_pred << 0.9, 2.1, 0.01, 3.9, 3.1, 0.8;
+
+  double mse_m = Metrics::mse(Y_true, Y_pred);
+  double rmse_m = Metrics::rmse(Y_true, Y_pred);
+  std::cout << "Outputs as matrix: MSE = " << mse_m << ", RMSE = " << rmse_m << "\n";
 
 
   return 0;
