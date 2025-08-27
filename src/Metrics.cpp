@@ -1,5 +1,12 @@
 #include "Metrics.hpp"
+
 #include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <chrono>
+#include <ctime>
+#include <sstream>
 #include <limits>
 
 /**
@@ -48,4 +55,106 @@ double Metrics::rmse(const Eigen::MatrixXd& Y_true, const Eigen::MatrixXd& Y_pre
     double rmse_result = std::sqrt(mse(Y_true, Y_pred));
 
     return rmse_result;
+}
+
+/**
+ * Append a labeled row of metrics into CSV file
+ */
+bool Metrics::appendMetricsCsv(const std::string &path,
+    const std::vector<std::pair<std::string,double>> &metrics,
+    const std::string &id,
+    bool verbose) {
+    
+        // Does file already exist?
+    bool file_exists = false;
+    {
+        std::ifstream ifs(path);
+        file_exists = ifs.good();
+    }
+
+    std::ofstream ofs(path, std::ios::app);
+    if (!ofs.is_open()) {
+        std::cerr << "[Metrics::appendMetricsCsv] Cannot open file for writing: " << path << "\n";
+        return false;
+    }
+    ofs << std::setprecision(12);
+
+    // if new file, write header
+    if (!file_exists) {
+        ofs << "id";
+        if (!metrics.empty()) ofs << ",";
+        for (size_t i = 0; i < metrics.size(); ++i) {
+            ofs << metrics[i].first;
+            if (i + 1 < metrics.size()) ofs << ",";
+        }
+        ofs << "\n";
+    } else {
+        // if file exists, we could validate header vs metrics names...
+    }
+
+    // Generate id string if empty to timestamp
+    std::string rowId = id;
+    if (rowId.empty()) {
+        using namespace std::chrono;
+        auto t = system_clock::now();
+        std::time_t tt = system_clock::to_time_t(t);
+        std::tm tm{};
+    #if defined(_MSC_VER)
+        localtime_s(&tm, &tt);
+    #else
+        localtime_r(&tt, &tm);
+    #endif
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%Y%m%d-%H%M%S", &tm);
+        rowId = std::string(buf);
+    }
+
+    // write the row (id followed by metric values)
+    ofs << rowId;
+    if (!metrics.empty()) ofs << ",";
+    for (size_t i = 0; i < metrics.size(); ++i) {
+        ofs << metrics[i].second;
+        if (i + 1 < metrics.size()) ofs << ",";
+    }
+    ofs << "\n";
+    
+    // flush and check
+    ofs.flush();
+    bool ok = !(ofs.fail() || !ofs.good());
+    ofs.close();
+
+    // inform about saving of the metrics
+    if (verbose) {
+        if (ok) {
+            std::cout << "[Metrics] Saved metrics to '" << path << "' (row id: " << rowId << ")\n";
+        } else {
+            std::cerr << "[Metrics] Failed to save metrics to '" << path << "'\n";
+        }
+    }
+    
+    return ok;
+}
+
+/**
+ * Compute final metrics for matrix pair and append a single row into CSV oputput file
+ */
+bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
+    const Eigen::MatrixXd &Y_pred,
+    const std::string &outCsv,
+    const std::string &id,
+    bool verbose) {
+
+    if ((Y_true.rows() != Y_pred.rows()) || (Y_true.cols() != Y_pred.cols())) {
+        std::cerr << "[Metrics::computeAndAppendFinalMetrics] Shape mismatch\n";
+        return false;
+    }
+
+    double mse_write = Metrics::mse(Y_true, Y_pred);
+    double rmse_write = Metrics::rmse(Y_true, Y_pred);
+
+    std::vector<std::pair<std::string,double>> metrics;
+    metrics.emplace_back("MSE", mse_write);
+    metrics.emplace_back("RMSE", rmse_write);
+
+    return appendMetricsCsv(outCsv, metrics, id, verbose);
 }

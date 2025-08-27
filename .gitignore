@@ -8,3 +8,4 @@
 
 # Input data (do not track large/private datasets)
 /data/inputs/
+/data/outputs/

@@ -441,6 +441,8 @@ int main() {
   double rmse_m = Metrics::rmse(Y_true, Y_pred);
   std::cout << "Outputs as matrix: MSE = " << mse_m << ", RMSE = " << rmse_m << "\n";
 
+  // Save metrics into CSV file (need to have an existing folder "data/outputs")
+  Metrics::computeAndAppendFinalMetrics(Y_true, Y_pred, "data/outputs/final_metrics.csv");
 
   return 0;
 }
