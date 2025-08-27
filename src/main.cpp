@@ -1,3 +1,16 @@
+// ********* 27. 8. 2025 *********
+// **DONE**: Create class for metrics
+// TODO: Add more metrics (PI, NS, KGE, ...)
+// **DONE**: Deal with NAs in the dataset
+// TODO: Skip windows (horizon) that include any NA in the data (not only the exact timestamp)
+// TODO: Split calibration matrix into one for inputs and one for targets
+// TODO: Preprocessing of calibration matrix in R (?)
+// TODO: Split data for calibration and validation set (+ testing set?) (chronologically or randomly as a new method in MLP) 
+// TODO: Change 'Testing ADAM' section in 'main.cpp' as a new method 
+// TODO: Prepare more scenarios for running
+// TODO: Prepare vector of weights from matrix of weights (for global optimization)
+// *******************************
+
 #include <ctime>
 #include <iostream>
 #include <algorithm>
