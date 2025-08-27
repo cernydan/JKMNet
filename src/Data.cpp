@@ -480,3 +480,185 @@ std::vector<int> Data::shuffleCalibMat(){
 
     return permVec;
 }
+
+/**
+ * Find indices of rows that contain any NaN in numeric data
+ */
+std::vector<size_t> Data::findRowsWithNa() const {
+    std::vector<size_t> out;
+    if (m_data.size() == 0) return out;
+    const Eigen::Index R = m_data.rows();
+    const Eigen::Index C = m_data.cols();
+    for (Eigen::Index r = 0; r < R; ++r) {
+        bool rowHasNa = false;
+        for (Eigen::Index c = 0; c < C; ++c) {
+            double v = m_data(r, c);
+            if (!std::isfinite(v)) { rowHasNa = true; break; }
+        }
+        if (rowHasNa) out.push_back(static_cast<size_t>(r));
+    }
+    return out;
+}
+
+/**
+ * Remove rows that contain any NaN from m_data and m_timestamps, but keep backups and record removed indices so they can be restored later
+ */
+void Data::removeRowsWithNa() {
+    if (m_has_filtered_rows) {
+        // already filtered — do nothing
+        return;
+    }
+
+    // find rows to remove
+    auto naIdx = findRowsWithNa();
+    if (naIdx.empty()) {
+        // no NAs — nothing to do
+        m_has_filtered_rows = false;
+        m_na_row_indices.clear();
+        return;
+    }
+
+    // Backup originals
+    m_data_backup = m_data;
+    m_timestamps_backup = m_timestamps;
+
+    const Eigen::Index R = m_data.rows();
+    const Eigen::Index C = m_data.cols();
+
+    // Build a boolean mask of rows to keep
+    std::vector<char> keep(R, 1);
+    for (size_t i : naIdx) {
+        if (i < static_cast<size_t>(R)) keep[static_cast<size_t>(i)] = 0;
+    }
+
+    // Count kept rows
+    size_t kept_count = 0;
+    for (Eigen::Index r = 0; r < R; ++r) if (keep[static_cast<size_t>(r)]) ++kept_count;
+
+    // Create new matrix of kept rows
+    Eigen::MatrixXd newmat(static_cast<Eigen::Index>(kept_count), C);
+    std::vector<std::string> newtimes;
+    newtimes.reserve(kept_count);
+
+    Eigen::Index rr = 0;
+    for (Eigen::Index r = 0; r < R; ++r) {
+        if (keep[static_cast<size_t>(r)]) {
+            newmat.row(rr) = m_data.row(r);
+            newtimes.push_back(m_timestamps[static_cast<size_t>(r)]);
+            ++rr;
+        }
+    }
+
+    // Replace m_data and m_timestamps with filtered versions
+    m_data = std::move(newmat);
+    m_timestamps = std::move(newtimes);
+
+    // Store removed indices (sorted ascending)
+    m_na_row_indices = std::move(naIdx);
+    std::sort(m_na_row_indices.begin(), m_na_row_indices.end());
+
+    m_has_filtered_rows = true;
+}
+
+/**
+ * Restore the original (unfiltered) data/timestamps and clear backups
+ */
+void Data::restoreOriginalData() {
+    if (!m_has_filtered_rows) return;
+    m_data = std::move(m_data_backup);
+    m_timestamps = std::move(m_timestamps_backup);
+    m_data_backup.resize(0,0);
+    m_timestamps_backup.clear();
+    m_na_row_indices.clear();
+    m_has_filtered_rows = false;
+}
+
+/**
+ * Expand predictions on the filtered dataset back to full-length matrix
+ */
+Eigen::MatrixXd Data::expandPredictionsToFull(const Eigen::MatrixXd& preds) const {
+    if (!m_has_filtered_rows) {
+        return preds;
+    }
+
+    const Eigen::Index origRows = static_cast<Eigen::Index>(m_data_backup.rows());
+    const Eigen::Index validRows = static_cast<Eigen::Index>(m_data.rows());
+    if (preds.rows() != validRows) {
+        throw std::invalid_argument("expandPredictionsToFull (matrix): preds rows != valid rows");
+    }
+    const Eigen::Index cols = preds.cols();
+
+    Eigen::MatrixXd full(origRows, cols);
+    full.setConstant(std::numeric_limits<double>::quiet_NaN());
+
+    std::size_t idxRemPos = 0;
+    Eigen::Index pj = 0;
+    for (Eigen::Index ri = 0; ri < origRows; ++ri) {
+        bool removed = false;
+        if (idxRemPos < m_na_row_indices.size() && static_cast<size_t>(ri) == m_na_row_indices[idxRemPos]) {
+            removed = true;
+            ++idxRemPos;
+        }
+        if (!removed) {
+            full.row(ri) = preds.row(pj++);
+        } // else leave NaNs
+    }
+    return full;
+}
+
+/**
+ * Expand predictions produced from calibration matrix
+ */
+Eigen::MatrixXd Data::expandPredictionsFromCalib(const Eigen::MatrixXd& preds, int inpRows) const {
+    if (inpRows < 0) throw std::invalid_argument("expandPredictionsFromCalib: inpRows must be >= 0");
+    const Eigen::Index CR = preds.rows();
+    const Eigen::Index out_horizon = preds.cols();
+
+    // original full row count (before any filtering)
+    const Eigen::Index origRows = static_cast<Eigen::Index>(m_data_backup.rows());
+    const Eigen::Index validRows = static_cast<Eigen::Index>(m_data.rows()); // filtered rows
+
+    if (CR == 0 || out_horizon == 0) {
+        return Eigen::MatrixXd(0,0);
+    }
+
+    // Build mapping filtered_index -> original_index
+    std::vector<Eigen::Index> filt2orig;
+    filt2orig.reserve(static_cast<size_t>(validRows));
+    if (m_na_row_indices.empty()) {
+        // identity mapping when no rows were removed
+        for (Eigen::Index i = 0; i < validRows; ++i) filt2orig.push_back(i);
+    } else {
+        // iterate original indices and skip removed ones
+        std::size_t remPos = 0;
+        for (Eigen::Index orig = 0; orig < origRows; ++orig) {
+            if (remPos < m_na_row_indices.size() && static_cast<Eigen::Index>(m_na_row_indices[remPos]) == orig) {
+                ++remPos; // this original row was removed
+            } else {
+                filt2orig.push_back(orig);
+            }
+        }
+        if (static_cast<Eigen::Index>(filt2orig.size()) != validRows) {
+            throw std::runtime_error("expandPredictionsFromCalib: internal mapping size mismatch");
+        }
+    }
+
+    // Prepare full matrix with NaN
+    Eigen::MatrixXd full(origRows, out_horizon);
+    full.setConstant(std::numeric_limits<double>::quiet_NaN());
+
+    // For each calibration pattern i, place preds(i, j) at filtered-row index (i + inpRows + j)
+    for (Eigen::Index i = 0; i < CR; ++i) {
+        for (Eigen::Index j = 0; j < out_horizon; ++j) {
+            Eigen::Index filteredRow = i + inpRows + j;
+            if (filteredRow < 0 || filteredRow >= validRows) {
+                // If the pattern maps outside valid rows, skip (safe guard)
+                continue;
+            }
+            Eigen::Index origRow = filt2orig[static_cast<size_t>(filteredRow)];
+            full(origRow, j) = preds(i, j);
+        }
+    }
+
+    return full;
+}

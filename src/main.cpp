@@ -2,6 +2,8 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <fstream>
+#include <limits>
 
 #include "JKMNet.hpp"
 #include "MLP.hpp"
@@ -352,6 +354,13 @@ int main() {
   }
   std::cout << "First 5 moisture values: " << firstMoisture << "\n";
 
+  // Detect and remove rows with NaNs
+  auto naIdx = data.findRowsWithNa();
+  std::cout << "Number of rows with any NaN: " << naIdx.size() << "\n";
+  if (!naIdx.empty()) {
+      data.removeRowsWithNa();
+  }
+
 
   std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "-- Transformation of data --" << std::endl;
@@ -443,6 +452,203 @@ int main() {
 
   // Save metrics into CSV file (need to have an existing folder "data/outputs")
   Metrics::computeAndAppendFinalMetrics(Y_true, Y_pred, "data/outputs/final_metrics.csv");
+
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "--  Testing NAs removal - vector (no real data!) --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  // Ensure folder exists: "data/inputs"
+  const std::string path = "data/inputs/test_artificial.csv";
+
+  // Create a small CSV with some missing values (empty fields and "NA")
+  {
+      std::ofstream ofs(path);
+      if (!ofs.is_open()) {
+          std::cerr << "Cannot create test CSV at " << path << "\n";
+          return 1;
+      }
+      // header: ID, date, then numeric cols T1,T2,moisture
+      ofs << "ID,date,T1,T2,moisture\n";
+      ofs << "1,2020-01-01,1.0,2.0,0.50\n";       // OK
+      ofs << "2,2020-01-02,1.10,,0.55\n";         // missing T2 -> NaN
+      ofs << "3,2020-01-03,,2.20,0.60\n";         // missing T1 -> NaN
+      ofs << "4,2020-01-04,1.30,2.30,\n";         // missing moisture -> NaN
+      ofs << "5,2020-01-05,1.40,2.40,0.65\n";     // OK
+      ofs << "6,2020-01-06,NA,2.50,0.70\n";       // "NA" -> NaN
+      ofs.close();
+      std::cout << "Wrote test CSV: " << path << "\n";
+  }
+
+  // Load the CSV using Data
+  Data dataArtificial;
+  std::vector<std::string> keepColsArtificial = {"T1", "T2", "moisture"};
+
+  try {
+      // Empty idFilter to accept all IDs
+      std::unordered_set<std::string> idFilter;
+      size_t nrows = dataArtificial.loadFilteredCSV(path, idFilter, keepColsArtificial, "date", "ID");
+      std::cout << "Loaded rows: " << nrows << "\n";
+
+      // Store original timestamps (so we can print full timeline later)
+      std::vector<std::string> original_times = dataArtificial.timestamps();
+
+      // Print the loaded numeric matrix
+      Eigen::MatrixXd MArtificial = dataArtificial.numericData();
+      std::cout << "Loaded numeric data (" << MArtificial.rows() << " x " << MArtificial.cols() << "):\n";
+      for (int r = 0; r < MArtificial.rows(); ++r) {
+          std::cout << " row " << r << ": ";
+          for (int c = 0; c < MArtificial.cols(); ++c) {
+              double v = MArtificial(r,c);
+              if (std::isfinite(v)) std::cout << v;
+              else std::cout << "NaN";
+              if (c + 1 < MArtificial.cols()) std::cout << " | ";
+          }
+          std::cout << "\n";
+      }
+
+      // Find rows with any NaN
+      auto naRows = dataArtificial.findRowsWithNa();
+      std::cout << "Rows containing NaN: ";
+      if (naRows.empty()) std::cout << "(none)";
+      for (auto idx : naRows) std::cout << idx << " ";
+      std::cout << "\n";
+
+      // Remove rows with NaN and show filtered data
+      dataArtificial.removeRowsWithNa();
+      Eigen::MatrixXd M_filtered = dataArtificial.numericData();
+      std::cout << "After removeRowsWithNa(): data has " << M_filtered.rows() << " rows\n";
+      for (int r = 0; r < M_filtered.rows(); ++r) {
+          std::cout << " kept row " << r << " : ";
+          for (int c = 0; c < M_filtered.cols(); ++c) {
+              double v = M_filtered(r,c);
+              if (std::isfinite(v)) std::cout << v;
+              else std::cout << "NaN";
+              if (c + 1 < M_filtered.cols()) std::cout << " | ";
+          }
+          std::cout << "\n";
+      }
+
+      // Simulate predictions on the filtered rows (one output per row)
+      int validRows = static_cast<int>(M_filtered.rows());
+      // Produce one predicted value per valid row, e.g. predicted moisture = last column of filtered row + 0.1
+      Eigen::MatrixXd preds_valid(validRows, 1);
+      for (int i = 0; i < validRows; ++i) {
+          double observed_moisture = M_filtered(i, M_filtered.cols()-1);
+          preds_valid(i,0) = std::isfinite(observed_moisture) ? (observed_moisture + 0.1) : std::numeric_limits<double>::quiet_NaN();
+      }
+
+      // Expand predictions back to full timeline (original length)
+      Eigen::MatrixXd preds_full = dataArtificial.expandPredictionsToFull(preds_valid);
+      std::cout << "Expanded preds_full rows: " << preds_full.rows() << " cols: " << preds_full.cols() << "\n";
+
+      // Print the full timeline alongside timestamps (using original_times captured earlier)
+      std::cout << "Full timeline (timestamp | predicted):\n";
+      for (int r = 0; r < preds_full.rows(); ++r) {
+          std::cout << " " << original_times[r] << " | ";
+          double v = preds_full(r, 0);
+          if (std::isfinite(v)) std::cout << v;
+          else std::cout << "NaN";
+          std::cout << "\n";
+      }
+
+      // Restore original data in memory
+      dataArtificial.restoreOriginalData();
+  }
+  catch (std::exception &ex) {
+      std::cerr << "[Error]: " << ex.what() << "\n";
+      return 1;
+  }
+
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "--  Testing NAs removal - matrix (no real data!) --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  try {
+    const std::string pathA = "data/inputs/test_multi_horizon.csv";
+    {
+        std::ofstream ofs(pathA);
+        ofs << "ID,date,T1,T2,moisture\n";
+        ofs << "1,2020-01-01,1.0,2.0,0.50\n";       // OK
+        ofs << "2,2020-01-02,1.10,1.9,0.55\n";      // OK
+        ofs << "3,2020-01-03,1.17,2.20,0.60\n";     // OK
+        ofs << "4,2020-01-04,1.30,2.30,0.62\n";     // OK
+        ofs << "5,2020-01-05,1.40,2.40,0.65\n";     // OK
+        ofs << "5,2020-01-06,1.35,2.30,0.55\n";     // OK
+        ofs << "5,2020-01-07,1.20,,0.60\n";         // missing T2 -> NaN
+        ofs << "5,2020-01-08,1.80,2.10,0.68\n";     // OK
+        ofs << "5,2020-01-09,1.80,2.60,0.65\n";     // OK
+        ofs << "5,2020-01-10,1.72,2.50,0.58\n";     // OK
+        ofs << "5,2020-01-11,1.40,2.50,0.52\n";     // OK
+        ofs.close();
+        std::cout << "Wrote test CSV: " << pathA << "\n";
+    }
+
+    Data dataMultiOut;
+    std::vector<std::string> keepA = {"T1","T2","moisture"};
+    std::unordered_set<std::string> idFilterA; // accept all
+    size_t nA = dataMultiOut.loadFilteredCSV(pathA, idFilterA, keepA, "date", "ID");
+    std::cout << "Loaded rows: " << nA << "\n";
+
+    // save original timestamps BEFORE filtering
+    std::vector<std::string> timesA = dataMultiOut.timestamps();
+
+    auto naRowsA = dataMultiOut.findRowsWithNa();
+    std::cout << "Rows with NaN: ";
+    for (auto r : naRowsA) std::cout << r << " ";
+    std::cout << "\n";
+
+    // remove rows that contain any NaN
+    dataMultiOut.removeRowsWithNa();
+    Eigen::MatrixXd MfA = dataMultiOut.numericData();
+    std::cout << "Filtered rows: " << MfA.rows() << " x " << MfA.cols() << "\n";
+
+    // Build calibration matrix for multi-horizon outputs (inpRows = 2, out_horizon = 2)
+    int inpRows = 2;
+    int out_horizon = 2;
+    dataMultiOut.makeCalibMat(inpRows, out_horizon);
+    Eigen::MatrixXd C = dataMultiOut.getCalibMat(); // CR x (inpRows*inputCols + out_horizon)
+    const Eigen::Index CR = C.rows();
+    const Eigen::Index CC = C.cols();
+    const Eigen::Index inputSize = CC - out_horizon;
+
+    // Extract truth_valid (CR x out_horizon) and synthetic preds_valid
+    Eigen::MatrixXd Y_true_valid = C.block(0, inputSize, CR, out_horizon);
+    Eigen::MatrixXd preds_valid = Y_true_valid;
+    // synthetic shift so preds != truth
+    preds_valid.array() += 0.1;
+
+    // compute a quick metric on valid rows
+    double mseA = Metrics::mse(Y_true_valid, preds_valid);
+    std::cout << "MSE (multi-horizon, valid rows) = " << mseA << "\n";
+
+    // Expand predictions back to full timeline (use inpRows from makeCalibMat)
+    Eigen::MatrixXd preds_full = dataMultiOut.expandPredictionsFromCalib(preds_valid, inpRows);
+    std::cout << "Expanded preds_full: " << preds_full.rows() << " x " << preds_full.cols() << "\n";
+
+    // Print full timeline (timestamps from timesA)
+    std::cout << "Timestamp | pred_h1 | pred_h2\n";
+    for (int r = 0; r < preds_full.rows(); ++r) {
+        std::cout << " " << timesA[r] << " | ";
+        for (int c = 0; c < preds_full.cols(); ++c) {
+            double v = preds_full(r,c);
+            if (std::isfinite(v)) std::cout << v;
+            else std::cout << "NaN";
+            if (c+1 < preds_full.cols()) std::cout << " | ";
+        }
+        std::cout << "\n";
+    }
+
+    // Restore original data if you want to reuse dataMultiOut later
+    dataMultiOut.restoreOriginalData();
+
+      
+  } catch (const std::exception &ex) {
+    std::cerr << "[Error]: " << ex.what() << "\n";
+    return 1;
+  }
+
 
   return 0;
 }

@@ -50,6 +50,16 @@ class Data {
         Eigen::MatrixXd getCalibMat();  //!< Getter for calibration matrix
         std::vector<int> shuffleCalibMat();  //!< Randomly shuffle calibration matrix rows
 
+        // Deal with NAs in the dataset
+        std::vector<size_t> findRowsWithNa() const;  //!< Find indices of rows that contain any NaN in numeric data
+        void removeRowsWithNa();  //!< Remove rows that contain any NaN from m_data and m_timestamps, but keep backups and record removed indices so they can be restored later
+        void restoreOriginalData();  //< Restore the original (unfiltered) data/timestamps and clear backups
+        Eigen::MatrixXd expandPredictionsToFull(const Eigen::MatrixXd& preds) const;  //!< Expand predictions on the filtered dataset back to full-length matrix
+        Eigen::MatrixXd expandPredictionsFromCalib(const Eigen::MatrixXd& preds, int inpRows) const;  //!< Expand predictions produced from calibration matrix
+        const std::vector<size_t>& removedRowIndices() const { return m_na_row_indices; }   //!< Get indices of rows removed 
+        size_t validRowCount() const { return static_cast<size_t>(m_data.rows()); }  //!< Number of valid rows currently in m_data
+
+
     protected:
 
     private:
@@ -60,11 +70,18 @@ class Data {
         std::vector<std::string> m_colNames;  //!< Column names for m_data
         Eigen::MatrixXd calibMat; //!< Matrix of inputs and desired outputs for backpropagation
 
-        // global transform config
+        // Global transform config
         transform_type m_transform = transform_type::NONE;
         double m_alpha = 0.015;
         bool m_excludeLastCol = false;
-        Scaler m_scaler;   // stores per-column min/max after a MINMAX fit
+        Scaler m_scaler;   //!< Stores per-column min/max after a MINMAX fit
+
+        // Deal with NAs in the dataset
+        Eigen::MatrixXd m_data_backup;  //!< Full original data backup (before filtering)
+        std::vector<std::string> m_timestamps_backup;  //!< Timestamps backup
+        std::vector<size_t> m_na_row_indices;  //!< Indices of removed rows (in original coordinates)
+        bool m_has_filtered_rows = false;  //!< True if removeRowsWithNa() was applied
+
 };
 
 #endif // DATA_HPP
