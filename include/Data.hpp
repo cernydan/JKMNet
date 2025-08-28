@@ -45,10 +45,20 @@ class Data {
         void applyTransform();  //!< Apply the previously configured transform to m_data
         void inverseTransform();  //!< Inverse the global transform (to bring predictions back)
 
-        void makeCalibMat(int inpRows, int outRows); //!< Create calibration matrix for backpropagation from data matrix
-        void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix for backpropagation from data matrix
+        void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix
+        void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix  (both inps + outs) for backpropagation from data matrix
+        void makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix
+        void splitCalibMat(size_t inpLength);  //!< Split created calibration matrix into separate inps and outs matrices 
         Eigen::MatrixXd getCalibMat();  //!< Getter for calibration matrix
-        std::vector<int> shuffleCalibMat();  //!< Randomly shuffle calibration matrix rows
+        void setCalibMat(const Eigen::MatrixXd &newMat);  //!< Setter for calibration matrix
+        Eigen::MatrixXd getCalibInpsMat();  //!< Getter for calibration inputs matrix
+        void setCalibInpsMat(const Eigen::MatrixXd &newMat);  //!< Setter for calibration inputs matrix
+        Eigen::MatrixXd getCalibOutsMat();  //!< Getter for calibration outputs matrix
+        void setCalibOutsMat(const Eigen::MatrixXd &newMat);  //!< Setter for calibration outputs matrix
+        
+        std::vector<int> permutationVector(int length);  //!< Create random permutation vector for shuffling
+        Eigen::MatrixXd shuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec); //!< Shuffle matrix rows
+        Eigen::MatrixXd unshuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec); //!< Unshuffle matrix rows
 
         // Deal with NAs in the dataset
         std::vector<size_t> findRowsWithNa() const;  //!< Find indices of rows that contain any NaN in numeric data
@@ -69,6 +79,8 @@ class Data {
         Eigen::MatrixXd m_data;  //!< Matrix with numeric columns (rows x cols) filled with variables
         std::vector<std::string> m_colNames;  //!< Column names for m_data
         Eigen::MatrixXd calibMat; //!< Matrix of inputs and desired outputs for backpropagation
+        Eigen::MatrixXd calibInpsMat; //!< Matrix of inputs for backpropagation
+        Eigen::MatrixXd calibOutsMat; //!< Matrix of desired outputs for backpropagation
 
         // Global transform config
         transform_type m_transform = transform_type::NONE;

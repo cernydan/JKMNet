@@ -393,23 +393,36 @@ void Data::inverseTransform() {
 /**
  * Create matrix for backpropagation from data matrix
  */
-void Data::makeCalibMat(int inpRows, int outRows){
+void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows){
+    if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
+        throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
 
     // ! Assuming predicted variable is in last column of data
-    int DC = m_data.cols();                           // number of cols in input data matrix
-    int CR = m_data.rows() - inpRows - outRows + 1;   // number of rows of calibration matrix
-    int CC = inpRows * DC + outRows;                  // number of cols of calibration matrix
+    const auto maxR = *std::max_element(inpNumsOfVars.begin(),inpNumsOfVars.end());    // max number of input variable values
+    if (maxR == 0)
+        throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
 
+    const int DC = static_cast<int>(m_data.cols());   // number of cols in input data matrix
+    if (DC < 1)
+        throw std::runtime_error("Data has no columns");
+    if (inpNumsOfVars.size() != DC)
+        throw std::invalid_argument("inpNumsOfVars size doesnt match data columns");
+
+    const int CR = m_data.rows() - maxR - outRows + 1;   // number of rows of calibration matrix
+    if (CR <= 0)
+        throw std::runtime_error("Not enough rows to build calibration matrix with given inpNumsOfVars/outRows");
+    
+    const int CC = std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0) + outRows;  // number of cols of calibration matrix
     calibMat = Eigen::MatrixXd(CR , CC);
     for(int i = 0; i < CR; i++){
         int col_idx = 0;
         for (int j = 0; j < DC; j++) {
-            for (int k = 0; k < inpRows; k++) {
-                calibMat(i, col_idx++) = m_data(i + k, j);
+            for(int l = 0; l < inpNumsOfVars[j]; l++){
+                calibMat(i, col_idx++) = m_data(i + maxR - inpNumsOfVars[j] + l, j);
             }
         }
         for (int j = 0; j < outRows; j++) {
-            calibMat(i, col_idx++) = m_data(i + inpRows + j, DC - 1);
+            calibMat(i, col_idx++) = m_data(i + maxR + j, DC - 1);
         }
     }
 }
@@ -454,6 +467,56 @@ void Data::makeCalibMat2(int inpRows, int outRows){
 }
 
 /**
+ * Create separate calibration inps and outs matrices for backpropagation from data matrix
+ */
+void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows){
+    if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
+        throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
+
+    // ! Assuming predicted variable is in last column of data
+    const auto maxR = *std::max_element(inpNumsOfVars.begin(),inpNumsOfVars.end());    // max number of input variable values
+    if (maxR == 0)
+        throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
+
+    const int DC = static_cast<int>(m_data.cols());   // number of cols in input data matrix
+    if (DC < 1)
+        throw std::runtime_error("Data has no columns");
+    if (inpNumsOfVars.size() != DC)
+        throw std::invalid_argument("inpNumsOfVars size doesnt match data columns");
+
+    const int CR = m_data.rows() - maxR - outRows + 1;   // number of rows of matrices
+    if (CR <= 0)
+        throw std::runtime_error("Not enough rows to build calibration matrices with given inpNumsOfVars/outRows");
+    
+    const int inpC = std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0);  // number of cols of inps calibration matrix
+    calibInpsMat = Eigen::MatrixXd(CR , inpC);
+    calibOutsMat = Eigen::MatrixXd(CR , outRows);
+
+    for(int i = 0; i < CR; i++){
+        int col_idx = 0;
+        for (int j = 0; j < DC; j++) {
+            for(int l = 0; l < inpNumsOfVars[j]; l++){
+                calibInpsMat(i, col_idx++) = m_data(i + maxR - inpNumsOfVars[j] + l, j);
+            }
+        }
+        for (int j = 0; j < outRows; j++) {
+            calibOutsMat(i, j) = m_data(i + maxR + j, DC - 1);
+        }
+    }
+}
+
+/**
+ * Split created calibration matrix into separate inps and outs matrices
+ */
+void Data::splitCalibMat(size_t inpLength){
+    if (inpLength <= 0 || inpLength >= calibMat.cols())
+        throw std::invalid_argument("inpLength must be greater and 0 and less than calibMat columns");
+
+    calibInpsMat = calibMat.leftCols(inpLength);
+    calibOutsMat = calibMat.rightCols(calibMat.cols() - inpLength);
+}
+
+/**
  * Getter for calibration matrix
  */
 Eigen::MatrixXd Data::getCalibMat(){
@@ -461,25 +524,85 @@ Eigen::MatrixXd Data::getCalibMat(){
 }
 
 /**
- * Randomly shuffle matrix rows
+ * Setter for calibration matrix
  */
-std::vector<int> Data::shuffleCalibMat(){
-    int r = calibMat.rows();
-    std::vector<int> permVec(r);
-    std::iota(permVec.begin(), permVec.end(), 0);
+void Data::setCalibMat(const Eigen::MatrixXd &newMat){
+    calibMat = newMat;
+}
 
+/**
+ * Getter for calibration inputs matrix
+ */
+Eigen::MatrixXd Data::getCalibInpsMat(){
+    return calibInpsMat;
+}
+
+/**
+ * Setter for calibration inputs matrix
+ */
+void Data::setCalibInpsMat(const Eigen::MatrixXd &newMat){
+    calibInpsMat = newMat;
+}
+
+/**
+ * Getter for calibration outputs matrix
+ */
+Eigen::MatrixXd Data::getCalibOutsMat(){
+    return calibOutsMat;
+}
+
+/**
+ * Setter for calibration outputs matrix
+ */
+void Data::setCalibOutsMat(const Eigen::MatrixXd &newMat){
+    calibOutsMat = newMat;
+}
+
+/**
+ * Create random permutation vector for shuffling
+ */
+std::vector<int> Data::permutationVector(int length){
+    if (length <= 0)
+        throw std::invalid_argument("length must be greater than 0");
+
+    std::vector<int> permVec(length);
+    std::iota(permVec.begin(), permVec.end(), 0);
+    
     static std::random_device rd;
     static std::mt19937 gen(rd());
     std::shuffle(permVec.begin(), permVec.end(), gen);
-
-    Eigen::MatrixXd newmat(r, calibMat.cols());
-    for (int i = 0; i < r; ++i) {
-        newmat.row(i) = calibMat.row(permVec[i]);
-    }
-    calibMat = std::move(newmat);
-
+    
     return permVec;
 }
+
+/**
+ * Shuffle matrix rows
+ */
+Eigen::MatrixXd Data::shuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec){
+    if (matrix.rows() != permVec.size())
+        throw std::invalid_argument("matrix rows and permVec length dont match");
+
+    Eigen::MatrixXd newmat(matrix.rows(), matrix.cols());
+    for (size_t i = 0; i < matrix.rows(); ++i) {
+        newmat.row(i) = matrix.row(permVec[i]);
+    }
+    return newmat;
+}
+
+/**
+ * Unshuffle matrix rows
+ */
+Eigen::MatrixXd Data::unshuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec) {
+    if (matrix.rows() != permVec.size())
+        throw std::invalid_argument("matrix rows and permVec length dont match");
+
+    Eigen::MatrixXd oldmat(matrix.rows(), matrix.cols());
+    for (size_t i = 0; i < matrix.rows(); ++i) {
+        oldmat.row(permVec[i]) = matrix.row(i);
+    }
+    return oldmat;
+}
+
 
 /**
  * Find indices of rows that contain any NaN in numeric data

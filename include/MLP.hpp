@@ -65,9 +65,15 @@ class MLP {
         bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8) const; //!< Repeatability check for 'runMLP'
         void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate); //!< Forward pass and update weights with backpropagation (one input)
 
-        void onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calMat);    //!< Online backpropagation
-        void onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calMat);  //!< Online backpropagation using Adam algorithm
-        void batchAdam(int numIter, int batchSize, double learningRate, const Eigen::MatrixXd& calMat);  //!< Batch backpropagation using Adam algorithm
+        void onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calMat);    //!< Online backpropagation - 1 calibration matrix
+        void onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat);    //!< Online backpropagation - separete inp out matrices
+
+        void onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calMat);  //!< Online backpropagation using Adam algorithm - 1 calibration matrix
+        void onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat);  //!< Online backpropagation using Adam algorithm - separete inp out matrices
+
+        void batchAdam(int numIter, int batchSize, double learningRate, const Eigen::MatrixXd& calMat);  //!< Batch backpropagation using Adam algorithm - 1 calibration matrix
+        void batchAdam(int numIter, int batchSize, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat);  //!< Batch backpropagation using Adam algorithm - separete inp out matrices
+
 
     protected:
 
