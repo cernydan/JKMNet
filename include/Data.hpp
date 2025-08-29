@@ -36,6 +36,7 @@ class Data {
 
         std::vector<std::string> timestamps() const;  //!< Getter for the timestamps
         Eigen::MatrixXd numericData() const;  //!< Getter for the data numeric matrix
+        void setNumericData(const Eigen::MatrixXd &newData); //!< Setter for the data numeric matrix
         std::vector<std::string> numericColNames() const;  //!< Getter for the names of numeric columns
 
         void printHeader(const std::string& timestampColName = "timestamp") const;  //!< Print header line, i.e. timestamp + numeric column names
@@ -48,7 +49,7 @@ class Data {
         void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix
         void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix  (both inps + outs) for backpropagation from data matrix
         void makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix
-        void splitCalibMat(size_t inpLength);  //!< Split created calibration matrix into separate inps and outs matrices 
+        void splitCalibMat(int inpLength);  //!< Split created calibration matrix into separate inps and outs matrices 
         Eigen::MatrixXd getCalibMat();  //!< Getter for calibration matrix
         void setCalibMat(const Eigen::MatrixXd &newMat);  //!< Setter for calibration matrix
         Eigen::MatrixXd getCalibInpsMat();  //!< Getter for calibration inputs matrix

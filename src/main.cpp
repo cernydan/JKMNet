@@ -26,6 +26,31 @@
 
 using namespace std;
 
+void testAdamOnlineSplitM(Data& dataA, 
+                          std::vector<unsigned> mlpArchitecture,
+                          const std::vector<int>& numbersOfPastVarsValues,
+                          activ_func_type activationType,
+                          weight_init_type weightsInitType,
+                          int maxIterations,
+                          double maxError,
+                          double learningRate){           
+  dataA.makeCalibMatsSplit(numbersOfPastVarsValues,mlpArchitecture.back());
+  std::vector<int>permutVector = dataA.permutationVector(dataA.getCalibInpsMat().rows());
+  dataA.setCalibInpsMat(dataA.shuffleMatrix(dataA.getCalibInpsMat(),permutVector));
+  MLP adamlp;
+  adamlp.setArchitecture(mlpArchitecture);
+  std::vector<activ_func_type> activations;
+  std::vector<weight_init_type> weightInits;
+  for(size_t i = 0; i < mlpArchitecture.size(); i++){
+    activations.push_back(activationType);
+    weightInits.push_back(weightsInitType);
+  }
+  adamlp.setActivations(activations);
+  adamlp.setWInitType(weightInits);
+  adamlp.initMLP(dataA.getCalibInpsMat().row(0));
+  adamlp.onlineAdam(maxIterations, maxError, learningRate, dataA.getCalibInpsMat(), dataA.getCalibOutsMat());
+}
+
 int main() {
 
   std::cout << "-------------------------------------------" << std::endl;
@@ -374,7 +399,6 @@ int main() {
       data.removeRowsWithNa();
   }
 
-
   std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "-- Transformation of data --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
@@ -392,54 +416,6 @@ int main() {
   std::cout << "After NONLINEAR transform (first row):  " << data.numericData().row(0) << "\n";
   data.inverseTransform();
   std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
-
-
-  std::cout << "\n-------------------------------------------" << std::endl;
-  std::cout << "--  Testing Adam for matrix data --" << std::endl;
-  std::cout << "-------------------------------------------" << std::endl;
-             
-  unsigned int numOuts = 2;      // number of outputs in each pattern = output neurons
-  std::vector<int> inputVars = {3,3,3,3}; // number of values of each variable used in each pattern
-  data.makeCalibMat(inputVars, numOuts);
-  data.permutationVector(data.getCalibMat().rows());
-  data.setCalibMat(data.shuffleMatrix(data.getCalibMat(),data.permutationVector(data.getCalibMat().rows())));
-
-  MLP mlpbp;
-  std::vector<unsigned> arch = {2,3,numOuts};
-  mlpbp.setArchitecture(arch);
-  mlpbp.printArchitecture();
-  std::vector<weight_init_type> weiInits = {
-        weight_init_type::RANDOM,weight_init_type::RANDOM,weight_init_type::RANDOM
-  };
-  mlpbp.setWInitType(weiInits);
-  mlpbp.printActivations();
-  mlpbp.printWInitType();
-  Eigen::VectorXd initvec(data.getCalibMat().cols() - numOuts); // number of inputs = calibration matrix row length - number of outputs
-  mlpbp.initMLP(initvec);
-
-  Eigen::MatrixXd M;
-  M = (data.getCalibMat().array().isNaN()).select(0.0, data.getCalibMat()); // change NaN to 0 ... for now
-  mlpbp.batchAdam(200,20,0.001, M);
-
-  Eigen::VectorXd jedna(12);
-  Eigen::VectorXd dva(12);
-  Eigen::VectorXd tri(12);
-  jedna<< 5.35807,5.16797,5.02604,4.79622,4.83268,4.58984,1.64323,2.87695,2.00586,0.243134,0.242252,0.241349;
-  dva<< 12.3822,12.056,11.9596,12.8229,12.459,12.3763,13.6309,13.3034,12.9238,0.148254,0.144221,0.141342;
-  tri<< 9.04362,9.42383,9.86198,9.57552,10.1908,10.696,11.4434,13.3431,14.2383,0.2519,0.248034,0.24362;
-  std::cout<<"\n Testing 3 input vectors from calibration data: \n";
-  std::cout<<"vec1: "<<jedna.transpose()<<"\n";
-  std::cout<<"vec1: "<<dva.transpose()<<"\n";
-  std::cout<<"vec1: "<<tri.transpose()<<"\n \n";
-  std::cout<<"Their measured outputs: \n";
-  std::cout<<"0.240465   0.240071 \n";
-  std::cout<<"0.139811   0.138863 \n";
-  std::cout<<"0.239087   0.235801 \n \n";
-  std::cout<<"Modelled outputs: \n";
-  std::cout<<mlpbp.runMLP(jedna).transpose()<<"\n";
-  std::cout<<mlpbp.runMLP(dva).transpose()<<"\n";
-  std::cout<<mlpbp.runMLP(tri).transpose()<<"\n";
-
 
   std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "--  Testing criteria (no real data!) --" << std::endl;
@@ -661,6 +637,34 @@ int main() {
     std::cerr << "[Error]: " << ex.what() << "\n";
     return 1;
   }
+
+  // std::cout << "\n-------------------------------------------" << std::endl;
+  // std::cout << "--   Testing split calibMats, shuffling  --" << std::endl;
+  // std::cout << "-------------------------------------------" << std::endl;
+  // std::cout<<"data: \n"<<data.numericData().topRows(5)<<endl<<"\n";
+  // data.makeCalibMat({1,3,2,1},2);     // input length = 7
+  // std::cout<<"calibMat: \n"<<data.getCalibMat().topRows(3)<<endl<<"\n";
+  // data.splitCalibMat(7);
+  // std::cout<<"split mats from calibMat: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
+  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
+  // data.makeCalibMatsSplit({1,3,2,1},2);
+  // std::cout<<"directly created split mats: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
+  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
+  // std::vector<int>permut = data.permutationVector(data.getCalibInpsMat().rows());
+  // data.setCalibInpsMat(data.shuffleMatrix(data.getCalibInpsMat(),permut));
+  // data.setCalibOutsMat(data.shuffleMatrix(data.getCalibOutsMat(),permut));
+  // std::cout<<"shuffled split mats: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
+  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
+  // data.setCalibInpsMat(data.unshuffleMatrix(data.getCalibInpsMat(),permut));
+  // data.setCalibOutsMat(data.unshuffleMatrix(data.getCalibOutsMat(),permut));
+  // std::cout<<"unshuffled split mats: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
+  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "--      Testing testing online Adam      --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  testAdamOnlineSplitM(data,{5,3,2},{1,2,2,3},activ_func_type::RELU,weight_init_type::RANDOM,200,0.004,0.001);
 
 
   return 0;

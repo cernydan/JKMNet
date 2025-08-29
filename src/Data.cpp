@@ -202,6 +202,13 @@ Eigen::MatrixXd Data::numericData() const {
 } 
 
 /**
+ *  Setter for the data numeric matrix
+ */
+void Data::setNumericData(const Eigen::MatrixXd &newData){
+    m_data = newData;
+}
+
+/**
  * Getter for the names of numeric columns
  */
 std::vector<std::string> Data::numericColNames() const {
@@ -402,7 +409,7 @@ void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows){
     if (maxR == 0)
         throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
 
-    const int DC = static_cast<int>(m_data.cols());   // number of cols in input data matrix
+    const size_t DC = m_data.cols();   // number of cols in input data matrix
     if (DC < 1)
         throw std::runtime_error("Data has no columns");
     if (inpNumsOfVars.size() != DC)
@@ -416,7 +423,7 @@ void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows){
     calibMat = Eigen::MatrixXd(CR , CC);
     for(int i = 0; i < CR; i++){
         int col_idx = 0;
-        for (int j = 0; j < DC; j++) {
+        for (size_t j = 0; j < DC; j++) {
             for(int l = 0; l < inpNumsOfVars[j]; l++){
                 calibMat(i, col_idx++) = m_data(i + maxR - inpNumsOfVars[j] + l, j);
             }
@@ -478,7 +485,7 @@ void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows){
     if (maxR == 0)
         throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
 
-    const int DC = static_cast<int>(m_data.cols());   // number of cols in input data matrix
+    const size_t DC = m_data.cols();   // number of cols in input data matrix
     if (DC < 1)
         throw std::runtime_error("Data has no columns");
     if (inpNumsOfVars.size() != DC)
@@ -494,7 +501,7 @@ void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows){
 
     for(int i = 0; i < CR; i++){
         int col_idx = 0;
-        for (int j = 0; j < DC; j++) {
+        for (size_t j = 0; j < DC; j++) {
             for(int l = 0; l < inpNumsOfVars[j]; l++){
                 calibInpsMat(i, col_idx++) = m_data(i + maxR - inpNumsOfVars[j] + l, j);
             }
@@ -508,7 +515,7 @@ void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows){
 /**
  * Split created calibration matrix into separate inps and outs matrices
  */
-void Data::splitCalibMat(size_t inpLength){
+void Data::splitCalibMat(int inpLength){
     if (inpLength <= 0 || inpLength >= calibMat.cols())
         throw std::invalid_argument("inpLength must be greater and 0 and less than calibMat columns");
 
@@ -579,11 +586,12 @@ std::vector<int> Data::permutationVector(int length){
  * Shuffle matrix rows
  */
 Eigen::MatrixXd Data::shuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec){
-    if (matrix.rows() != permVec.size())
+    size_t rows = matrix.rows();
+    if (rows != permVec.size())
         throw std::invalid_argument("matrix rows and permVec length dont match");
 
-    Eigen::MatrixXd newmat(matrix.rows(), matrix.cols());
-    for (size_t i = 0; i < matrix.rows(); ++i) {
+    Eigen::MatrixXd newmat(rows, matrix.cols());
+    for (size_t i = 0; i < rows; ++i) {
         newmat.row(i) = matrix.row(permVec[i]);
     }
     return newmat;
@@ -593,11 +601,12 @@ Eigen::MatrixXd Data::shuffleMatrix(const Eigen::MatrixXd &matrix, const std::ve
  * Unshuffle matrix rows
  */
 Eigen::MatrixXd Data::unshuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec) {
-    if (matrix.rows() != permVec.size())
+    size_t rows = matrix.rows();
+    if (rows != permVec.size())
         throw std::invalid_argument("matrix rows and permVec length dont match");
 
-    Eigen::MatrixXd oldmat(matrix.rows(), matrix.cols());
-    for (size_t i = 0; i < matrix.rows(); ++i) {
+    Eigen::MatrixXd oldmat(rows, matrix.cols());
+    for (size_t i = 0; i < rows; ++i) {
         oldmat.row(permVec[i]) = matrix.row(i);
     }
     return oldmat;

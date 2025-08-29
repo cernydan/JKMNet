@@ -1,7 +1,9 @@
 #include "MLP.hpp"
 #include <iostream>
+#include <chrono>
 
 using namespace std;
+using namespace std::chrono;
 
 // /**
 //  * The constructor
@@ -51,7 +53,7 @@ std::vector<unsigned> MLP::getArchitecture() {
  */
 void MLP::setArchitecture(std::vector<unsigned>& architecture) {
     nNeurons = architecture;
-
+    numLayers = nNeurons.size();
     // if user hasn’t supplied activations yet, give them a default (e.g. ReLU)
     if (activFuncs.size() != architecture.size()) {
         activFuncs.assign(architecture.size(), activ_func_type::RELU);
@@ -63,8 +65,7 @@ void MLP::setArchitecture(std::vector<unsigned>& architecture) {
  */
 void MLP::printArchitecture() {
     std::cout << "MLP Architecture: ";
-
-    numLayers = nNeurons.size(); 
+    numLayers = nNeurons.size();
 
     for (size_t i = 0; i < numLayers; ++i) {
         std::cout << nNeurons[i];
@@ -411,12 +412,12 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
 /**
  * Online backpropagation - 1 calibration matrix
  */
-void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calMat) {
+void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calMat) {
     if (layers_.empty())
         throw std::logic_error("onlineBP called before initMLP");
 
-    if (numIter <= 0)
-        throw std::invalid_argument("numIter must be positive");
+    if (maxIter <= 0 || maxErr < 0.0)
+        throw std::invalid_argument("maxIter and maxErr must be positive");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -429,7 +430,10 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calM
     if ((inpSize + outSize) != calMat.cols())
         throw std::runtime_error("Matrix row length doesnt match the initialized input + output size");
 
-    for (int iter = 1; iter < numIter + 1; iter++){
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIter + 1; iter++){
+        Error = 0.0;
         for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
             Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
@@ -458,19 +462,32 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calM
                     layers_[i].updateWeights(learningRate);
                 }
             }
+            Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
         }
+        Error = Error / numOfPatterns;
+        if(Error <= maxErr){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+            std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
+            break;
+        }
+    }
+    if(Error > maxErr){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
 
 /**
  * Online backpropagation - separete inp out matrices
  */
-void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat) {
+void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat) {
     if (layers_.empty())
         throw std::logic_error("onlineBP called before initMLP");
 
-    if (numIter <= 0)
-        throw std::invalid_argument("numIter must be positive");
+    if (maxIter <= 0 || maxErr < 0.0)
+        throw std::invalid_argument("maxIter and maxErr must be positive");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -489,7 +506,10 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calI
     if (outSize != calOutMat.cols())
         throw std::runtime_error("Output matrix row length doesnt match the initialized output size");
 
-    for (int iter = 1; iter < numIter + 1; iter++){
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIter + 1; iter++){
+        Error = 0.0;
         for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = calInpMat.row(pat);
             Eigen::VectorXd currentObs = calOutMat.row(pat);
@@ -518,19 +538,32 @@ void MLP::onlineBP(int numIter, double learningRate, const Eigen::MatrixXd& calI
                     layers_[i].updateWeights(learningRate);
                 }
             }
+            Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
         }
+        Error = Error / numOfPatterns;
+        if(Error <= maxErr){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+            std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
+            break;
+        }
+    }
+    if(Error > maxErr){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
 
 /**
  * Online backpropagation using Adam algorithm - 1 calibration matrix
  */
-void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calMat) {
+void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calMat) {
     if (layers_.empty())
         throw std::logic_error("onlineAdam called before initMLP");
-    
-    if (numIter <= 0)
-        throw std::invalid_argument("numIter must be positive");
+
+    if (maxIter <= 0 || maxErr < 0.0)
+        throw std::invalid_argument("maxIter and maxErr must be positive");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -543,7 +576,10 @@ void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& ca
     if ((inpSize + outSize) != calMat.cols())
         throw std::runtime_error("Matrix row length doesnt match the initialized input + output size");
 
-    for (int iter = 1; iter < numIter + 1; iter++){
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIter + 1; iter++){
+        Error = 0.0;
         for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
             Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
@@ -572,19 +608,32 @@ void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& ca
                     layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
                 }
             }
+            Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
         }
+        Error = Error / numOfPatterns;
+        if(Error <= maxErr){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+            std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
+            break;
+        }
+    }
+    if(Error > maxErr){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
 
 /**
  * Online backpropagation using Adam algorithm - separete inp out matrices
  */
-void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat) {
+void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat) {
     if (layers_.empty())
         throw std::logic_error("onlineAdam called before initMLP");
     
-    if (numIter <= 0)
-        throw std::invalid_argument("numIter must be positive");
+    if (maxIter <= 0 || maxErr < 0.0)
+        throw std::invalid_argument("maxIter and maxErr must be positive");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -603,11 +652,14 @@ void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& ca
     if (outSize != calOutMat.cols())
         throw std::runtime_error("Output matrix row length doesnt match the initialized output size");
 
-    for (int iter = 1; iter < numIter + 1; iter++){
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIter + 1; iter++){
+        Error = 0.0;
         for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = calInpMat.row(pat);
             Eigen::VectorXd currentObs = calOutMat.row(pat);
-            
+
             // First layer
             layers_[0].setInputs(currentInp);
             layers_[0].calculateOutput(activFuncs[0]);
@@ -632,19 +684,32 @@ void MLP::onlineAdam(int numIter, double learningRate, const Eigen::MatrixXd& ca
                     layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
                 }
             }
+            Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
         }
+        Error = Error / numOfPatterns;
+        if(Error <= maxErr){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+            std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
+            break;
+        }
+    }
+    if(Error > maxErr){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
 
 /**
  * Batch backpropagation using Adam algorithm - 1 calibration matrix
  */
-void MLP::batchAdam(int numIter, int batchSize, double learningRate, const Eigen::MatrixXd& calMat) {
+void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRate, const Eigen::MatrixXd& calMat) {
     if (layers_.empty())
         throw std::logic_error("batchAdam called before initMLP");
     
-    if (numIter <= 0 || batchSize <= 0)
-        throw std::invalid_argument("numIter and batchSize must be positive");
+    if (maxIter <= 0 || batchSize <= 0|| maxErr < 0.0)
+        throw std::invalid_argument("maxIter, batchSize and maxErr must be positive");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -657,7 +722,10 @@ void MLP::batchAdam(int numIter, int batchSize, double learningRate, const Eigen
     if ((inpSize + outSize) != calMat.cols())
         throw std::runtime_error("Matrix row length doesnt match the initialized input + output size");
 
-    for (int iter = 1; iter < numIter + 1; iter++){
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIter + 1; iter++){
+        Error = 0.0;
         for(int batch = 0; batch < (numOfPatterns + batchSize - 1)/batchSize; batch++){
             int start = batch * batchSize;
             int end   = std::min(start + batchSize,numOfPatterns);
@@ -688,24 +756,37 @@ void MLP::batchAdam(int numIter, int batchSize, double learningRate, const Eigen
                         layers_[i].calculateBatchGradient();
                     }
                 }
+                Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
             }
             for (int i = 0; i <= lastLayerIndex; i++){
                 layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
                 layers_[i].setGradient(layers_[i].getGradient().setZero());
             }
         }
+        Error = Error / numOfPatterns;
+        if(Error <= maxErr){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+            std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
+            break;
+        }
+    }
+    if(Error > maxErr){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
 
 /**
  * Batch backpropagation using Adam algorithm  - separete inp out matrices
  */
-void MLP::batchAdam(int numIter, int batchSize, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat) {
+void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat) {
     if (layers_.empty())
         throw std::logic_error("batchAdam called before initMLP");
     
-    if (numIter <= 0 || batchSize <= 0)
-        throw std::invalid_argument("numIter and batchSize must be positive");
+    if (maxIter <= 0 || batchSize <= 0|| maxErr < 0.0)
+        throw std::invalid_argument("maxIter, batchSize and maxErr must be positive");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -724,7 +805,10 @@ void MLP::batchAdam(int numIter, int batchSize, double learningRate, const Eigen
     if (outSize != calOutMat.cols())
         throw std::runtime_error("Output matrix row length doesnt match the initialized output size");
 
-    for (int iter = 1; iter < numIter + 1; iter++){
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIter + 1; iter++){
+        Error = 0.0;
         for(int batch = 0; batch < (numOfPatterns + batchSize - 1)/batchSize; batch++){
             int start = batch * batchSize;
             int end   = std::min(start + batchSize,numOfPatterns);
@@ -755,12 +839,25 @@ void MLP::batchAdam(int numIter, int batchSize, double learningRate, const Eigen
                         layers_[i].calculateBatchGradient();
                     }
                 }
+                Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+                }
+                for (int i = 0; i <= lastLayerIndex; i++){
+                    layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+                    layers_[i].setGradient(layers_[i].getGradient().setZero());
+                }
             }
-            for (int i = 0; i <= lastLayerIndex; i++){
-                layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
-                layers_[i].setGradient(layers_[i].getGradient().setZero());
-            }
+            Error = Error / numOfPatterns;
+        if(Error <= maxErr){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+            std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
+            break;
         }
+    }
+    if(Error > maxErr){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
 
