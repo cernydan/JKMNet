@@ -397,12 +397,12 @@ int main() {
   std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "--  Testing Adam for matrix data --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
-  
-  int numInpVar = 3;             // number of values of each variable used in each pattern
+             
   unsigned int numOuts = 2;      // number of outputs in each pattern = output neurons
-
-  data.makeCalibMat(numInpVar, numOuts);
-  data.shuffleCalibMat();
+  std::vector<int> inputVars = {3,3,3,3}; // number of values of each variable used in each pattern
+  data.makeCalibMat(inputVars, numOuts);
+  data.permutationVector(data.getCalibMat().rows());
+  data.setCalibMat(data.shuffleMatrix(data.getCalibMat(),data.permutationVector(data.getCalibMat().rows())));
 
   MLP mlpbp;
   std::vector<unsigned> arch = {2,3,numOuts};
@@ -620,7 +620,7 @@ int main() {
     // Build calibration matrix for multi-horizon outputs (inpRows = 2, out_horizon = 2)
     int inpRows = 2;
     int out_horizon = 2;
-    dataMultiOut.makeCalibMat(inpRows, out_horizon);
+    dataMultiOut.makeCalibMat({2,2,2}, out_horizon);
     Eigen::MatrixXd C = dataMultiOut.getCalibMat(); // CR x (inpRows*inputCols + out_horizon)
     const Eigen::Index CR = C.rows();
     const Eigen::Index CC = C.cols();
