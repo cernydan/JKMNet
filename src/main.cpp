@@ -26,7 +26,8 @@
 
 using namespace std;
 
-void testAdamOnlineSplitM(Data& dataA, 
+void testAdamOnlineSplitM(MLP& adamlp,
+                          Data& dataA, 
                           std::vector<unsigned> mlpArchitecture,
                           const std::vector<int>& numbersOfPastVarsValues,
                           activ_func_type activationType,
@@ -37,7 +38,7 @@ void testAdamOnlineSplitM(Data& dataA,
   dataA.makeCalibMatsSplit(numbersOfPastVarsValues,mlpArchitecture.back());
   std::vector<int>permutVector = dataA.permutationVector(dataA.getCalibInpsMat().rows());
   dataA.setCalibInpsMat(dataA.shuffleMatrix(dataA.getCalibInpsMat(),permutVector));
-  MLP adamlp;
+  dataA.setCalibOutsMat(dataA.shuffleMatrix(dataA.getCalibOutsMat(),permutVector));
   adamlp.setArchitecture(mlpArchitecture);
   std::vector<activ_func_type> activations;
   std::vector<weight_init_type> weightInits;
@@ -664,8 +665,16 @@ int main() {
   std::cout << "--      Testing testing online Adam      --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
 
-  testAdamOnlineSplitM(data,{5,3,2},{1,2,2,3},activ_func_type::RELU,weight_init_type::RANDOM,200,0.004,0.001);
+  MLP test123;
+  testAdamOnlineSplitM(test123,data,{2,1},{0,0,1,2},activ_func_type::RELU,weight_init_type::RANDOM,500,0.002,0.001);
+  test123.calculateOutputs(data.getCalibInpsMat().topRows(5));
+  std::cout<<"calibrated outputs: \n"<<data.getCalibOutsMat().topRows(5)<<"\n\n";
+  std::cout<<"modelled outputs: \n"<<test123.getOutputs()<<"\n\n";
 
+  std::cout<<"first layer weight mat: \n"<<test123.getWeights(0)<<"\n\n";
+  std::cout<<"second layer weight mat: \n"<<test123.getWeights(1)<<"\n\n";
+  test123.weightsToVectorMlp();
+  std::cout<<"all weights vector: \n"<<test123.getWeightsVectorMlp().transpose();
 
   return 0;
 }
