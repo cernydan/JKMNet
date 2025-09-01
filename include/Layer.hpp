@@ -90,9 +90,13 @@ public:
     static std::string activationName(activ_func_type f);  //!< Mapping activ_func_type from enum to string
     static std::string wInitTypeName(weight_init_type w);  //!< Mapping weight_init_type from enum to string
 
+    Eigen::VectorXd getWeightsVector(); //!< Getter for weights vector
+    void weightsToVector(); //!< Arrange weight matrix into vector
+
 protected:
 private:
     Eigen::MatrixXd weights;  //!< The weight matrix for the layer
+    Eigen::VectorXd weightsVector;  //!< The weight matrix arranged into vector by rows
     Eigen::VectorXd inputs;  //!< The input vector to the layer
     Eigen::VectorXd output;  //!< The output vector of the layer
     Eigen::VectorXd activations;  //!< The activation vector of the layer

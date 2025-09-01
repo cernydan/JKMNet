@@ -560,4 +560,18 @@ void Layer::setDeltas(const Eigen::VectorXd &newDeltas){
     deltas = newDeltas;
 }
 
+/**
+ * Getter for weights vector
+ */
+Eigen::VectorXd Layer::getWeightsVector(){
+    return weightsVector;
+}
+
+/**
+ * Arrange weight matrix into vector
+ */
+void Layer::weightsToVector(){
+    weightsVector = weights.reshaped<Eigen::RowMajor>();
+}
+
 

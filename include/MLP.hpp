@@ -56,6 +56,9 @@ class MLP {
         Eigen::MatrixXd getWeights(size_t layerIndex);  //!< Getter for weights
         void setWeights(size_t layerIndex, const Eigen::MatrixXd& W);  //!< Setter for weights
 
+        Eigen::VectorXd getWeightsVectorMlp(); //!< Getter for weights vector of MLP
+        void weightsToVectorMlp(); //!< Merge weight vectors of all layers
+
         Eigen::VectorXd& getOutput();   //!< Getter for output
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
@@ -74,6 +77,9 @@ class MLP {
         void batchAdam(int maxIter, double maxErr, int batchSize, double learningRate, const Eigen::MatrixXd& calMat);  //!< Batch backpropagation using Adam algorithm - 1 calibration matrix
         void batchAdam(int maxIter, double maxErr, int batchSize, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat);  //!< Batch backpropagation using Adam algorithm - separete inp out matrices
 
+        void calcOneOutput(const Eigen::VectorXd& inputVec);  //!< Forward pass for one input
+        void calculateOutputs(const Eigen::MatrixXd& inputMat); //!< Calculate outputs for given matrix of inputs
+        Eigen::MatrixXd getOutputs();  //!< Getter for output matrix
 
     protected:
 
@@ -85,6 +91,8 @@ class MLP {
         std::vector<weight_init_type> wInitTypes;   //!< Vector of weights initialization for each layer
         std::vector<Layer> layers_;  //!< Private member of the class Layer to store each layer’s state
         Eigen::VectorXd output;  //!< The output vector of mlp
+        Eigen::MatrixXd outputMat; //!< The output matrix of mlp
+        Eigen::VectorXd weightsVectorMlp;  //!< The weights vector of all layers
 };
 
 #endif // MLP_H

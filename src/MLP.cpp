@@ -252,6 +252,34 @@ void MLP::setWeights(size_t idx, const Eigen::MatrixXd& W) {
     layers_[idx].setWeights(W);
 }
 
+/**
+ * Getter for weights vector of MLP
+ */
+Eigen::VectorXd MLP::getWeightsVectorMlp(){
+    return weightsVectorMlp;
+}
+
+/**
+ *  //!< Merge weight vectors of all layers
+ */
+void MLP::weightsToVectorMlp(){
+    int length = 0;
+    for(size_t i = 0; i < layers_.size(); i++){
+        layers_[i].weightsToVector();
+        length += layers_[i].getWeightsVector().size();
+    }
+    weightsVectorMlp = Eigen::VectorXd(length);
+    
+    int pos = 0;
+    for(size_t i = 0; i < layers_.size(); i++){
+        weightsVectorMlp.segment(pos, layers_[i].getWeightsVector().size()) = layers_[i].getWeightsVector();
+        pos += layers_[i].getWeightsVector().size();
+    }
+}
+
+/**
+ * Getter for output
+ */
 Eigen::VectorXd& MLP::getOutput(){
     return output;
 }
@@ -335,7 +363,7 @@ Eigen::VectorXd MLP::runMLP(const Eigen::VectorXd& input) {
     // First layer
     layers_[0].setInputs(input);
     layers_[0].calculateLayerOutput(activFuncs[0]);
-    Eigen::VectorXd currentOutput = layers_[0].getOutput();  //calculateLayerOutput neukládá do layers_.output
+    Eigen::VectorXd currentOutput = layers_[0].getOutput();
 
     // Remaining layers
     for (size_t i = 1; i < layers_.size(); ++i) {
@@ -383,16 +411,7 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
     if (layers_.empty())
         throw std::logic_error("runMLP called before initMLP");
 
-    // First layer
-    layers_[0].setInputs(input);
-    layers_[0].calculateOutput(activFuncs[0]);
-
-    // Remaining layers
-    for (size_t i = 1; i < layers_.size(); ++i) {
-        layers_[i].setInputs(layers_[i-1].getOutput());
-        layers_[i].calculateOutput(activFuncs[i]);
-    }
-    output = layers_[layers_.size()-1].getOutput();
+    calcOneOutput(input);
 
     // Output layer BP
     layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
@@ -438,16 +457,7 @@ void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen:
             Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
             Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
             
-            // First layer
-            layers_[0].setInputs(currentInp);
-            layers_[0].calculateOutput(activFuncs[0]);
-
-            // Remaining layers
-            for (size_t i = 1; i < getNumLayers(); ++i) {
-                layers_[i].setInputs(layers_[i-1].getOutput());
-                layers_[i].calculateOutput(activFuncs[i]);
-            }
-            output = layers_[lastLayerIndex].getOutput();
+            calcOneOutput(currentInp);
 
             // Output layer BP
             layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
@@ -514,16 +524,7 @@ void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen:
             Eigen::VectorXd currentInp = calInpMat.row(pat);
             Eigen::VectorXd currentObs = calOutMat.row(pat);
             
-            // First layer
-            layers_[0].setInputs(currentInp);
-            layers_[0].calculateOutput(activFuncs[0]);
-
-            // Remaining layers
-            for (size_t i = 1; i < getNumLayers(); ++i) {
-                layers_[i].setInputs(layers_[i-1].getOutput());
-                layers_[i].calculateOutput(activFuncs[i]);
-            }
-            output = layers_[lastLayerIndex].getOutput();
+            calcOneOutput(currentInp);
 
             // Output layer BP
             layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
@@ -584,16 +585,7 @@ void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eige
             Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
             Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
             
-            // First layer
-            layers_[0].setInputs(currentInp);
-            layers_[0].calculateOutput(activFuncs[0]);
-
-            // Remaining layers
-            for (size_t i = 1; i < getNumLayers(); ++i) {
-                layers_[i].setInputs(layers_[i-1].getOutput());
-                layers_[i].calculateOutput(activFuncs[i]);
-            }
-            output = layers_[lastLayerIndex].getOutput();
+            calcOneOutput(currentInp);
 
             // Output layer BP
             layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
@@ -660,16 +652,7 @@ void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eige
             Eigen::VectorXd currentInp = calInpMat.row(pat);
             Eigen::VectorXd currentObs = calOutMat.row(pat);
 
-            // First layer
-            layers_[0].setInputs(currentInp);
-            layers_[0].calculateOutput(activFuncs[0]);
-
-            // Remaining layers
-            for (size_t i = 1; i < getNumLayers(); ++i) {
-                layers_[i].setInputs(layers_[i-1].getOutput());
-                layers_[i].calculateOutput(activFuncs[i]);
-            }
-            output = layers_[lastLayerIndex].getOutput();
+            calcOneOutput(currentInp);
 
             // Output layer BP
             layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
@@ -734,16 +717,7 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
                 Eigen::VectorXd currentInp = calMat.row(pat).segment(0,inpSize);
                 Eigen::VectorXd currentObs = calMat.row(pat).segment(inpSize,outSize);
                 
-                // First layer
-                layers_[0].setInputs(currentInp);
-                layers_[0].calculateOutput(activFuncs[0]);
-
-                // Remaining layers
-                for (size_t i = 1; i < getNumLayers(); ++i) {
-                    layers_[i].setInputs(layers_[i-1].getOutput());
-                    layers_[i].calculateOutput(activFuncs[i]);
-                }
-                output = layers_[lastLayerIndex].getOutput();
+                calcOneOutput(currentInp);
 
                 // Output layer gradient
                 layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
@@ -817,16 +791,7 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
                 Eigen::VectorXd currentInp = calInpMat.row(pat);
                 Eigen::VectorXd currentObs = calOutMat.row(pat);
                 
-                // First layer
-                layers_[0].setInputs(currentInp);
-                layers_[0].calculateOutput(activFuncs[0]);
-
-                // Remaining layers
-                for (size_t i = 1; i < getNumLayers(); ++i) {
-                    layers_[i].setInputs(layers_[i-1].getOutput());
-                    layers_[i].calculateOutput(activFuncs[i]);
-                }
-                output = layers_[lastLayerIndex].getOutput();
+                calcOneOutput(currentInp);
 
                 // Output layer gradient
                 layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
@@ -859,5 +824,46 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
     auto duration = duration_cast<seconds>(stop - start);
     std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
+}
+
+/**
+ * Forward pass reusing existing weights
+ */
+void MLP::calcOneOutput(const Eigen::VectorXd& inputVec){      
+    // First layer
+    layers_[0].setInputs(inputVec);
+    layers_[0].calculateOutput(activFuncs[0]);
+
+    // Remaining layers
+    for (size_t i = 1; i < getNumLayers(); ++i) {
+        layers_[i].setInputs(layers_[i-1].getOutput());
+        layers_[i].calculateOutput(activFuncs[i]);
+    }
+    output = layers_[getNumLayers()-1].getOutput();
+}
+
+/**
+ * Calculate outputs for given matrix of inputs
+ */
+void MLP::calculateOutputs(const Eigen::MatrixXd& inputMat){
+    if (layers_.empty())
+        throw std::logic_error("calculateOutputs called before initMLP");
+
+    int inpSize = layers_[0].getInputs().size()-1;
+    if (inpSize != inputMat.cols())
+        throw std::invalid_argument("Input matrix row length doesnt match the initialized input size");
+
+    if (inputMat.rows() <= 0)
+        throw std::invalid_argument("Input matrix is empty");
+
+    outputMat = Eigen::MatrixXd(inputMat.rows(),nNeurons.back());
+    for(int i = 0; i < inputMat.rows(); i++){
+        calcOneOutput(inputMat.row(i));
+        outputMat.row(i) = output;
+    }
+}
+
+Eigen::MatrixXd MLP::getOutputs(){
+    return outputMat;
 }
 
