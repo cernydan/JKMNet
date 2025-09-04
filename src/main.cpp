@@ -3,10 +3,10 @@
 // TODO: Add more metrics (PI, NS, KGE, ...)
 // **DONE**: Deal with NAs in the dataset
 // TODO: Skip windows (horizon) that include any NA in the data (not only the exact timestamp) (?)
-// TODO: Split calibration matrix into one for inputs and one for targets
+// **DONE**: Split calibration matrix into one for inputs and one for targets
 // TODO: Preprocessing of calibration matrix in R (?)
 // **DONE**: Split data for calibration and validation set (+ testing set?) (chronologically or randomly as a new method in MLP) 
-// TODO: Change 'Testing ADAM' section in 'main.cpp' as a new method 
+// **DONE**: Change 'Testing ADAM' section in 'main.cpp' as a new method 
 // TODO: Prepare more scenarios for running
 // TODO: Prepare vector of weights from matrix of weights (for global optimization)
 // *******************************
@@ -26,7 +26,7 @@
 
 using namespace std;
 
-void testAdamOnlineSplitM(MLP& adamlp,
+void testAdamOnlineSplitD(MLP& adamlp,
                           Data& dataA, 
                           std::vector<unsigned> mlpArchitecture,
                           const std::vector<int>& numbersOfPastVarsValues,
@@ -664,11 +664,13 @@ int main() {
     // Restore original data if you want to reuse dataMultiOut later
     dataMultiOut.restoreOriginalData();
 
-      
   } catch (const std::exception &ex) {
     std::cerr << "[Error]: " << ex.what() << "\n";
     return 1;
   }
+
+  
+
 
   // std::cout << "\n-------------------------------------------" << std::endl;
   // std::cout << "--   Testing split calibMats, shuffling  --" << std::endl;
@@ -697,7 +699,7 @@ int main() {
   std::cout << "-------------------------------------------" << std::endl;
 
   MLP test123;
-  testAdamOnlineSplitM(test123,data,{2,1},{0,0,1,2},activ_func_type::RELU,weight_init_type::RANDOM,500,0.002,0.001);
+  testAdamOnlineSplitD(test123,data,{2,1},{0,0,1,2},activ_func_type::RELU,weight_init_type::RANDOM,500,0.002,0.001);
   test123.calculateOutputs(data.getCalibInpsMat().topRows(5));
   std::cout<<"calibrated outputs: \n"<<data.getCalibOutsMat().topRows(5)<<"\n\n";
   std::cout<<"modelled outputs: \n"<<test123.getOutputs()<<"\n\n";
@@ -706,6 +708,26 @@ int main() {
   std::cout<<"second layer weight mat: \n"<<test123.getWeights(1)<<"\n\n";
   test123.weightsToVectorMlp();
   std::cout<<"all weights vector: \n"<<test123.getWeightsVectorMlp().transpose();
+
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "-- Testing online Adam from JKMNet --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+  
+  JKMNet net;
+  MLP mymlp;
+  auto resAdam = net.trainAdamOnlineSplit(
+      mymlp, data, {2,1}, {0,0,1,2},
+      activ_func_type::RELU, weight_init_type::RANDOM,
+      500, 0.002, 0.001, true, 42);
+
+  mymlp.calculateOutputs(data.getCalibInpsMat().topRows(5));
+  std::cout<<"calibrated outputs: \n"<<data.getCalibOutsMat().topRows(5)<<"\n\n";
+  std::cout<<"modelled outputs: \n"<<mymlp.getOutputs()<<"\n\n";
+
+  std::cout << "Training finished; final MSE=" << resAdam.finalLoss
+            << ", iterations=" << resAdam.iterations
+            << ", converged=" << std::boolalpha << resAdam.converged << "\n";
 
 
   return 0;
