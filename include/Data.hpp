@@ -49,7 +49,16 @@ class Data {
         void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix
         void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix  (both inps + outs) for backpropagation from data matrix
         void makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix
+        
         void splitCalibMat(int inpLength);  //!< Split created calibration matrix into separate inps and outs matrices 
+    
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
+        splitCalibMatWithIdx(double trainFraction = 0.8, bool shuffle = true, unsigned seed = 0) const;  //!< Split calibration matrix into train/validation and also return indices
+
+        
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
+        splitDataRowsWithIdx(double trainFraction = 0.8, bool shuffle = true, unsigned seed = 0) const;  //!< Split raw data rows (m_data) into train/validation and return indices
+
         Eigen::MatrixXd getCalibMat();  //!< Getter for calibration matrix
         void setCalibMat(const Eigen::MatrixXd &newMat);  //!< Setter for calibration matrix
         Eigen::MatrixXd getCalibInpsMat();  //!< Getter for calibration inputs matrix

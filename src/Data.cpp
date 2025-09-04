@@ -9,6 +9,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <limits>
+#include <tuple>
 
 /**
  * Trim helper function
@@ -47,6 +48,19 @@ void Data::splitCSVLine(const std::string& line, std::vector<std::string>& outFi
         }
     }
     outFields.push_back(cur);
+}
+
+/**
+ * Helper function to build index vector [0..N-1] and optionally shuffle it with seed
+ */
+static std::vector<int> buildIndicesInt(int N, bool shuffle, unsigned seed) {
+    std::vector<int> idx(N);
+    for (int i = 0; i < N; ++i) idx[i] = i;
+    if (shuffle && N > 1) {
+        std::mt19937 gen(seed == 0 ? std::random_device{}() : seed);
+        std::shuffle(idx.begin(), idx.end(), gen);
+    }
+    return idx;
 }
 
 /**
@@ -522,6 +536,86 @@ void Data::splitCalibMat(int inpLength){
     calibInpsMat = calibMat.leftCols(inpLength);
     calibOutsMat = calibMat.rightCols(calibMat.cols() - inpLength);
 }
+
+/**
+ * Split calibration matrix into train/validation and also return indices
+ */
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
+Data::splitCalibMatWithIdx(double trainFraction, bool shuffle, unsigned seed) const {
+    if (trainFraction <= 0.0 || trainFraction >= 1.0) {
+        throw std::invalid_argument("splitCalibMatWithIdx: trainFraction must be in (0,1)");
+    }
+
+    const Eigen::Index R = calibMat.rows();
+    const Eigen::Index C = calibMat.cols();
+    if (R == 0) {
+        return { Eigen::MatrixXd(0, C), Eigen::MatrixXd(0, C), std::vector<int>{}, std::vector<int>{} };
+    }
+
+    std::vector<int> idx = buildIndicesInt(static_cast<int>(R), shuffle, seed);
+
+    // compute training count
+    int nTrain = static_cast<int>(std::floor(trainFraction * static_cast<double>(R)));
+    nTrain = std::max(1, std::min<int>(nTrain, static_cast<int>(R) - 1));
+
+    Eigen::MatrixXd trainMat(nTrain, C);
+    Eigen::MatrixXd validMat(R - nTrain, C);
+    std::vector<int> trainIdx;
+    std::vector<int> validIdx;
+    trainIdx.reserve(static_cast<size_t>(nTrain));
+    validIdx.reserve(static_cast<size_t>(R - nTrain));
+
+    for (int i = 0; i < nTrain; ++i) {
+        trainMat.row(i) = calibMat.row(idx[i]);
+        trainIdx.push_back(idx[i]);
+    }
+    for (int i = nTrain; i < static_cast<int>(R); ++i) {
+        validMat.row(i - nTrain) = calibMat.row(idx[i]);
+        validIdx.push_back(idx[i]);
+    }
+
+    return { trainMat, validMat, trainIdx, validIdx };
+}
+
+/**
+ * Split raw data rows (m_data) into train/validation and return indices
+ */
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
+Data::splitDataRowsWithIdx(double trainFraction, bool shuffle, unsigned seed) const {
+    if (trainFraction <= 0.0 || trainFraction >= 1.0) {
+        throw std::invalid_argument("splitDataRowsWithIdx: trainFraction must be in (0,1)");
+    }
+
+    const Eigen::Index R = m_data.rows();
+    const Eigen::Index C = m_data.cols();
+    if (R == 0) {
+        return { Eigen::MatrixXd(0, C), Eigen::MatrixXd(0, C), std::vector<int>{}, std::vector<int>{} };
+    }
+
+    std::vector<int> idx = buildIndicesInt(static_cast<int>(R), shuffle, seed);
+
+    int nTrain = static_cast<int>(std::floor(trainFraction * static_cast<double>(R)));
+    nTrain = std::max(1, std::min<int>(nTrain, static_cast<int>(R) - 1));
+
+    Eigen::MatrixXd trainMat(nTrain, C);
+    Eigen::MatrixXd validMat(R - nTrain, C);
+    std::vector<int> trainIdx;
+    std::vector<int> validIdx;
+    trainIdx.reserve(static_cast<size_t>(nTrain));
+    validIdx.reserve(static_cast<size_t>(R - nTrain));
+
+    for (int i = 0; i < nTrain; ++i) {
+        trainMat.row(i) = m_data.row(idx[i]);
+        trainIdx.push_back(idx[i]);
+    }
+    for (int i = nTrain; i < static_cast<int>(R); ++i) {
+        validMat.row(i - nTrain) = m_data.row(idx[i]);
+        validIdx.push_back(idx[i]);
+    }
+
+    return { trainMat, validMat, trainIdx, validIdx };
+}
+
 
 /**
  * Getter for calibration matrix

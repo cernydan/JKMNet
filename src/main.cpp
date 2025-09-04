@@ -2,10 +2,10 @@
 // **DONE**: Create class for metrics
 // TODO: Add more metrics (PI, NS, KGE, ...)
 // **DONE**: Deal with NAs in the dataset
-// TODO: Skip windows (horizon) that include any NA in the data (not only the exact timestamp)
+// TODO: Skip windows (horizon) that include any NA in the data (not only the exact timestamp) (?)
 // TODO: Split calibration matrix into one for inputs and one for targets
 // TODO: Preprocessing of calibration matrix in R (?)
-// TODO: Split data for calibration and validation set (+ testing set?) (chronologically or randomly as a new method in MLP) 
+// **DONE**: Split data for calibration and validation set (+ testing set?) (chronologically or randomly as a new method in MLP) 
 // TODO: Change 'Testing ADAM' section in 'main.cpp' as a new method 
 // TODO: Prepare more scenarios for running
 // TODO: Prepare vector of weights from matrix of weights (for global optimization)
@@ -391,7 +391,7 @@ int main() {
       Eigen::Map<const Eigen::VectorXd> mview(moistureData.data(), static_cast<Eigen::Index>(N));
       firstMoisture = mview.transpose(); 
   }
-  std::cout << "First 5 moisture values: " << firstMoisture << "\n";
+  std::cout << "First 3 moisture values: " << firstMoisture << "\n";
 
   // Detect and remove rows with NaNs
   auto naIdx = data.findRowsWithNa();
@@ -566,11 +566,13 @@ int main() {
         ofs << "4,2020-01-04,1.30,2.30,0.62\n";     // OK
         ofs << "5,2020-01-05,1.40,2.40,0.65\n";     // OK
         ofs << "5,2020-01-06,1.35,2.30,0.55\n";     // OK
-        ofs << "5,2020-01-07,1.20,,0.60\n";         // missing T2 -> NaN
+        ofs << "5,2020-01-07,1.20,    ,0.60\n";         // missing T2 -> NaN
         ofs << "5,2020-01-08,1.80,2.10,0.68\n";     // OK
         ofs << "5,2020-01-09,1.80,2.60,0.65\n";     // OK
         ofs << "5,2020-01-10,1.72,2.50,0.58\n";     // OK
         ofs << "5,2020-01-11,1.40,2.50,0.52\n";     // OK
+        //ofs << "5,2020-01-12,1.40,2.50,0.52\n";     // OK
+        //ofs << "5,2020-01-13,1.40,2.50,0.52\n";     // OK
         ofs.close();
         std::cout << "Wrote test CSV: " << pathA << "\n";
     }
@@ -585,14 +587,15 @@ int main() {
     std::vector<std::string> timesA = dataMultiOut.timestamps();
 
     auto naRowsA = dataMultiOut.findRowsWithNa();
-    std::cout << "Rows with NaN: ";
+    std::cout << "Number of rows with any NaN: " << naRowsA.size() << "\n";
+    std::cout << "Row index with NaN: ";
     for (auto r : naRowsA) std::cout << r << " ";
     std::cout << "\n";
 
     // remove rows that contain any NaN
     dataMultiOut.removeRowsWithNa();
     Eigen::MatrixXd MfA = dataMultiOut.numericData();
-    std::cout << "Filtered rows: " << MfA.rows() << " x " << MfA.cols() << "\n";
+    std::cout << "Filtered dataset: " << MfA.rows() << " (rows) x " << MfA.cols() << " (cols) \n";
 
     // Build calibration matrix for multi-horizon outputs (inpRows = 2, out_horizon = 2)
     int inpRows = 2;
@@ -602,6 +605,34 @@ int main() {
     const Eigen::Index CR = C.rows();
     const Eigen::Index CC = C.cols();
     const Eigen::Index inputSize = CC - out_horizon;
+
+    // Split data into calibration and validation sets
+    double trainFrac = 0.8;
+    bool shuffle = true;
+    unsigned seed = 42;  // choose 0 for non-deterministic
+
+    Eigen::MatrixXd trainMat, validMat;
+    std::vector<int> trainIdx, validIdx;
+    std::tie(trainMat, validMat, trainIdx, validIdx) = dataMultiOut.splitCalibMatWithIdx(trainFrac, shuffle, seed);
+
+    // calib rows = filteredRows - inpRows - out_horizon + 1
+    std::cout << "calib rows: " << dataMultiOut.getCalibMat().rows()
+              << " -> train: " << trainMat.rows() << ", valid: " << validMat.rows() << "\n";
+
+    // If you saved original timestamps earlier (before calling removeRowsWithNa()):
+    auto times_all = dataMultiOut.timestamps();
+
+    // Print first 10 validation rows and their original indices
+    int toPrint = std::min<int>(10, static_cast<int>(validIdx.size()));
+    for (int i = 0; i < toPrint; ++i) {
+        int calibRow = validIdx[i]; // index into calibMat 
+        std::cout << "valid row " << i << " : calibIndex=" << calibRow;
+        // If you have a mapping calibIndex -> original_time_index (e.g. m_calib_pattern_orig_indices),
+        // map that here to get the timestamp. Example (pseudocode):
+        // size_t origRow = m_calib_pattern_orig_indices[calibRow];
+        // std::cout << " origRow=" << origRow << " time=" << times_all[origRow];
+        std::cout << "\n";
+    }
 
     // Extract truth_valid (CR x out_horizon) and synthetic preds_valid
     Eigen::MatrixXd Y_true_valid = C.block(0, inputSize, CR, out_horizon);
@@ -675,6 +706,7 @@ int main() {
   std::cout<<"second layer weight mat: \n"<<test123.getWeights(1)<<"\n\n";
   test123.weightsToVectorMlp();
   std::cout<<"all weights vector: \n"<<test123.getWeightsVectorMlp().transpose();
+
 
   return 0;
 }
