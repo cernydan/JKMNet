@@ -412,6 +412,60 @@ void Data::inverseTransform() {
 }
 
 /**
+ * Inverse the global transform for outputs
+ */
+Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M) const {
+    if (M.size() == 0) return M;
+
+    switch (m_transform) {
+        case transform_type::NONE:
+            return M; // nothing to do
+
+        case transform_type::MINMAX: {
+            if (!m_scaler.fitted) {
+                throw std::runtime_error("inverseTransformOutputs: MINMAX scaler not fitted");
+            }
+            // We assume the target column in original m_data is the last column.
+            // The MINMAX scaling is per-column; for outputs we apply the inverse min/max for the target col.
+            const Eigen::Index targetCol = m_data.cols() - 1;
+            if (targetCol < 0) throw std::runtime_error("inverseTransformOutputs: no columns in m_data");
+            double mn = m_scaler.min(targetCol);
+            double mx = m_scaler.max(targetCol);
+            double span = (mx - mn); if (span == 0.0) span = 1.0;
+
+            Eigen::MatrixXd out = M;
+            out = out.array() * span + mn;
+            return out;
+        }
+
+        case transform_type::NONLINEAR: {
+            const double alpha = m_alpha;
+            Eigen::MatrixXd out = M;
+            for (Eigen::Index r = 0; r < out.rows(); ++r) {
+                for (Eigen::Index c = 0; c < out.cols(); ++c) {
+                    double t = out(r, c);
+                    if (!std::isfinite(t)) continue;
+                    // clamp / nudge to valid open interval (0,1)
+                    if (t >= 1.0) t = std::nextafter(1.0, 0.0);
+                    if (t < 0.0) {
+                        if (t > -1e-12) t = 0.0; // treat tiny negative as zero
+                        else throw std::runtime_error("inverseTransformOutputs: transformed value < 0");
+                    }
+                    double one_minus = 1.0 - t;
+                    if (!(one_minus > 0.0)) throw std::runtime_error("inverseTransformOutputs: 1 - t <= 0");
+                    out(r, c) = -std::log(one_minus) / alpha;
+                }
+            }
+            return out;
+        }
+
+        default:
+            throw std::runtime_error("inverseTransformOutputs: unknown transform_type");
+    }
+}
+
+
+/**
  * Create matrix for backpropagation from data matrix
  */
 void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows){

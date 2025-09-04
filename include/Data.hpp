@@ -45,6 +45,7 @@ class Data {
         void setTransform(transform_type t, double alpha = 0.015, bool excludeLastCol = false);  //!< Set which transform to apply (applies to all numeric columns)
         void applyTransform();  //!< Apply the previously configured transform to m_data
         void inverseTransform();  //!< Inverse the global transform (to bring predictions back)
+        Eigen::MatrixXd inverseTransformOutputs(const Eigen::MatrixXd& M) const;  //!< Inverse the global transform for outputs
 
         void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix
         void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix  (both inps + outs) for backpropagation from data matrix
@@ -55,7 +56,6 @@ class Data {
         std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
         splitCalibMatWithIdx(double trainFraction = 0.8, bool shuffle = true, unsigned seed = 0) const;  //!< Split calibration matrix into train/validation and also return indices
 
-        
         std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
         splitDataRowsWithIdx(double trainFraction = 0.8, bool shuffle = true, unsigned seed = 0) const;  //!< Split raw data rows (m_data) into train/validation and return indices
 
@@ -78,7 +78,6 @@ class Data {
         Eigen::MatrixXd expandPredictionsFromCalib(const Eigen::MatrixXd& preds, int inpRows) const;  //!< Expand predictions produced from calibration matrix
         const std::vector<size_t>& removedRowIndices() const { return m_na_row_indices; }   //!< Get indices of rows removed 
         size_t validRowCount() const { return static_cast<size_t>(m_data.rows()); }  //!< Number of valid rows currently in m_data
-
 
     protected:
 

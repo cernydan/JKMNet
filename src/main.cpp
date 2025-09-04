@@ -17,6 +17,8 @@
 #include <vector>
 #include <fstream>
 #include <limits>
+#include <iomanip>
+#include <chrono>
 
 #include "JKMNet.hpp"
 #include "MLP.hpp"
@@ -337,88 +339,15 @@ int main() {
   Eigen::VectorXd output = layer.getOutput();
   std::cout << "Layer Outputs: " << output.transpose() << std::endl;
 
+  //!! ------------------------------------------------------------
+  //!! ARTIFICIAL DATA
+  //!! ------------------------------------------------------------
+
   std::cout << "\n-------------------------------------------" << std::endl;
-  std::cout << "-- Upload data from file --" << std::endl;
+  std::cout << "-- *** ARTIFICIAL DATA *** --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
 
-  Data data;
-
-  // Filter data by single ID "94206029"
-  std::unordered_set<std::string> ids = {"94206029"};
-
-  // Select which columns to keep
-  std::vector<std::string> keepCols = {"T1", "T2", "T3", "moisture"};
-
-  try {
-      //size_t n = data.loadFilteredCSV("data/inputs/data_all_hourly.csv",  // has "hour_start" column
-      size_t n = data.loadFilteredCSV("data/inputs/data_all_daily.csv",  // has "date" column
-        ids,
-        keepCols,
-        "date", //"hour_start",
-        "ID");
-
-      // Print total number of loaded row
-      std::cout << "Total number of rows: " << n << "\n";
-
-      // Print header names
-      data.printHeader("date");   // or "hour_start"
-
-      const auto& times = data.timestamps();
-      const auto& mat = data.numericData();
-
-      // Print couple of the first rows (5)
-      for (size_t i = 0; i < std::min<size_t>(5, n); ++i) {
-          std::cout << times[i] << " | ";
-          for (int c = 0; c < mat.cols(); ++c) {
-              std::cout << mat(i, c) << (c+1<mat.cols()? " | " : "");
-          }
-          std::cout << "\n";
-      }
-  } catch (std::exception &ex) {
-      std::cerr << "[Error]: " << ex.what() << "\n";
-  }
-
-  // Select only one column (moisture)
-  auto moistureData = data.getColumnValues("moisture");
-  size_t nMoistureData = moistureData.size();
-  if (nMoistureData == 0) { 
-    std::cout << "no data\n"; 
-    return {}; 
-  }
-  Eigen::RowVectorXd firstMoisture;
-  size_t N = std::min<size_t>(3, nMoistureData);
-  {
-      Eigen::Map<const Eigen::VectorXd> mview(moistureData.data(), static_cast<Eigen::Index>(N));
-      firstMoisture = mview.transpose(); 
-  }
-  std::cout << "First 3 moisture values: " << firstMoisture << "\n";
-
-  // Detect and remove rows with NaNs
-  auto naIdx = data.findRowsWithNa();
-  std::cout << "Number of rows with any NaN: " << naIdx.size() << "\n";
-  if (!naIdx.empty()) {
-      data.removeRowsWithNa();
-  }
-
-  std::cout << "\n-------------------------------------------" << std::endl;
-  std::cout << "-- Transformation of data --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
-
-  std::cout << "Before transform (first row): " << data.numericData().row(0) << "\n";
-  data.setTransform(transform_type::MINMAX);
-  data.applyTransform();
-  std::cout << "After MINMAX transform (first row):  " << data.numericData().row(0) << "\n";
-  data.inverseTransform();
-  std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
-
-  std::cout << "Before transform (first row): " << data.numericData().row(0) << "\n";
-  data.setTransform(transform_type::NONLINEAR, 0.015, false);
-  data.applyTransform();
-  std::cout << "After NONLINEAR transform (first row):  " << data.numericData().row(0) << "\n";
-  data.inverseTransform();
-  std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
-
-  std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "--  Testing criteria (no real data!) --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
   
@@ -643,6 +572,8 @@ int main() {
     // compute a quick metric on valid rows
     double mseA = Metrics::mse(Y_true_valid, preds_valid);
     std::cout << "MSE (multi-horizon, valid rows) = " << mseA << "\n";
+    double rmseA = Metrics::rmse(Y_true_valid, preds_valid);
+    std::cout << "RMSE (multi-horizon, valid rows) = " << rmseA << "\n";
 
     // Expand predictions back to full timeline (use inpRows from makeCalibMat)
     Eigen::MatrixXd preds_full = dataMultiOut.expandPredictionsFromCalib(preds_valid, inpRows);
@@ -669,7 +600,115 @@ int main() {
     return 1;
   }
 
+
+  //!! ------------------------------------------------------------
+  //!! REAL DATA
+  //!! ------------------------------------------------------------
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "-- *** REAL DATA *** --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  std::cout << "-------------------------------------------" << std::endl;
+  std::cout << "-- Upload data from file --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  Data data;
+
+  // Filter data by single ID "94206029"
+  std::unordered_set<std::string> ids = {"94206029"};
+
+  // Select which columns to keep
+  std::vector<std::string> keepCols = {"T1", "T2", "T3", "moisture"};
+
+  try {
+      //size_t n = data.loadFilteredCSV("data/inputs/data_all_hourly.csv",  // has "hour_start" column
+      size_t n = data.loadFilteredCSV("data/inputs/data_all_daily.csv",  // has "date" column
+        ids,
+        keepCols,
+        "date", //"hour_start",
+        "ID");
+
+      // Print total number of loaded row
+      std::cout << "Total number of rows: " << n << "\n";
+
+      // Print header names
+      data.printHeader("date");   // or "hour_start"
+
+      const auto& times = data.timestamps();
+      const auto& mat = data.numericData();
+
+      // Print couple of the first rows (5)
+      for (size_t i = 0; i < std::min<size_t>(5, n); ++i) {
+          std::cout << times[i] << " | ";
+          for (int c = 0; c < mat.cols(); ++c) {
+              std::cout << mat(i, c) << (c+1<mat.cols()? " | " : "");
+          }
+          std::cout << "\n";
+      }
+  } catch (std::exception &ex) {
+      std::cerr << "[Error]: " << ex.what() << "\n";
+  }
+
+  // Select only one column (moisture)
+  auto moistureData = data.getColumnValues("moisture");
+  size_t nMoistureData = moistureData.size();
+  if (nMoistureData == 0) { 
+    std::cout << "no data\n"; 
+    return {}; 
+  }
+  Eigen::RowVectorXd firstMoisture;
+  size_t N = std::min<size_t>(3, nMoistureData);
+  {
+      Eigen::Map<const Eigen::VectorXd> mview(moistureData.data(), static_cast<Eigen::Index>(N));
+      firstMoisture = mview.transpose(); 
+  }
+  std::cout << "First 3 moisture values: " << firstMoisture << "\n";
+
+  // Detect and remove rows with NaNs
+  auto naIdx = data.findRowsWithNa();
+  std::cout << "Number of rows with any NaN: " << naIdx.size() << "\n";
+  if (!naIdx.empty()) {
+      data.removeRowsWithNa();
+  }
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "-- Transformation of data --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  std::cout << "Before transform (first row): " << data.numericData().row(0) << "\n";
+  data.setTransform(transform_type::MINMAX);
+  data.applyTransform();
+  std::cout << "After MINMAX transform (first row):  " << data.numericData().row(0) << "\n";
+  data.inverseTransform();
+  std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
+
+  std::cout << "Before transform (first row): " << data.numericData().row(0) << "\n";
+  data.setTransform(transform_type::NONLINEAR, 0.015, false);
+  data.applyTransform();
+  std::cout << "After NONLINEAR transform (first row):  " << data.numericData().row(0) << "\n";
+  data.inverseTransform();
+  std::cout << "After inverse (first row):   " << data.numericData().row(0) << "\n";
+
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "-- Testing online Adam from JKMNet --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
   
+  JKMNet net;
+  MLP mymlp;
+  auto resAdam = net.trainAdamOnlineSplit(
+      mymlp, data, {2,1}, 
+      {0,0,1,2},  //use 1 value from T1 (current), 1 from T2 (current), 2 from T3 (current + 1 lag), 3 from moisture (current + 2 lag)
+      activ_func_type::RELU, weight_init_type::RANDOM,
+      500, 0.002, 0.001, true, 42);
+
+  mymlp.calculateOutputs(data.getCalibInpsMat().topRows(5));
+  std::cout<<"observed outputs (calib): \n"<<data.getCalibOutsMat().topRows(5)<<"\n\n";
+  std::cout<<"modelled outputs (calib): \n"<<mymlp.getOutputs()<<"\n\n";
+
+  std::cout << "Training finished; final MSE=" << resAdam.finalLoss
+            << ", iterations=" << resAdam.iterations
+            << ", converged=" << std::boolalpha << resAdam.converged << "\n";
 
 
   // std::cout << "\n-------------------------------------------" << std::endl;
@@ -710,25 +749,6 @@ int main() {
   std::cout<<"all weights vector: \n"<<test123.getWeightsVectorMlp().transpose();
 
 
-  std::cout << "\n-------------------------------------------" << std::endl;
-  std::cout << "-- Testing online Adam from JKMNet --" << std::endl;
-  std::cout << "-------------------------------------------" << std::endl;
   
-  JKMNet net;
-  MLP mymlp;
-  auto resAdam = net.trainAdamOnlineSplit(
-      mymlp, data, {2,1}, {0,0,1,2},
-      activ_func_type::RELU, weight_init_type::RANDOM,
-      500, 0.002, 0.001, true, 42);
-
-  mymlp.calculateOutputs(data.getCalibInpsMat().topRows(5));
-  std::cout<<"calibrated outputs: \n"<<data.getCalibOutsMat().topRows(5)<<"\n\n";
-  std::cout<<"modelled outputs: \n"<<mymlp.getOutputs()<<"\n\n";
-
-  std::cout << "Training finished; final MSE=" << resAdam.finalLoss
-            << ", iterations=" << resAdam.iterations
-            << ", converged=" << std::boolalpha << resAdam.converged << "\n";
-
-
   return 0;
 }
