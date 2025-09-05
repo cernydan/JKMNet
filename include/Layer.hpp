@@ -24,7 +24,8 @@ enum class activ_func_type
     ROOTSIG,
     LOGSIG,
     SECH,
-    WAVE
+    WAVE,
+    LEAKYRELU
 }; //!< All activation functions
 
 const activ_func_type all_activ_func[]{
@@ -40,7 +41,8 @@ const activ_func_type all_activ_func[]{
     activ_func_type::ROOTSIG,
     activ_func_type::LOGSIG,
     activ_func_type::SECH,
-    activ_func_type::WAVE
+    activ_func_type::WAVE,
+    activ_func_type::LEAKYRELU
 };
 const unsigned numActivFunc = std::size(all_activ_func); //!< Total number of activation functions
 

@@ -83,6 +83,7 @@ std::string Layer::activationName(activ_func_type f) {
       case activ_func_type::LOGSIG: return "LOGSIG";
       case activ_func_type::SECH: return "SECH";
       case activ_func_type::WAVE: return "WAVE";
+      case activ_func_type::LEAKYRELU: return "LEAKYRELU";
 
     }
     return "Unknown";
@@ -415,6 +416,10 @@ Eigen::VectorXd Layer::setActivationFunction(const Eigen::VectorXd& weightedSum,
             activatedOutput = activatedOutput.array().unaryExpr([](double x) { return (1 - x * x) * exp(-x * x); });
             break;
 
+        case activ_func_type::LEAKYRELU:   // f(x) = max(0.01 * x, x)
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return x > 0.0 ? x : 0.01 * x; });
+            break;
+
         default:
             std::cerr << "[Error]: Unknown activation function type!" << std::endl;
             break;
@@ -497,6 +502,10 @@ Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, acti
         case activ_func_type::WAVE:  // f'(x) = 2x * (x^2 - 2) * exp(-x^2)
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
             { return 2.0 * x * (x * x - 2.0) * exp(-x * x); });
+            break;
+
+        case activ_func_type::LEAKYRELU:  // f'(x) = 0.01 for x <= 0 ; f'(x) = 1 for x > 0
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) { return x > 0.0 ? 1.0 : 0.01; });
             break;
 
         default:

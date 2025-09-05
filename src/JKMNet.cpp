@@ -115,3 +115,82 @@ TrainingResult JKMNet::trainAdamOnlineSplit(
 
     return result;
 }
+
+/**
+ * Train an MLP with batch Adam using calibrated matrices built from Data
+ */
+TrainingResult JKMNet::trainAdamBatchSplit(
+  MLP &mlp,
+  Data &data,
+  const std::vector<unsigned> &mlpArchitecture,
+  const std::vector<int> &numbersOfPastVarsValues,
+  activ_func_type activationType,
+  weight_init_type weightsInitType,
+  int batchSize,
+  int maxIterations,
+  double maxError,
+  double learningRate,
+  bool shuffle,
+  unsigned rngSeed) 
+  {
+    TrainingResult result;
+
+    // Basic check of architecture
+    if (mlpArchitecture.empty())
+        throw std::invalid_argument("mlpArchitecture must be non-empty");
+    if (numbersOfPastVarsValues.empty())
+        throw std::invalid_argument("numbersOfPastVarsValues must be non-empty");
+    if (maxIterations <= 0 || batchSize <= 0)
+        throw std::invalid_argument("maxIterations and batchSize must be > 0");
+
+    // Build calib mats inside Data
+    data.makeCalibMatsSplit(numbersOfPastVarsValues, static_cast<int>(mlpArchitecture.back()));
+
+    // Get calib matrices
+    Eigen::MatrixXd X = data.getCalibInpsMat(); 
+    Eigen::MatrixXd Y = data.getCalibOutsMat();
+
+    // Shuffle rows
+    std::vector<int> perm;
+    if (shuffle) {
+        perm = data.permutationVector(static_cast<int>(X.rows()));
+        X = data.shuffleMatrix(X, perm);
+        Y = data.shuffleMatrix(Y, perm);
+    }
+
+    // Configure MLP
+    mlp.setArchitecture(const_cast<std::vector<unsigned>&>(mlpArchitecture));
+    std::vector<activ_func_type> activations(mlpArchitecture.size(), activationType);
+    std::vector<weight_init_type> weightInits(mlpArchitecture.size(), weightsInitType);
+    mlp.setActivations(activations);
+    mlp.setWInitType(weightInits);
+
+    // Initialize MLP
+    int inputSize = static_cast<int>(X.cols()); // each pattern is a row of inputs (flattened)
+    Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
+    mlp.initMLP(zeroIn);
+
+    // Run training with batchAdam method
+    try {
+        mlp.batchAdam(maxIterations, maxError, batchSize, learningRate, X, Y);
+    } catch (const std::exception &ex) {
+        std::cerr << "[trainAdamBatchSplit] training failed: " << ex.what() << "\n";
+        throw;
+    }
+
+    // Compute final loss on training set (simple MSE)
+    Eigen::MatrixXd preds(X.rows(), Y.cols());
+    for (int r = 0; r < X.rows(); ++r) {
+        Eigen::VectorXd xcol = X.row(r).transpose();
+        Eigen::VectorXd yhat = mlp.runMLP(xcol);
+        preds.row(r) = yhat.transpose();
+    }
+    Eigen::MatrixXd diff = preds - Y;
+    double mse = diff.array().square().mean();
+
+    result.finalLoss = mse;
+    result.iterations = maxIterations;
+    result.converged = (mse <= maxError);
+
+    return result;
+}

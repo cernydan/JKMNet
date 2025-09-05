@@ -38,6 +38,22 @@ class JKMNet {
             unsigned rngSeed = 42
         );
 
+        //!< Train MLP with batch Adam using calibrated matrices built from Data
+        TrainingResult trainAdamBatchSplit(
+            MLP &mlp,
+            Data &data,
+            const std::vector<unsigned> &mlpArchitecture,
+            const std::vector<int> &numbersOfPastVarsValues,
+            activ_func_type activationType,
+            weight_init_type weightsInitType,
+            int batchSize,
+            int maxIterations,
+            double maxError,
+            double learningRate,
+            bool shuffle = true,
+            unsigned rngSeed = 42
+        );
+
     protected:
 
     private:

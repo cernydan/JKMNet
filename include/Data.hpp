@@ -14,7 +14,8 @@
 enum class transform_type { 
     NONE = 0,
     MINMAX, 
-    NONLINEAR
+    NONLINEAR,
+    ZSCORE
 };
 
 struct Scaler {

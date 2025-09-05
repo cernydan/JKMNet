@@ -347,6 +347,50 @@ void Data::applyTransform() {
             break;
         }
 
+        case transform_type::ZSCORE:    // t = (x - mean) / sd
+        {
+            for (Eigen::Index c = 0; c < C; ++c) {
+                if (!shouldTransformCol(static_cast<int>(c))) continue;
+
+                double sum = 0.0;
+                double sumsq = 0.0;
+                Eigen::Index count = 0;
+
+                for (Eigen::Index r = 0; r < R; ++r) {
+                    double v = m_data(r, c);
+                    if (std::isfinite(v)) {
+                        sum += v;
+                        sumsq += v * v;
+                        ++count;
+                    }
+                }
+
+                if (count > 1) {
+                    double mean = sum / static_cast<double>(count);
+                    double variance = (sumsq / static_cast<double>(count)) - (mean * mean);
+                    double stddev = variance > 0.0 ? std::sqrt(variance) : 0.0;
+
+                    for (Eigen::Index r = 0; r < R; ++r) {
+                        double v = m_data(r, c);
+                        if (std::isfinite(v)) {
+                            if (stddev > 0.0) {
+                                double t = (v - mean) / stddev;
+                                m_data(r, c) = std::isfinite(t) ? t : std::numeric_limits<double>::quiet_NaN();
+                            } else {
+                                m_data(r, c) = 0.0;
+                            }
+                        }
+                    }
+                    // using Scaler struct also for zscore - min = mean, max = sd
+                    // might confuse, should change later
+                    m_scaler.min(c) = mean;
+                    m_scaler.max(c) = stddev;
+                    m_scaler.fitted = true;
+                }
+            }
+            break;
+        }
+
         default:
             break;
     }
@@ -406,6 +450,21 @@ void Data::inverseTransform() {
             break;
         }
 
+        case transform_type::ZSCORE:
+        {
+            if (!m_scaler.fitted) throw std::runtime_error("Scaler not fitted for inverse");
+            for (Eigen::Index c = 0; c < C; ++c) {
+                if (!shouldTransformCol(static_cast<int>(c))) continue;
+                double mean = m_scaler.min(c);
+                double stddev = m_scaler.max(c);
+                for (Eigen::Index r = 0; r < R; ++r) {
+                    double &x = m_data(r, c);
+                    if (std::isfinite(x)) x = x * stddev + mean;
+                }
+            }
+            break;
+        }
+
         default:
             break;
     }
@@ -456,6 +515,22 @@ Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M) const {
                     out(r, c) = -std::log(one_minus) / alpha;
                 }
             }
+            return out;
+        }
+
+        case transform_type::ZSCORE: {
+            if (!m_scaler.fitted) {
+                throw std::runtime_error("inverseTransformOutputs: scaler not fitted");
+            }
+            // We assume the target column in original m_data is the last column...
+
+            const Eigen::Index targetCol = m_data.cols() - 1;
+            if (targetCol < 0) throw std::runtime_error("inverseTransformOutputs: no columns in m_data");
+            double mean = m_scaler.min(targetCol);
+            double stddev = m_scaler.max(targetCol);
+
+            Eigen::MatrixXd out = M;
+            out = out.array() * stddev + mean;
             return out;
         }
 
