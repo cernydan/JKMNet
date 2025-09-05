@@ -8,7 +8,7 @@
 // **DONE**: Split data for calibration and validation set (+ testing set?) (chronologically or randomly as a new method in MLP) 
 // **DONE**: Change 'Testing ADAM' section in 'main.cpp' as a new method 
 // TODO: Prepare more scenarios for running
-// TODO: Prepare vector of weights from matrix of weights (for global optimization)
+// **DONE**: Prepare vector of weights from matrix of weights (for global optimization)
 // *******************************
 
 #include <ctime>
@@ -698,7 +698,7 @@ int main() {
   MLP mymlp;
   auto resAdam = net.trainAdamOnlineSplit(
       mymlp, data, {2,1}, 
-      {0,0,1,2},  //use 1 value from T1 (current), 1 from T2 (current), 2 from T3 (current + 1 lag), 3 from moisture (current + 2 lag)
+      {0,0,1,2},  //use 1 value from T3 (current), 2 from moisture (current + 1 lag)
       activ_func_type::RELU, weight_init_type::RANDOM,
       500, 0.002, 0.001, true, 42);
 
@@ -711,44 +711,25 @@ int main() {
             << ", converged=" << std::boolalpha << resAdam.converged << "\n";
 
 
-  // std::cout << "\n-------------------------------------------" << std::endl;
-  // std::cout << "--   Testing split calibMats, shuffling  --" << std::endl;
-  // std::cout << "-------------------------------------------" << std::endl;
-  // std::cout<<"data: \n"<<data.numericData().topRows(5)<<endl<<"\n";
-  // data.makeCalibMat({1,3,2,1},2);     // input length = 7
-  // std::cout<<"calibMat: \n"<<data.getCalibMat().topRows(3)<<endl<<"\n";
-  // data.splitCalibMat(7);
-  // std::cout<<"split mats from calibMat: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
-  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
-  // data.makeCalibMatsSplit({1,3,2,1},2);
-  // std::cout<<"directly created split mats: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
-  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
-  // std::vector<int>permut = data.permutationVector(data.getCalibInpsMat().rows());
-  // data.setCalibInpsMat(data.shuffleMatrix(data.getCalibInpsMat(),permut));
-  // data.setCalibOutsMat(data.shuffleMatrix(data.getCalibOutsMat(),permut));
-  // std::cout<<"shuffled split mats: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
-  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
-  // data.setCalibInpsMat(data.unshuffleMatrix(data.getCalibInpsMat(),permut));
-  // data.setCalibOutsMat(data.unshuffleMatrix(data.getCalibOutsMat(),permut));
-  // std::cout<<"unshuffled split mats: \n"<<data.getCalibInpsMat().topRows(3)<<endl<<"\n";
-  // std::cout<<data.getCalibOutsMat().topRows(3)<<endl<<"\n";
 
   std::cout << "\n-------------------------------------------" << std::endl;
-  std::cout << "--      Testing testing online Adam      --" << std::endl;
+  std::cout << "-- Testing batch Adam from JKMNet --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
+  
+  MLP batmlp;
+  auto resBatch = net.trainAdamBatchSplit(
+      batmlp, data, {2,1}, 
+      {0,0,1,2},  //use 1 value from T3 (current), 2 from moisture (current + 1 lag)
+      activ_func_type::LEAKYRELU, weight_init_type::RANDOM, 30,
+      500, 0.002, 0.001, true, 42);
 
-  MLP test123;
-  testAdamOnlineSplitD(test123,data,{2,1},{0,0,1,2},activ_func_type::RELU,weight_init_type::RANDOM,500,0.002,0.001);
-  test123.calculateOutputs(data.getCalibInpsMat().topRows(5));
-  std::cout<<"calibrated outputs: \n"<<data.getCalibOutsMat().topRows(5)<<"\n\n";
-  std::cout<<"modelled outputs: \n"<<test123.getOutputs()<<"\n\n";
+  batmlp.calculateOutputs(data.getCalibInpsMat().topRows(5));
+  std::cout<<"observed outputs (calib): \n"<<data.getCalibOutsMat().topRows(5)<<"\n\n";
+  std::cout<<"modelled outputs (calib): \n"<<batmlp.getOutputs()<<"\n\n";
 
-  std::cout<<"first layer weight mat: \n"<<test123.getWeights(0)<<"\n\n";
-  std::cout<<"second layer weight mat: \n"<<test123.getWeights(1)<<"\n\n";
-  test123.weightsToVectorMlp();
-  std::cout<<"all weights vector: \n"<<test123.getWeightsVectorMlp().transpose();
-
-
+  std::cout << "Training finished; final MSE=" << resBatch.finalLoss
+            << ", iterations=" << resBatch.iterations
+            << ", converged=" << std::boolalpha << resBatch.converged << "\n";
   
   return 0;
 }
