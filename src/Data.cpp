@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <limits>
 #include <tuple>
+#include <filesystem>
 
 /**
  * Trim helper function
@@ -63,7 +64,9 @@ static std::vector<int> buildIndicesInt(int N, bool shuffle, unsigned seed) {
     return idx;
 }
 
-// Helper function to build mapping filtered_index -> original_index (used when rows were removed)
+/**
+ * Helper function to build mapping filtered_index -> original_index (used when rows were removed)
+ */
 static std::vector<Eigen::Index> buildFilteredToOriginalMap(const std::vector<size_t>& na_row_indices, Eigen::Index origRows) {
     std::vector<Eigen::Index> filt2orig;
     filt2orig.reserve(static_cast<size_t>(origRows));
@@ -76,6 +79,69 @@ static std::vector<Eigen::Index> buildFilteredToOriginalMap(const std::vector<si
         }
     }
     return filt2orig;
+}
+
+/**
+ * Helper function to save matrix to CSV
+ */
+bool Data::saveMatrixCsv(const std::string &path,
+    const Eigen::MatrixXd &M,
+    const std::vector<std::string> &colNames,
+    bool inverseOutputs) const
+    {
+    try {
+        if (M.size() == 0) {
+            std::cerr << "[Data::saveMatrixCsv] Empty matrix, nothing to save: " << path << "\n";
+            return false;
+        }
+
+        // prepare output matrix: optionally inverse-transform using data's scaler
+        Eigen::MatrixXd out = M;
+        if (inverseOutputs) {
+            try {
+                out = this->inverseTransformOutputs(M);
+            } catch (const std::exception &ex) {
+                std::cerr << "[Data::saveMatrixCsv] inverseTransformOutputs failed: " << ex.what()
+                          << " — saving transformed values instead.\n";
+                out = M;
+            }
+        }
+
+        // ensure directory exists
+        std::filesystem::path p(path);
+        if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
+
+        std::ofstream ofs(path);
+        if (!ofs.is_open()) {
+            std::cerr << "[Data::saveMatrixCsv] Cannot open file for write: " << path << "\n";
+            return false;
+        }
+        ofs << std::setprecision(12);
+
+        // optional header
+        if (!colNames.empty()) {
+            for (size_t c = 0; c < colNames.size(); ++c) {
+                ofs << colNames[c];
+                if (c + 1 < colNames.size()) ofs << ",";
+            }
+            ofs << "\n";
+        }
+
+        for (Eigen::Index r = 0; r < out.rows(); ++r) {
+            for (Eigen::Index c = 0; c < out.cols(); ++c) {
+                double v = out(r, c);
+                if (std::isfinite(v)) ofs << v;
+                else ofs << "NaN";
+                if (c + 1 < out.cols()) ofs << ",";
+            }
+            ofs << "\n";
+        }
+        ofs.close();
+        return true;
+    } catch (const std::exception &ex) {
+        std::cerr << "[Data::saveMatrixCsv] Exception: " << ex.what() << "\n";
+        return false;
+    }
 }
 
 /**

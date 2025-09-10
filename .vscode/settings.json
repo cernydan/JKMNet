@@ -89,6 +89,7 @@
         "specialfunctions": "cpp",
         "splines": "cpp",
         "any": "cpp",
-        "forward_list": "cpp"
+        "forward_list": "cpp",
+        "codecvt": "cpp"
     }
 }

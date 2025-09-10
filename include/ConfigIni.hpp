@@ -1,4 +1,6 @@
-// ConfigIni.hpp
+#ifndef CONFIG_HPP
+#define CONFIG_HPP
+
 #pragma once
 
 #include <string>
@@ -11,9 +13,8 @@
 #include <cctype>
 #include <stdexcept>
 
-// include your enums headers (adjust include paths to your project)
-#include "Data.hpp"   // for transform_type
-#include "MLP.hpp"    // for activ_func_type, weight_init_type
+#include "Data.hpp"   
+#include "MLP.hpp"    
 
 // ---------- utility helpers ----------
 static inline std::string trimStr(const std::string &s) {
@@ -53,6 +54,7 @@ static inline bool parseBool(const std::string &s) {
 
 // ---------- RunConfig ----------
 struct RunConfig {
+    // model / training
     std::string trainer = "online";                 // "online" or "batch"
     std::vector<unsigned> mlp_architecture;         // e.g. [8,6,2]
     std::vector<int> input_numbers;                 // e.g. [0,0,1,2]
@@ -64,16 +66,31 @@ struct RunConfig {
     bool shuffle = true;
     unsigned seed = 42;
     int batch_size = 30;
+    double train_fraction = 0.8;
+
+    // transforms
     std::string transform = "NONE";
     double transform_alpha = 0.015;
     bool exclude_last_col_from_transform = false;
     bool remove_na_before_calib = true;
+
+    // data selection
     std::string data_file;
     std::string id = "";
     std::string id_col = "ID";
     std::string timestamp = "date";
     std::vector<std::string> columns;
-    double train_fraction = 0.8;
+
+    // output paths (parsed from [paths] section)
+    std::string out_dir = "";
+    std::string calib_mat = "";
+    std::string weights = "";
+    std::string real_calib = "";
+    std::string pred_calib = "";
+    std::string real_valid = "";
+    std::string pred_valid = "";
+    std::string metrics_cal = "";
+    std::string metrics_val = "";
 };
 
 // ---------- mapping helpers (adapt these if your enum names differ) ----------
@@ -85,7 +102,7 @@ inline activ_func_type strToActivation(const std::string &s) {
     if (u == "TANH") return activ_func_type::TANH;
     if (u == "SIGMOID") return activ_func_type::SIGMOID;
     if (u == "LINEAR") return activ_func_type::LINEAR;
-    // add others as you need
+
     throw std::runtime_error("Unknown activation: " + s);
 }
 
@@ -95,7 +112,7 @@ inline weight_init_type strToWeightInit(const std::string &s) {
     if (u == "RANDOM") return weight_init_type::RANDOM;
     if (u == "LHS") return weight_init_type::LHS;
     if (u == "LHS2") return weight_init_type::LHS2;
-    // add others as you need
+
     throw std::runtime_error("Unknown weight_init: " + s);
 }
 
@@ -106,15 +123,11 @@ inline transform_type strToTransformType(const std::string &s) {
     if (u == "MINMAX") return transform_type::MINMAX;
     if (u == "NONLINEAR") return transform_type::NONLINEAR;
     if (u == "ZSCORE") return transform_type::ZSCORE;
+
     throw std::runtime_error("Unknown transform: " + s);
 }
 
 // ---------- INI parser ----------
-/*
- Basic parser: reads key = value lines.
- Ignores comments starting with ';' or '#'.
- Ignores section headers like [section].
-*/
 inline std::unordered_map<std::string, std::string> parseIniToMap(const std::string &path) {
     std::ifstream ifs(path);
     if (!ifs.is_open()) throw std::runtime_error("Cannot open INI file: " + path);
@@ -130,13 +143,14 @@ inline std::unordered_map<std::string, std::string> parseIniToMap(const std::str
         if (pos == std::string::npos) continue;
         std::string key = trimStr(s.substr(0, pos));
         std::string val = trimStr(s.substr(pos+1));
-        // remove inline comment after value ( ; or # ) -- optional
+        // remove inline comment after value ( ; or # )
         size_t cpos = val.find_first_of(";#");
         if (cpos != std::string::npos) {
             val = trimStr(val.substr(0, cpos));
         }
         // lowercase key for convenience
         std::string key_lower;
+        key_lower.reserve(key.size());
         for (char ch : key) key_lower.push_back(static_cast<char>(std::tolower((unsigned char)ch)));
         kv[key_lower] = val;
     }
@@ -193,7 +207,7 @@ inline RunConfig parseConfigIni(const std::string &path) {
     cfg.data_file = sdata;
 
     std::string sid = get("id");
-    if (!sid.empty()) cfg.id = sid;
+    if (!sid.empty()) cfg.id = trimStr(sid);
 
     std::string sidcol = get("id_col");
     if (!sidcol.empty()) cfg.id_col = trimStr(sidcol);
@@ -237,6 +251,9 @@ inline RunConfig parseConfigIni(const std::string &path) {
     std::string sbsize = get("batch_size");
     if (!sbsize.empty()) cfg.batch_size = std::stoi(sbsize);
 
+    std::string strainf = get("train_fraction");
+    if (!strainf.empty()) cfg.train_fraction = std::stod(strainf);
+
     std::string strans = get("transform");
     if (!strans.empty()) cfg.transform = trimStr(strans);
 
@@ -249,9 +266,26 @@ inline RunConfig parseConfigIni(const std::string &path) {
     std::string sremna = get("remove_na_before_calib");
     if (!sremna.empty()) cfg.remove_na_before_calib = parseBool(sremna);
 
-    std::string strainf = get("train_fraction");
-    if (!strainf.empty()) cfg.train_fraction = std::stod(strainf);
-
+    // paths (optional)
+    std::string sout = get("out_dir");
+    if (!sout.empty()) cfg.out_dir = trimStr(sout);
+    std::string scalib = get("calib_mat");
+    if (!scalib.empty()) cfg.calib_mat = trimStr(scalib);
+    std::string swell = get("weights");
+    if (!swell.empty()) cfg.weights = trimStr(swell);
+    std::string srealc = get("real_calib");
+    if (!srealc.empty()) cfg.real_calib = trimStr(srealc);
+    std::string spredc = get("pred_calib");
+    if (!spredc.empty()) cfg.pred_calib = trimStr(spredc);
+    std::string srealv = get("real_valid");
+    if (!srealv.empty()) cfg.real_valid = trimStr(srealv);
+    std::string spredv = get("pred_valid");
+    if (!spredv.empty()) cfg.pred_valid = trimStr(spredv);
+    std::string smetcal = get("metrics_cal");
+    if (!smetcal.empty()) cfg.metrics_cal = trimStr(smetcal);
+    std::string smetval = get("metrics_val");
+    if (!smetval.empty()) cfg.metrics_val = trimStr(smetval);
+    
     // Basic validation
     if (cfg.mlp_architecture.empty()) throw std::runtime_error("config: architecture is required (e.g. architecture = 8,6,2)");
     if (cfg.input_numbers.empty()) throw std::runtime_error("config: input_numbers is required and length should match number of columns");
@@ -263,3 +297,6 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     return cfg;
 }
+
+
+#endif // CONFIG_HPP
