@@ -84,7 +84,8 @@ struct RunConfig {
     // output paths (parsed from [paths] section)
     std::string out_dir = "";
     std::string calib_mat = "";
-    std::string weights = "";
+    std::string weights_csv = "";
+    std::string weights_bin = "";
     std::string real_calib = "";
     std::string pred_calib = "";
     std::string real_valid = "";
@@ -271,8 +272,10 @@ inline RunConfig parseConfigIni(const std::string &path) {
     if (!sout.empty()) cfg.out_dir = trimStr(sout);
     std::string scalib = get("calib_mat");
     if (!scalib.empty()) cfg.calib_mat = trimStr(scalib);
-    std::string swell = get("weights");
-    if (!swell.empty()) cfg.weights = trimStr(swell);
+    std::string sweil = get("weights_csv");
+    if (!sweil.empty()) cfg.weights_csv = trimStr(sweil);
+    std::string swellbin = get("weights_bin");
+    if (!swellbin.empty()) cfg.weights_bin = trimStr(swellbin);
     std::string srealc = get("real_calib");
     if (!srealc.empty()) cfg.real_calib = trimStr(srealc);
     std::string spredc = get("pred_calib");

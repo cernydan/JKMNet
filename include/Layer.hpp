@@ -73,7 +73,7 @@ public:
     void calculateOnlineGradient(); //!< Calculation of the gradient matrix for online backpropagation
     void calculateBatchGradient(); //!< Calculation of the gradient matrix for batch backpropagation
 
-    Eigen::MatrixXd getWeights();  //!< Getter for weights
+    Eigen::MatrixXd getWeights() const;  //!< Getter for weights
     void setWeights(const Eigen::MatrixXd &newWeights);  //!< Setter for weights
     void updateWeights(double learningRate);  //!< Apply a gradient calculation: W = W – η·(∂E/∂W)
     void updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi); //!<  Apply a gradient calculation using ADAM algorithm

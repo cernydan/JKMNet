@@ -1,6 +1,12 @@
 #include "MLP.hpp"
+
 #include <iostream>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <cerrno>
+#include <cstring>
 
 using namespace std;
 using namespace std::chrono;
@@ -150,7 +156,7 @@ void MLP::printWInitType() {
 /**
  * Getter for the number of layers
  */
-size_t MLP::getNumLayers() {
+size_t MLP::getNumLayers() const {
     return numLayers; 
 }
 
@@ -237,7 +243,7 @@ void MLP::setInps(Eigen::VectorXd& inputs) {
 /**
  * Getter for the weights
  */
-Eigen::MatrixXd MLP::getWeights(size_t idx) {
+Eigen::MatrixXd MLP::getWeights(size_t idx) const {
     if (idx >= layers_.size())
       throw std::out_of_range("Layer index out of range in getWeights");
     return layers_[idx].getWeights();
@@ -260,7 +266,7 @@ Eigen::VectorXd MLP::getWeightsVectorMlp(){
 }
 
 /**
- *  //!< Merge weight vectors of all layers
+ * Merge weight vectors of all layers
  */
 void MLP::weightsToVectorMlp(){
     int length = 0;
@@ -274,6 +280,92 @@ void MLP::weightsToVectorMlp(){
     for(size_t i = 0; i < layers_.size(); i++){
         weightsVectorMlp.segment(pos, layers_[i].getWeightsVector().size()) = layers_[i].getWeightsVector();
         pos += layers_[i].getWeightsVector().size();
+    }
+}
+
+/**
+ * Save weights in readable CSV text (per-layer blocks)
+ */
+bool MLP::saveWeightsCsv(const std::string &path) const {
+    namespace fs = std::filesystem;
+
+    if (path.empty()) {
+        std::cerr << "[MLP::saveWeightsCsv] Cannot open: path is empty\n";
+        return false;
+    }
+
+    try {
+        fs::path p(path);
+        if (p.has_parent_path()) {
+            fs::create_directories(p.parent_path()); // no-op if exists
+        }
+    } catch (const std::exception &e) {
+        std::cerr << "[MLP::saveWeightsCsv] Cannot create parent directories for: " << path
+                  << "  (" << e.what() << ")\n";
+        return false;
+    }
+
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) {
+        int e = errno;
+        std::cerr << "[MLP::saveWeightsCsv] Cannot open file: " << path
+                  << "  errno=" << e << " (" << std::strerror(e) << ")\n";
+        return false;
+    }
+
+    ofs << std::setprecision(12);
+    // Optionally write a small header
+    ofs << "# MLP weights CSV\n";
+    // Write per-layer weights; format: a comment line with layer index and dimensions, then rows of CSV
+    for (size_t li = 0; li < layers_.size(); ++li) {
+        const Eigen::MatrixXd &W = layers_[li].getWeights(); // ensure Layer::getWeights() is const
+        ofs << "#layer," << li << "," << W.rows() << "," << W.cols() << "\n";
+        for (Eigen::Index r = 0; r < W.rows(); ++r) {
+            for (Eigen::Index c = 0; c < W.cols(); ++c) {
+                ofs << W(r, c);
+                if (c + 1 < W.cols()) ofs << ",";
+            }
+            ofs << "\n";
+        }
+    }
+    ofs.close();
+    if (ofs.fail()) {
+        std::cerr << "[MLP::saveWeightsCsv] Write failure for: " << path << "\n";
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Save weights in compact binary
+ */
+bool MLP::saveWeightsBinary(const std::string &path) const {
+    try {
+        std::filesystem::path p(path);
+        if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
+        std::ofstream ofs(path, std::ios::binary);
+        if (!ofs.is_open()) { std::cerr << "[MLP::saveWeightsBinary] Cannot open: " << path << "\n"; return false; }
+        size_t L = getNumLayers();
+        ofs.write(reinterpret_cast<const char*>(&L), sizeof(L));
+        for (size_t i = 0; i < L; ++i) {
+            Eigen::MatrixXd W = getWeights(i);
+            uint64_t rows = static_cast<uint64_t>(W.rows());
+            uint64_t cols = static_cast<uint64_t>(W.cols());
+            ofs.write(reinterpret_cast<const char*>(&rows), sizeof(rows));
+            ofs.write(reinterpret_cast<const char*>(&cols), sizeof(cols));
+            // write doubles row-major
+            for (Eigen::Index r = 0; r < W.rows(); ++r) {
+                for (Eigen::Index c = 0; c < W.cols(); ++c) {
+                    double v = W(r,c);
+                    ofs.write(reinterpret_cast<const char*>(&v), sizeof(v));
+                }
+            }
+        }
+        ofs.close();
+        return true;
+    } catch (const std::exception &ex) {
+        std::cerr << "[MLP::saveWeightsBinary] Exception: " << ex.what() << "\n";
+        return false;
     }
 }
 
@@ -863,7 +955,7 @@ void MLP::calculateOutputs(const Eigen::MatrixXd& inputMat){
     }
 }
 
-Eigen::MatrixXd MLP::getOutputs(){
+Eigen::MatrixXd MLP::getOutputs() const{
     return outputMat;
 }
 

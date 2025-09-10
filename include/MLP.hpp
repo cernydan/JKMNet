@@ -37,7 +37,7 @@ class MLP {
         void printWInitType();  //!< Print the weight initialization type
 
         //!< Number of layers
-        size_t getNumLayers();  //!< Getter for the number of layers
+        size_t getNumLayers() const;  //!< Getter for the number of layers
         void setNumLayers(size_t layers);  //!< Setter for the number of layers
 
         //!< Number of inputs (neurons in first layer)
@@ -53,11 +53,15 @@ class MLP {
         void setInps(Eigen::VectorXd& inputs);   //!< Setter for the inputs
 
         // Getter and Setter for weigths
-        Eigen::MatrixXd getWeights(size_t layerIndex);  //!< Getter for weights
+        Eigen::MatrixXd getWeights(size_t layerIndex) const;  //!< Getter for weights
         void setWeights(size_t layerIndex, const Eigen::MatrixXd& W);  //!< Setter for weights
 
         Eigen::VectorXd getWeightsVectorMlp(); //!< Getter for weights vector of MLP
         void weightsToVectorMlp(); //!< Merge weight vectors of all layers
+
+        bool saveWeightsCsv(const std::string &path) const;  //!< Save weights in readable CSV text (per-layer blocks)
+        bool saveWeightsBinary(const std::string &path) const;  //!< Save weights in compact binary
+        bool loadWeightsBinary(const std::string &path);  //!< Load weights in compact binary
 
         Eigen::VectorXd& getOutput();   //!< Getter for output
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
@@ -79,7 +83,7 @@ class MLP {
 
         void calcOneOutput(const Eigen::VectorXd& inputVec);  //!< Forward pass for one input
         void calculateOutputs(const Eigen::MatrixXd& inputMat); //!< Calculate outputs for given matrix of inputs
-        Eigen::MatrixXd getOutputs();  //!< Getter for output matrix
+        Eigen::MatrixXd getOutputs() const;  //!< Getter for output matrix
 
     protected:
 

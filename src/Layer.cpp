@@ -292,7 +292,7 @@ void Layer::calculateBatchGradient() {
 /**
  * Getter for the weight matrix of the layer
  */
-Eigen::MatrixXd Layer::getWeights() {
+Eigen::MatrixXd Layer::getWeights() const {
     return weights; 
 }
 

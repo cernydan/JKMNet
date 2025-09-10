@@ -4,9 +4,10 @@
 // **DONE**: Remove rows with NA in the calibMat
 // TODO: Add k-fold validation
 // **DONE**: Read data and setting of the MLP from file ('settings/config_model.ini')
-// **DONE**: Save final metrics into file ('metrics_calib.csv', path defined in 'config_model.ini')
-// **DONE**: Save real and predict calib data into file ('real_calib.csv' and 'pred_calib.csv', path defined in 'config_model.ini')
-// TODO: Save final matrix/vector of weights from training to be used in testing
+// **DONE**: Save final metrics into file ('data/outputs/metrics_calib.csv', path defined in 'config_model.ini')
+// **DONE**: Save real and predict calib data into file ('data/outputs/real_calib.csv' and 'data/outputs/pred_calib.csv', path defined in 'config_model.ini')
+// **DONE**: Save final matrix of weights from training to be used in testing ('data/outputs/weights.csv')
+// TODO: Create method for loading weights
 // TODO: Save other needed params or results into files, e.g., #iteration, etc.
 // TODO: Create validation run, i.e., read data and setting from files, no training
 
@@ -848,10 +849,16 @@ int main() {
   bool ok1 = configData.saveMatrixCsv(cfg.real_calib, Y_true_calib, colNames);
   bool ok2 = configData.saveMatrixCsv(cfg.pred_calib, Y_pred_calib, colNames);
   if (ok1 && ok2) {
-      std::cout << "[I/O] Saved real calib -> " << cfg.real_calib << ", pred calib -> " << cfg.pred_calib << "\n";
+      std::cout << "[I/O] Saved real calib to: '" << cfg.real_calib << "', pred calib to '" << cfg.pred_calib << "' \n";
   } else {
       std::cerr << "[I/O] Saving calib matrices failed\n";
   }
+
+  // Save weights
+  configBatchMLP.saveWeightsCsv(cfg.weights_csv);
+  configBatchMLP.saveWeightsBinary(cfg.weights_bin);
+
+  std::cout << "[I/O] Saved weights to: '" << cfg.weights_csv << ", and '" << cfg.weights_bin << "'\n";
 
   return 0;
 }
