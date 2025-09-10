@@ -3,6 +3,7 @@
 // **DONE**: Add batch Adam
 // **DONE**: Remove rows with NA in the calibMat
 // TODO: Add k-fold validation
+// **DONE**: Read data and setting of the MLP from file (settings/config_model.ini)
 // TODO: Save final matrix/vector of weights from training to be used in testing
 // TODO: Save other needed params or results into files, e.g., modelled outputs (train and test), metrics, #iteration, etc.
 // TODO: Create validation run, i.e., read data and setting from files, no training
@@ -28,6 +29,7 @@
 #include "Layer.hpp"
 #include "Data.hpp"
 #include "Metrics.hpp"
+#include "ConfigIni.hpp"
 
 using namespace std;
 
@@ -649,7 +651,7 @@ int main() {
           std::cout << "\n";
       }
   } catch (std::exception &ex) {
-      std::cerr << "[Error]: " << ex.what() << "\n";
+      std::cerr << "[Error] loading data: " << ex.what() << "\n";
   }
 
   // Select only one column (moisture)
@@ -714,7 +716,6 @@ int main() {
             << ", converged=" << std::boolalpha << resAdam.converged << "\n";
 
 
-
   std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "-- Testing batch Adam from JKMNet --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
@@ -734,5 +735,80 @@ int main() {
             << ", iterations=" << resBatch.iterations
             << ", converged=" << std::boolalpha << resBatch.converged << "\n";
   
+
+  std::cout << "\n-------------------------------------------" << std::endl;
+  std::cout << "-- Read settings from file --" << std::endl;
+  std::cout << "-------------------------------------------" << std::endl;
+
+  
+  RunConfig cfg = parseConfigIni("settings/config_model.ini");
+  std::cout << "Loaded config: \n";
+  std::cout << "  data_file = " << cfg.data_file << ", trainer = " << cfg.trainer << ", \n";
+  std::cout << "  id = " << cfg.id << ", timestamp = " << cfg.timestamp << ", id_col = " << cfg.id_col << ", \n";
+  std::cout << "  keep columns = " << join(cfg.columns) << ", timestamp = " << cfg.timestamp << ", etc. \n";
+
+ std::unordered_set<std::string> idFilter;
+  if (!cfg.id.empty()) {
+      std::vector<std::string> ids = parseStringList(cfg.id); // splits & trims on commas
+      idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
+  }
+
+  // debug print (optional)
+  std::cout << "idFilter = {";
+  bool first = true;
+  for (const auto &s : idFilter) {
+      if (!first) std::cout << ", ";
+      std::cout << s;
+      first = false;
+  }
+  std::cout << "}\n";
+
+  // Load the data
+  Data configData;
+  
+  size_t nRows = configData.loadFilteredCSV(cfg.data_file, idFilter, cfg.columns, cfg.timestamp, cfg.id_col);
+  std::cout << "Total number of rows: " << nRows << "\n";
+  configData.printHeader(cfg.timestamp);
+
+  // Print a few first rows with timestamps
+  const auto times = configData.timestamps();
+  const auto mat = configData.numericData();
+  size_t nPrint = std::min<size_t>(5, nRows);
+  for (size_t i = 0; i < nPrint; ++i) {
+      std::cout << times[i] << " | ";
+      for (int c = 0; c < mat.cols(); ++c) {
+          double v = mat(static_cast<int>(i), c);
+          if (std::isfinite(v)) std::cout << v;
+          else std::cout << "NaN";
+          if (c + 1 < mat.cols()) std::cout << " | ";
+      }
+      std::cout << "\n";
+  }
+     
+  MLP configBatchMLP;
+  auto configBatch = net.trainAdamBatchSplit(
+      configBatchMLP, 
+      configData, 
+      cfg.mlp_architecture, 
+      cfg.input_numbers,  //use 1 value from T3 (current), 2 from moisture (current + 1 lag)
+      strToActivation(cfg.activation), 
+      strToWeightInit(cfg.weight_init), 
+      cfg.batch_size,
+      cfg.max_iterations, 
+      cfg.max_error, 
+      cfg.learning_rate, 
+      cfg.shuffle, 
+      cfg.seed
+    );
+
+  configBatchMLP.calculateOutputs(configData.getCalibInpsMat().topRows(5));
+  std::cout<<"observed outputs (calib): \n" << configData.getCalibOutsMat().topRows(5)<<"\n\n";
+  std::cout<<"modelled outputs (calib): \n" << configBatchMLP.getOutputs()<<"\n\n";
+
+  std::cout << "Training finished; final MSE = " << configBatch.finalLoss
+            << ", iterations = " << configBatch.iterations
+            << ", converged = " << std::boolalpha << configBatch.converged << "\n";
+  
+
   return 0;
 }
