@@ -1,14 +1,17 @@
-// ********* 27. 8. 2025 *********
-// **DONE**: Create class for metrics
+// ********* 4. 9. 2025 *********
 // TODO: Add more metrics (PI, NS, KGE, ...)
-// **DONE**: Deal with NAs in the dataset
-// TODO: Skip windows (horizon) that include any NA in the data (not only the exact timestamp) (?)
-// **DONE**: Split calibration matrix into one for inputs and one for targets
-// TODO: Preprocessing of calibration matrix in R (?)
-// **DONE**: Split data for calibration and validation set (+ testing set?) (chronologically or randomly as a new method in MLP) 
-// **DONE**: Change 'Testing ADAM' section in 'main.cpp' as a new method 
-// TODO: Prepare more scenarios for running
-// **DONE**: Prepare vector of weights from matrix of weights (for global optimization)
+// **DONE**: Add batch Adam
+// **DONE**: Remove rows with NA in the calibMat
+// TODO: Add k-fold validation
+// TODO: Save final matrix/vector of weights from training to be used in testing
+// TODO: Save other needed params or results into files, e.g., modelled outputs (train and test), metrics, #iteration, etc.
+// TODO: Create validation run, i.e., read data and setting from files, no training
+
+// *** Before running the model:
+// TODO: Use more detailed data, i.e., hourly or 15-min
+// TODO: Clean the code, use 'main()' only for read data and setting, run, save
+// TODO: Prepare many scenarios for running together with the tree structure of files and folders
+// TODO: Solve the running of scenarios in a loop over all sensor IDs (with Rcpp?)
 // *******************************
 
 #include <ctime>
@@ -664,12 +667,12 @@ int main() {
   }
   std::cout << "First 3 moisture values: " << firstMoisture << "\n";
 
-  // Detect and remove rows with NaNs
+  // Detect and remove rows with NaNs (remove is now part of the makeCalibMat)
   auto naIdx = data.findRowsWithNa();
   std::cout << "Number of rows with any NaN: " << naIdx.size() << "\n";
-  if (!naIdx.empty()) {
-      data.removeRowsWithNa();
-  }
+  // if (!naIdx.empty()) {
+  //     data.removeRowsWithNa(); 
+  // }
 
   std::cout << "\n-------------------------------------------" << std::endl;
   std::cout << "-- Transformation of data --" << std::endl;

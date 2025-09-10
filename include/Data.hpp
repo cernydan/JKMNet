@@ -47,11 +47,17 @@ class Data {
         void applyTransform();  //!< Apply the previously configured transform to m_data
         void inverseTransform();  //!< Inverse the global transform (to bring predictions back)
         Eigen::MatrixXd inverseTransformOutputs(const Eigen::MatrixXd& M) const;  //!< Inverse the global transform for outputs
-
-        void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix
-        void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix  (both inps + outs) for backpropagation from data matrix
-        void makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix
         
+        std::vector<size_t> calibPatternOriginalIndices() const { return m_calib_pattern_orig_indices; }
+        std::vector<int> calibPatternFilteredIndices() const { return m_calib_pattern_filtered_indices; }
+        
+        void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix (with NA removal)
+        void makeCalibMatD(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix
+        void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix  (both inps + outs) for backpropagation from data matrix
+        
+        void makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix (with NA removal)
+        void makeCalibMatsSplitD(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix
+
         void splitCalibMat(int inpLength);  //!< Split created calibration matrix into separate inps and outs matrices 
     
         std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
@@ -91,6 +97,9 @@ class Data {
         Eigen::MatrixXd calibMat; //!< Matrix of inputs and desired outputs for backpropagation
         Eigen::MatrixXd calibInpsMat; //!< Matrix of inputs for backpropagation
         Eigen::MatrixXd calibOutsMat; //!< Matrix of desired outputs for backpropagation
+
+        std::vector<int> m_calib_pattern_filtered_indices;   //!< Indices in filtered m_data for each calib pattern (reference output row)
+        std::vector<size_t> m_calib_pattern_orig_indices;    //!< Indices in original unfiltered data (if available)
 
         // Global transform config
         transform_type m_transform = transform_type::NONE;

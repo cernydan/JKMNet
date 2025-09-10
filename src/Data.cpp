@@ -63,6 +63,21 @@ static std::vector<int> buildIndicesInt(int N, bool shuffle, unsigned seed) {
     return idx;
 }
 
+// Helper function to build mapping filtered_index -> original_index (used when rows were removed)
+static std::vector<Eigen::Index> buildFilteredToOriginalMap(const std::vector<size_t>& na_row_indices, Eigen::Index origRows) {
+    std::vector<Eigen::Index> filt2orig;
+    filt2orig.reserve(static_cast<size_t>(origRows));
+    std::size_t remPos = 0;
+    for (Eigen::Index orig = 0; orig < origRows; ++orig) {
+        if (remPos < na_row_indices.size() && static_cast<Eigen::Index>(na_row_indices[remPos]) == orig) {
+            ++remPos; // this original row was removed
+        } else {
+            filt2orig.push_back(orig);
+        }
+    }
+    return filt2orig;
+}
+
 /**
  * Loads and filters the CSV file and returns number of loaded rows
  */
@@ -539,11 +554,92 @@ Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M) const {
     }
 }
 
+/**
+ * Create matrix for backpropagation from data matrix (with NA removal)
+ */
+void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows) {
+    if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
+        throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
+
+    const auto maxR = *std::max_element(inpNumsOfVars.begin(), inpNumsOfVars.end());
+    if (maxR == 0)
+        throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
+
+    const size_t DC = m_data.cols();
+    if (DC < 1) throw std::runtime_error("Data has no columns");
+    if (inpNumsOfVars.size() != DC) throw std::invalid_argument("inpNumsOfVars size does not match data columns");
+
+    const int CRcand = static_cast<int>(m_data.rows()) - static_cast<int>(maxR) - outRows + 1;
+    if (CRcand <= 0) throw std::runtime_error("Not enough rows to build calibration matrices with given inpNumsOfVars/outRows");
+
+    const int CC = static_cast<int>(std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0)) + outRows;
+
+    std::vector<std::vector<double>> rows;
+    rows.reserve(static_cast<size_t>(std::max(0, CRcand)));
+    m_calib_pattern_filtered_indices.clear();
+    m_calib_pattern_orig_indices.clear();
+
+    std::vector<Eigen::Index> filt2orig;
+    if (m_has_filtered_rows) {
+        filt2orig = buildFilteredToOriginalMap(m_na_row_indices, static_cast<Eigen::Index>(m_data_backup.rows()));
+    }
+
+    for (int i = 0; i < CRcand; ++i) {
+        bool ok = true;
+        std::vector<double> row;
+        row.reserve(CC);
+        // inputs
+        for (size_t j = 0; j < DC; ++j) {
+            for (int l = 0; l < inpNumsOfVars[j]; ++l) {
+                int rindex = i + static_cast<int>(maxR) - inpNumsOfVars[j] + l;
+                double v = m_data(rindex, static_cast<Eigen::Index>(j));
+                if (!std::isfinite(v)) { ok = false; break; }
+                row.push_back(v);
+            }
+            if (!ok) break;
+        }
+        if (!ok) continue;
+
+        // outputs
+        for (int j = 0; j < outRows; ++j) {
+            int rindex = i + static_cast<int>(maxR) + j;
+            double v = m_data(rindex, static_cast<Eigen::Index>(DC - 1));
+            if (!std::isfinite(v)) { ok = false; break; }
+            row.push_back(v);
+        }
+        if (!ok) continue;
+
+        rows.push_back(std::move(row));
+
+        int filtered_ref = i + static_cast<int>(maxR);
+        m_calib_pattern_filtered_indices.push_back(filtered_ref);
+        if (m_has_filtered_rows) {
+            if (filtered_ref < 0 || filtered_ref >= static_cast<int>(filt2orig.size()))
+                throw std::runtime_error("internal mapping error while building orig indices (makeCalibMat)");
+            m_calib_pattern_orig_indices.push_back(static_cast<size_t>(filt2orig[static_cast<size_t>(filtered_ref)]));
+        } else {
+            m_calib_pattern_orig_indices.push_back(static_cast<size_t>(filtered_ref));
+        }
+    }
+
+    const int valid = static_cast<int>(rows.size());
+    calibMat = Eigen::MatrixXd::Constant(valid, CC, std::numeric_limits<double>::quiet_NaN());
+    for (int r = 0; r < valid; ++r) {
+        for (int c = 0; c < CC; ++c) calibMat(r, c) = rows[r][c];
+    }
+
+    if (valid > 0) {
+        splitCalibMat(static_cast<int>(std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0)));
+    } else {
+        calibInpsMat.resize(0,0);
+        calibOutsMat.resize(0,0);
+    }
+}
 
 /**
  * Create matrix for backpropagation from data matrix
  */
-void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows){
+void Data::makeCalibMatD(std::vector<int> inpNumsOfVars, int outRows){
     if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
         throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
 
@@ -556,7 +652,7 @@ void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows){
     if (DC < 1)
         throw std::runtime_error("Data has no columns");
     if (inpNumsOfVars.size() != DC)
-        throw std::invalid_argument("inpNumsOfVars size doesnt match data columns");
+        throw std::invalid_argument("inpNumsOfVars size does not match data columns");
 
     const int CR = m_data.rows() - maxR - outRows + 1;   // number of rows of calibration matrix
     if (CR <= 0)
@@ -615,11 +711,105 @@ void Data::makeCalibMat2(int inpRows, int outRows){
         }
     }
 }
+/**
+ * Create separate calibration inps and outs matrices for backpropagation from data matrix (with NA removal)
+ */
+void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows) {
+    if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
+        throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
+
+    const auto maxR = *std::max_element(inpNumsOfVars.begin(), inpNumsOfVars.end());
+    if (maxR == 0)
+        throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
+
+    const size_t DC = m_data.cols();
+    if (DC < 1) throw std::runtime_error("Data has no columns");
+    if (inpNumsOfVars.size() != DC) throw std::invalid_argument("inpNumsOfVars size does not match data columns");
+
+    const int CRcand = static_cast<int>(m_data.rows()) - static_cast<int>(maxR) - outRows + 1;
+    if (CRcand <= 0) throw std::runtime_error("Not enough rows to build calibration matrices with given inpNumsOfVars/outRows");
+
+    const int inpC = static_cast<int>(std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0));
+    std::vector<std::vector<double>> rowsIn;
+    std::vector<std::vector<double>> rowsOut;
+    rowsIn.reserve(static_cast<size_t>(std::max(0, CRcand)));
+    rowsOut.reserve(static_cast<size_t>(std::max(0, CRcand)));
+    m_calib_pattern_filtered_indices.clear();
+    m_calib_pattern_orig_indices.clear();
+
+    // Prepare map filtered -> original if original backup exists
+    std::vector<Eigen::Index> filt2orig;
+    if (m_has_filtered_rows) {
+        filt2orig = buildFilteredToOriginalMap(m_na_row_indices, static_cast<Eigen::Index>(m_data_backup.rows()));
+    }
+
+    for (int i = 0; i < CRcand; ++i) {
+        bool ok = true;
+        std::vector<double> inrow;
+        inrow.reserve(inpC);
+        // collect inputs (for each column j, take last inpNumsOfVars[j] values relative to i+maxR)
+        for (size_t j = 0; j < DC; ++j) {
+            for (int l = 0; l < inpNumsOfVars[j]; ++l) {
+                int rindex = i + static_cast<int>(maxR) - inpNumsOfVars[j] + l;
+                double v = m_data(rindex, static_cast<Eigen::Index>(j));
+                if (!std::isfinite(v)) { ok = false; break; }
+                inrow.push_back(v);
+            }
+            if (!ok) break;
+        }
+        if (!ok) continue;
+
+        // collect outputs (target column assumed last column)
+        std::vector<double> outrow;
+        outrow.reserve(outRows);
+        for (int j = 0; j < outRows; ++j) {
+            int rindex = i + static_cast<int>(maxR) + j;
+            double v = m_data(rindex, static_cast<Eigen::Index>(DC - 1));
+            if (!std::isfinite(v)) { ok = false; break; }
+            outrow.push_back(v);
+        }
+        if (!ok) continue;
+
+        // accept the pattern
+        rowsIn.push_back(std::move(inrow));
+        rowsOut.push_back(std::move(outrow));
+
+        // filtered index that corresponds to the first output (reference) row
+        int filtered_ref = i + static_cast<int>(maxR);
+        m_calib_pattern_filtered_indices.push_back(filtered_ref);
+
+        // compute original index
+        if (m_has_filtered_rows) {
+            if (filtered_ref < 0 || filtered_ref >= static_cast<int>(filt2orig.size()))
+                throw std::runtime_error("internal mapping error while building orig indices");
+            m_calib_pattern_orig_indices.push_back(static_cast<size_t>(filt2orig[static_cast<size_t>(filtered_ref)]));
+        } else {
+            m_calib_pattern_orig_indices.push_back(static_cast<size_t>(filtered_ref));
+        }
+    }
+
+    // pack into Eigen matrices
+    const int valid = static_cast<int>(rowsIn.size());
+    calibInpsMat = Eigen::MatrixXd::Constant(valid, inpC, std::numeric_limits<double>::quiet_NaN());
+    calibOutsMat = Eigen::MatrixXd::Constant(valid, outRows, std::numeric_limits<double>::quiet_NaN());
+
+    for (int r = 0; r < valid; ++r) {
+        for (int c = 0; c < inpC; ++c) calibInpsMat(r, c) = rowsIn[r][c];
+        for (int c = 0; c < outRows; ++c) calibOutsMat(r, c) = rowsOut[r][c];
+    }
+
+    // build combined calibMat (left inputs, right outs)
+    calibMat = Eigen::MatrixXd::Constant(valid, inpC + outRows, std::numeric_limits<double>::quiet_NaN());
+    if (valid > 0) {
+        calibMat.leftCols(inpC) = calibInpsMat;
+        calibMat.rightCols(outRows) = calibOutsMat;
+    }
+}
 
 /**
  * Create separate calibration inps and outs matrices for backpropagation from data matrix
  */
-void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows){
+void Data::makeCalibMatsSplitD(std::vector<int> inpNumsOfVars, int outRows){
     if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
         throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
 
