@@ -65,7 +65,7 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     const std::string &id,
     bool verbose) {
     
-        // Does file already exist?
+    // Does file already exist?
     bool file_exists = false;
     {
         std::ifstream ifs(path);
@@ -79,9 +79,9 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     }
     ofs << std::setprecision(12);
 
-    // if new file, write header
+    // if new file, write header: time,id,<metric names...>
     if (!file_exists) {
-        ofs << "id";
+        ofs << "time,id";
         if (!metrics.empty()) ofs << ",";
         for (size_t i = 0; i < metrics.size(); ++i) {
             ofs << metrics[i].first;
@@ -92,25 +92,30 @@ bool Metrics::appendMetricsCsv(const std::string &path,
         // if file exists, we could validate header vs metrics names...
     }
 
-    // Generate id string if empty to timestamp
-    std::string rowId = id;
-    if (rowId.empty()) {
-        using namespace std::chrono;
-        auto t = system_clock::now();
-        std::time_t tt = system_clock::to_time_t(t);
-        std::tm tm{};
-    #if defined(_MSC_VER)
-        localtime_s(&tm, &tt);
-    #else
-        localtime_r(&tt, &tm);
-    #endif
-        char buf[32];
-        std::strftime(buf, sizeof(buf), "%Y%m%d-%H%M%S", &tm);
-        rowId = std::string(buf);
+    // Generate timestamp string (human readable)
+    using namespace std::chrono;
+    auto t = system_clock::now();
+    std::time_t tt = system_clock::to_time_t(t);
+    std::tm tm{};
+#if defined(_MSC_VER)
+    localtime_s(&tm, &tt);
+#else
+    localtime_r(&tt, &tm);
+#endif
+    char timebuf[64];
+    std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", &tm);
+    std::string timeStr(timebuf);
+
+    // Determine ID to write: if id empty, use compact timestamp as fallback
+    std::string idToWrite = id;
+    if (idToWrite.empty()) {
+        char idbuf[32];
+        std::strftime(idbuf, sizeof(idbuf), "%Y%m%d-%H%M%S", &tm);
+        idToWrite = std::string(idbuf);
     }
 
-    // write the row (id followed by metric values)
-    ofs << rowId;
+    // write the row: time, id, metric values
+    ofs << timeStr << "," << idToWrite;
     if (!metrics.empty()) ofs << ",";
     for (size_t i = 0; i < metrics.size(); ++i) {
         ofs << metrics[i].second;
@@ -126,7 +131,7 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     // inform about saving of the metrics
     if (verbose) {
         if (ok) {
-            std::cout << "[Metrics] Saved metrics to '" << path << "' (row id: " << rowId << ")\n";
+            std::cout << "[Metrics] Saved metrics to '" << path << "' (time: " << timeStr << ", id: " << idToWrite << ")\n";
         } else {
             std::cerr << "[Metrics] Failed to save metrics to '" << path << "'\n";
         }
@@ -134,6 +139,7 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     
     return ok;
 }
+
 
 /**
  * Compute final metrics for matrix pair and append a single row into CSV oputput file

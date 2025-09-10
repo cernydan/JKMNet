@@ -3,7 +3,8 @@
 // **DONE**: Add batch Adam
 // **DONE**: Remove rows with NA in the calibMat
 // TODO: Add k-fold validation
-// **DONE**: Read data and setting of the MLP from file (settings/config_model.ini)
+// **DONE**: Read data and setting of the MLP from file ('settings/config_model.ini')
+// **DONE**: Save real data final metrics into 'final_metrics_cal.csv'
 // TODO: Save final matrix/vector of weights from training to be used in testing
 // TODO: Save other needed params or results into files, e.g., modelled outputs (train and test), metrics, #iteration, etc.
 // TODO: Create validation run, i.e., read data and setting from files, no training
@@ -375,7 +376,7 @@ int main() {
   std::cout << "Outputs as matrix: MSE = " << mse_m << ", RMSE = " << rmse_m << "\n";
 
   // Save metrics into CSV file (need to have an existing folder "data/outputs")
-  Metrics::computeAndAppendFinalMetrics(Y_true, Y_pred, "data/outputs/final_metrics.csv");
+  Metrics::computeAndAppendFinalMetrics(Y_true, Y_pred, "data/outputs/final_metrics.csv", "01");
 
 
   std::cout << "\n-------------------------------------------" << std::endl;
@@ -740,7 +741,6 @@ int main() {
   std::cout << "-- Read settings from file --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
 
-  
   RunConfig cfg = parseConfigIni("settings/config_model.ini");
   std::cout << "Loaded config: \n";
   std::cout << "  data_file = " << cfg.data_file << ", trainer = " << cfg.trainer << ", \n";
@@ -801,14 +801,20 @@ int main() {
       cfg.seed
     );
 
-  configBatchMLP.calculateOutputs(configData.getCalibInpsMat().topRows(5));
+  configBatchMLP.calculateOutputs(configData.getCalibInpsMat());
   std::cout<<"observed outputs (calib): \n" << configData.getCalibOutsMat().topRows(5)<<"\n\n";
-  std::cout<<"modelled outputs (calib): \n" << configBatchMLP.getOutputs()<<"\n\n";
+  std::cout<<"modelled outputs (calib): \n" << configBatchMLP.getOutputs().topRows(5)<<"\n\n";
 
   std::cout << "Training finished; final MSE = " << configBatch.finalLoss
             << ", iterations = " << configBatch.iterations
             << ", converged = " << std::boolalpha << configBatch.converged << "\n";
   
+  double configMSE = Metrics::mse(configData.getCalibOutsMat(), configBatchMLP.getOutputs());
+  double configRMSE = Metrics::rmse(configData.getCalibOutsMat(), configBatchMLP.getOutputs());
+  cout << "Metrics (calib): MSE = " << configMSE << ", RMSE = " << configRMSE << "\n";
+
+  // Save metrics into CSV file (need to have an existing folder "data/outputs")
+  Metrics::computeAndAppendFinalMetrics(configData.getCalibOutsMat(), configBatchMLP.getOutputs(), "data/outputs/final_metrics_cal.csv", cfg.id);
 
   return 0;
 }
