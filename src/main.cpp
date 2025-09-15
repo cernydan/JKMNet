@@ -786,7 +786,28 @@ int main() {
       }
       std::cout << "\n";
   }
-     
+  
+  // Configure transform to numeric data 
+  transform_type tt = transform_type::NONE;
+  try {
+      tt = strToTransformType(cfg.transform);
+  } catch (const std::exception &ex) {
+      std::cerr << "[Warning] Unknown transform in config ('" << cfg.transform 
+                << "'). Defaulting to NONE.\n";
+      tt = transform_type::NONE;
+  }
+
+  configData.setTransform(tt, cfg.transform_alpha, cfg.exclude_last_col_from_transform);
+
+  // Apply transform
+  configData.applyTransform();
+  std::cout << "[I/O] Applied transform = " << cfg.transform 
+            << " (exclude_last_col = " << std::boolalpha << cfg.exclude_last_col_from_transform << ")\n";
+
+  // Print first transformed row
+  std::cout << "After transform (first row): " << configData.numericData().row(0) << "\n";
+
+  // Set MLP and run calibration
   MLP configBatchMLP;
   auto configBatch = net.trainAdamBatchSplit(
       configBatchMLP, 
@@ -809,20 +830,19 @@ int main() {
   Eigen::MatrixXd Y_pred_calib = configBatchMLP.getOutputs();    
 
   // Add after implementing transformation of data!!
-  // try {
-  //   Y_true_calib = configData.inverseTransformOutputs(Y_true_calib);
-  //   Y_pred_calib = configData.inverseTransformOutputs(Y_pred_calib);
-  // } catch (const std::exception &ex) {
-  //     std::cerr << "[Warning] inverseTransformOutputs failed: " << ex.what() << "\n"
-  //               << "Saving transformed values instead.\n";
-  // }
+  try {
+    Y_true_calib = configData.inverseTransformOutputs(Y_true_calib);
+    Y_pred_calib = configData.inverseTransformOutputs(Y_pred_calib);
+  } catch (const std::exception &ex) {
+      std::cerr << "[Warning] inverseTransformOutputs failed: " << ex.what() << "\n"
+                << "Saving transformed values instead.\n";
+  }
 
   // Shapes should match
   if (Y_true_calib.rows() != Y_pred_calib.rows() || Y_true_calib.cols() != Y_pred_calib.cols()) {
       std::cerr << "[Warning] shape mismatch: real vs pred ("
                 << Y_true_calib.rows() << "x" << Y_true_calib.cols() << ") vs ("
                 << Y_pred_calib.rows() << "x" << Y_pred_calib.cols() << ").\n";
-      // you may still save them, but be careful later when computing metrics!
   }
 
   std::cout<<"observed outputs (calib): \n" << Y_true_calib.topRows(5)<<"\n\n";
@@ -832,9 +852,15 @@ int main() {
             << ", iterations = " << configBatch.iterations
             << ", converged = " << std::boolalpha << configBatch.converged << "\n";
   
-  double configMSE = Metrics::mse(Y_true_calib, Y_pred_calib);
-  double configRMSE = Metrics::rmse(Y_true_calib, Y_pred_calib);
-  cout << "Metrics (calib): MSE = " << configMSE << ", RMSE = " << configRMSE << "\n";
+  // metrics
+  double configMSE = 0.0, configRMSE = 0.0;
+  try {
+      configMSE = Metrics::mse(Y_true_calib, Y_pred_calib);
+      configRMSE = Metrics::rmse(Y_true_calib, Y_pred_calib);
+      std::cout << "Metrics (calib): MSE = " << configMSE << ", RMSE = " << configRMSE << "\n";
+  } catch (const std::exception &ex) {
+      std::cerr << "[Error] cannot compute metrics: " << ex.what() << "\n";
+  }
 
   // Save metrics into CSV file (need to have an existing folder "data/outputs")
   Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg.metrics_cal, cfg.id);
@@ -849,7 +875,7 @@ int main() {
   bool ok1 = configData.saveMatrixCsv(cfg.real_calib, Y_true_calib, colNames);
   bool ok2 = configData.saveMatrixCsv(cfg.pred_calib, Y_pred_calib, colNames);
   if (ok1 && ok2) {
-      std::cout << "[I/O] Saved real calib to: '" << cfg.real_calib << "', pred calib to '" << cfg.pred_calib << "' \n";
+      std::cout << "[I/O] Saved real calib data to: '" << cfg.real_calib << "', pred calib data to '" << cfg.pred_calib << "' \n";
   } else {
       std::cerr << "[I/O] Saving calib matrices failed\n";
   }
@@ -858,7 +884,10 @@ int main() {
   configBatchMLP.saveWeightsCsv(cfg.weights_csv);
   configBatchMLP.saveWeightsBinary(cfg.weights_bin);
 
-  std::cout << "[I/O] Saved weights to: '" << cfg.weights_csv << ", and '" << cfg.weights_bin << "'\n";
+  std::cout << "[I/O] Saved weights to: '" << cfg.weights_csv << "', and '" << cfg.weights_bin << "'\n";
+
+
+  // Set MLP and run validation
 
   return 0;
 }
