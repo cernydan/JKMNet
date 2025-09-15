@@ -1,5 +1,5 @@
 // ********* 4. 9. 2025 *********
-// TODO: Add more metrics (PI, NS, KGE, ...)
+// **DONE**: Add more metrics (PI, NS, KGE, ...)
 // **DONE**: Add batch Adam
 // **DONE**: Remove rows with NA in the calibMat
 // TODO: Add k-fold validation

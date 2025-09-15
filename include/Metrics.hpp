@@ -13,6 +13,16 @@ class Metrics {
         static double rmse(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred);  //!<  RMSE between two vectors (element-wise)
         static double rmse(const Eigen::MatrixXd& Y_true, const Eigen::MatrixXd& Y_pred);  //!<  RMSE between two matrices (element-wise average across all entries)
 
+        //!< PI - Persistency Index
+        static double pi(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred); //!< PI between two vectors (element-wise)
+
+        //!< NI - Nash–Sutcliffe Efficiency
+        static double ns(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred); //!< NS between two vectors (element-wise)
+
+        //!< KGE – Kling–Gupta Efficiency
+        static double kge(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred); //!< KGE between two vectors
+        
+
         static bool appendMetricsCsv(const std::string &path, 
             const std::vector<std::pair<std::string,
             double>> &metrics, 
