@@ -634,6 +634,13 @@ void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen:
         if(Error <= maxErr){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            lastIterations_ = iter;
+            lastError_ = Error;
+            lastRuntimeSec_ = duration.count();
+
+            // Print results
             std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
             break;
         }
@@ -641,6 +648,12 @@ void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen:
     if(Error > maxErr){
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    lastIterations_ = maxIter;
+    lastError_ = Error;
+    lastRuntimeSec_ = duration.count();
+
     std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
@@ -701,6 +714,12 @@ void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen:
         if(Error <= maxErr){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            lastIterations_ = iter;
+            lastError_ = Error;
+            lastRuntimeSec_ = duration.count();
+
             std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
             break;
         }
@@ -708,6 +727,12 @@ void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen:
     if(Error > maxErr){
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    lastIterations_ = maxIter;
+    lastError_ = Error;
+    lastRuntimeSec_ = duration.count();
+
     std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
@@ -762,6 +787,12 @@ void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eige
         if(Error <= maxErr){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            lastIterations_ = iter;
+            lastError_ = Error;
+            lastRuntimeSec_ = duration.count();
+
             std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
             break;
         }
@@ -769,6 +800,12 @@ void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eige
     if(Error > maxErr){
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    lastIterations_ = maxIter;
+    lastError_ = Error;
+    lastRuntimeSec_ = duration.count();
+
     std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
@@ -829,6 +866,12 @@ void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eige
         if(Error <= maxErr){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            lastIterations_ = iter;
+            lastError_ = Error;
+            lastRuntimeSec_ = duration.count();
+
             std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
             break;
         }
@@ -836,6 +879,12 @@ void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eige
     if(Error > maxErr){
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    lastIterations_ = maxIter;
+    lastError_ = Error;
+    lastRuntimeSec_ = duration.count();
+
     std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
@@ -897,6 +946,12 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
         if(Error <= maxErr){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            lastIterations_ = iter;
+            lastError_ = Error;
+            lastRuntimeSec_ = duration.count();
+
             std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
             break;
         }
@@ -904,6 +959,12 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
     if(Error > maxErr){
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    lastIterations_ = maxIter;
+    lastError_ = Error;
+    lastRuntimeSec_ = duration.count();
+
     std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }
@@ -971,6 +1032,12 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
         if(Error <= maxErr){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            lastIterations_ = iter;
+            lastError_ = Error;
+            lastRuntimeSec_ = duration.count();
+            
             std::cout<<"Calibration finished on "<<iter<<". iteration after "<<duration.count()<<" seconds."<<endl;
             break;
         }
@@ -978,6 +1045,12 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
     if(Error > maxErr){
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    lastIterations_ = maxIter;
+    lastError_ = Error;
+    lastRuntimeSec_ = duration.count();
+
     std::cout<<"Calibration reached max iterations with error: "<<Error<<" after "<<duration.count()<<" seconds."<<endl;
     }
 }

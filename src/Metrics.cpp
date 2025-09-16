@@ -9,6 +9,7 @@
 #include <sstream>
 #include <limits>
 #include <time.h>
+#include <filesystem>
 
 /**
  * Mean squared error between two vectors
@@ -193,7 +194,6 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     return ok;
 }
 
-
 /**
  * Compute final metrics for matrix pair and append a single row into CSV oputput file
  */
@@ -222,4 +222,77 @@ bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
     metrics.emplace_back("KGE", kge_write);
 
     return appendMetricsCsv(outCsv, metrics, id, verbose);
+}
+
+/**
+ * Save run information into CSV file
+ */
+bool Metrics::appendRunInfoCsv(const std::string &path,
+                               int iterations,
+                               double loss,
+                               bool converged,
+                               double runtime_sec,
+                               const std::string &id,
+                               bool verbose) {
+    // check if file exists
+    bool file_exists = false;
+    {
+        std::ifstream ifs(path);
+        file_exists = ifs.good();
+    }
+
+    std::ofstream ofs(path, std::ios::app);
+    if (!ofs.is_open()) {
+        std::cerr << "[Metrics::appendRunInfoCsv] Cannot open file for writing: " << path << "\n";
+        return false;
+    }
+    ofs << std::setprecision(12);
+
+    // write header if needed
+    if (!file_exists) {
+        ofs << "time,id,iterations,loss,converged,runtime_sec\n";
+    }
+
+    // generate timestamp string
+    using namespace std::chrono;
+    auto t = system_clock::now();
+    std::time_t tt = system_clock::to_time_t(t);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &tt);
+#else
+    localtime_r(&tt, &tm);
+#endif
+    char timebuf[64];
+    std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", &tm);
+    std::string timeStr(timebuf);
+
+    // fallback ID if empty
+    std::string idToWrite = id;
+    if (idToWrite.empty()) {
+        char idbuf[32];
+        std::strftime(idbuf, sizeof(idbuf), "%Y%m%d-%H%M%S", &tm);
+        idToWrite = std::string(idbuf);
+    }
+
+    // write row
+    ofs << timeStr << "," << idToWrite
+        << "," << iterations
+        << "," << loss
+        << "," << (converged ? 1 : 0)
+        << "," << runtime_sec << "\n";
+
+    ofs.flush();
+    bool ok = !(ofs.fail() || !ofs.good());
+    ofs.close();
+
+    if (verbose) {
+        if (ok) {
+            std::cout << "[Metrics] Saved run info to '" << path
+                      << "' (time: " << timeStr << ", id: " << idToWrite << ")\n";
+        } else {
+            std::cerr << "[Metrics] Failed to save run info to '" << path << "'\n";
+        }
+    }
+    return ok;
 }

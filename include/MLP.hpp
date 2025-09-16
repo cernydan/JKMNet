@@ -88,6 +88,10 @@ class MLP {
         void calculateOutputs(const Eigen::MatrixXd& inputMat); //!< Calculate outputs for given matrix of inputs
         Eigen::MatrixXd getOutputs() const;  //!< Getter for output matrix
 
+        int getLastIterations() const { return lastIterations_; }
+        double getLastError() const { return lastError_; }
+        double getLastRuntimeSec() const { return lastRuntimeSec_; }
+
     protected:
 
     private:
@@ -100,6 +104,9 @@ class MLP {
         Eigen::VectorXd output;  //!< The output vector of mlp
         Eigen::MatrixXd outputMat; //!< The output matrix of mlp
         Eigen::VectorXd weightsVectorMlp;  //!< The weights vector of all layers
+        int lastIterations_ = 0;
+        double lastError_ = 0.0;
+        double lastRuntimeSec_ = 0.0;
 };
 
 #endif // MLP_H

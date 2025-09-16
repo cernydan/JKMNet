@@ -90,6 +90,8 @@
         "splines": "cpp",
         "any": "cpp",
         "forward_list": "cpp",
-        "codecvt": "cpp"
-    }
+        "codecvt": "cpp",
+        "filesystem": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

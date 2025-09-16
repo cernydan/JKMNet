@@ -889,11 +889,21 @@ int main() {
             << ", iterations = " << configBatch.iterations
             << ", converged = " << std::boolalpha << configBatch.converged << "\n";
   
+  // Save run info to CSV
+  Metrics::appendRunInfoCsv(cfg.run_info,
+                          configBatchMLP.getLastIterations(),
+                          configBatchMLP.getLastError(),
+                          configBatch.converged,
+                          configBatchMLP.getLastRuntimeSec(),
+                          cfg.id);
+  std::cout << "[I/O] Run info saved to: '" << cfg.run_info <<"' \n";
+
   // metrics
-  double configMSE = 0.0, configRMSE = 0.0;
+  double configMSE = 0.0, configRMSE = 0.0; 
   try {
       configMSE = Metrics::mse(Y_true_calib, Y_pred_calib);
       configRMSE = Metrics::rmse(Y_true_calib, Y_pred_calib);
+
       std::cout << "Metrics (calib): MSE = " << configMSE << ", RMSE = " << configRMSE << "\n";
   } catch (const std::exception &ex) {
       std::cerr << "[Error] cannot compute metrics: " << ex.what() << "\n";

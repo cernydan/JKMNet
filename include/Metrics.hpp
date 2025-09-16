@@ -22,7 +22,6 @@ class Metrics {
         //!< KGE – Kling–Gupta Efficiency
         static double kge(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred); //!< KGE between two vectors
         
-
         static bool appendMetricsCsv(const std::string &path, 
             const std::vector<std::pair<std::string,
             double>> &metrics, 
@@ -34,6 +33,14 @@ class Metrics {
             const std::string &outCsv, 
             const std::string &id = "",
             bool verbose = true);  //!< Compute final metrics for matrix pair and append a single row into CSV oputput file
+
+        static bool appendRunInfoCsv(const std::string &path,
+            int iterations,
+            double loss,
+            bool converged,
+            double runtime_sec,
+            const std::string &id,
+            bool verbose = true);  //!< Save run information into CSV file
 
     protected:
 
