@@ -88,6 +88,10 @@ struct RunConfig {
     // output paths (parsed from [paths] section)
     std::string out_dir = "";
     std::string calib_mat = "";
+    std::string weights_csv_init = "";
+    std::string weights_bin_init = "";
+    std::string weights_vec_csv_init = "";
+    std::string weights_vec_bin_init = "";
     std::string weights_csv = "";
     std::string weights_bin = "";
     std::string weights_vec_csv = "";
@@ -286,14 +290,32 @@ inline RunConfig parseConfigIni(const std::string &path) {
     if (!sout.empty()) cfg.out_dir = trimStr(sout);
     std::string scalib = get("calib_mat");
     if (!scalib.empty()) cfg.calib_mat = trimStr(scalib);
+
+
+    std::string sinitweil = get("weights_csv_init");
+    if (!sinitweil.empty()) cfg.weights_csv_init = trimStr(sinitweil);
+
+    std::string sinitwellbin = get("weights_bin_init");
+    if (!sinitwellbin.empty()) cfg.weights_bin_init = trimStr(sinitwellbin);
+
+    std::string sinitweilvec = get("weights_vec_csv_init");
+    if (!sinitweilvec.empty()) cfg.weights_vec_csv_init = trimStr(sinitweilvec);
+
+    std::string sinitwellbinvec = get("weights_vec_bin_init");
+    if (!sinitwellbinvec.empty()) cfg.weights_vec_bin_init = trimStr(sinitwellbinvec);
+
     std::string sweil = get("weights_csv");
     if (!sweil.empty()) cfg.weights_csv = trimStr(sweil);
+
     std::string swellbin = get("weights_bin");
     if (!swellbin.empty()) cfg.weights_bin = trimStr(swellbin);
+
     std::string sweilvec = get("weights_vec_csv");
     if (!sweilvec.empty()) cfg.weights_vec_csv = trimStr(sweilvec);
+
     std::string swellbinvec = get("weights_vec_bin");
     if (!swellbinvec.empty()) cfg.weights_vec_bin = trimStr(swellbinvec);
+
     std::string srealc = get("real_calib");
     if (!srealc.empty()) cfg.real_calib = trimStr(srealc);
     std::string spredc = get("pred_calib");

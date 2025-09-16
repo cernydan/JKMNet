@@ -378,7 +378,7 @@ int main() {
   std::cout << "Outputs as matrix: MSE = " << mse_m << ", RMSE = " << rmse_m << "\n";
 
   // Save metrics into CSV file (need to have an existing folder "data/outputs")
-  Metrics::computeAndAppendFinalMetrics(Y_true, Y_pred, "data/outputs/final_metrics.csv", "01");
+  //Metrics::computeAndAppendFinalMetrics(Y_true, Y_pred, "data/outputs/final_metrics.csv", "01");
 
 
   std::cout << "\n-------------------------------------------" << std::endl;
@@ -809,6 +809,43 @@ int main() {
 
   // Set MLP and run calibration
   MLP configBatchMLP;
+
+  configBatchMLP.setArchitecture(cfg.mlp_architecture);
+  std::vector<activ_func_type> realActivs(cfg.mlp_architecture.size(), strToActivation(cfg.activation));
+  configBatchMLP.setActivations(realActivs);
+  std::vector<weight_init_type> realWeightInit(cfg.mlp_architecture.size(), strToWeightInit(cfg.weight_init));
+  configBatchMLP.setWInitType(realWeightInit);
+
+  configBatchMLP.printArchitecture();
+  configBatchMLP.printActivations();
+  configBatchMLP.printWInitType();
+
+  // initialize layers (build weights) using any input of the right length 
+  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(cfg.input_numbers.size());
+  configBatchMLP.initMLP(x0);
+
+  // Get and print each layer’s weights
+  size_t realL = cfg.mlp_architecture.size();
+  for (size_t i = 0; i < realL; ++i) {
+      Eigen::MatrixXd realW = configBatchMLP.getWeights(i);
+      std::cout << "Layer " << i 
+                << " weight matrix (" << realW.rows() << "×" << realW.cols() << "):\n"  
+                // W.rows(): number of neurons in the current layer
+                // W.cols(): number of inputs coming into that layer (i.e. the size of the previous layer’s output) plus one extra column for the bias weight
+                << realW << "\n\n";
+  }
+
+  // Save initialized weights
+  configBatchMLP.saveWeightsCsv(cfg.weights_csv_init);
+  configBatchMLP.saveWeightsBinary(cfg.weights_bin_init);
+  configBatchMLP.weightsToVectorMlp();
+  configBatchMLP.saveWeightsVectorCsv(cfg.weights_vec_csv_init);
+  configBatchMLP.saveWeightsVectorBinary(cfg.weights_vec_bin_init);
+
+  std::cout << "[I/O] Saved INIT weights to: '" << cfg.weights_csv_init << "', and '" << cfg.weights_bin_init << "'\n";
+  std::cout << "[I/O] Saved INIT weights vector to: '" << cfg.weights_vec_csv_init << "', and '" << cfg.weights_vec_bin_init << "'\n";
+
+  // Run training
   auto configBatch = net.trainAdamBatchSplit(
       configBatchMLP, 
       configData, 
@@ -875,7 +912,7 @@ int main() {
   bool ok1 = configData.saveMatrixCsv(cfg.real_calib, Y_true_calib, colNames);
   bool ok2 = configData.saveMatrixCsv(cfg.pred_calib, Y_pred_calib, colNames);
   if (ok1 && ok2) {
-      std::cout << "[I/O] Saved real calib data to: '" << cfg.real_calib << "', pred calib data to '" << cfg.pred_calib << "' \n";
+      std::cout << "[I/O] Saved REAL CALIB data to: '" << cfg.real_calib << "', PRED CALIB data to '" << cfg.pred_calib << "' \n";
   } else {
       std::cerr << "[I/O] Saving calib matrices failed\n";
   }
@@ -887,8 +924,8 @@ int main() {
   configBatchMLP.saveWeightsVectorCsv(cfg.weights_vec_csv);
   configBatchMLP.saveWeightsVectorBinary(cfg.weights_vec_bin);
 
-  std::cout << "[I/O] Saved weights to: '" << cfg.weights_csv << "', and '" << cfg.weights_bin << "'\n";
-  std::cout << "[I/O] Saved weights vector to: '" << cfg.weights_vec_csv << "', and '" << cfg.weights_vec_bin << "'\n";
+  std::cout << "[I/O] Saved FINAL weights to: '" << cfg.weights_csv << "', and '" << cfg.weights_bin << "'\n";
+  std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg.weights_vec_csv << "', and '" << cfg.weights_vec_bin << "'\n";
 
   // Set MLP and run validation
 
