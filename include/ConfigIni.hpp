@@ -16,7 +16,9 @@
 #include "Data.hpp"   
 #include "MLP.hpp"    
 
-// ---------- utility helpers ----------
+/**
+ * Helper functions
+ */
 static inline std::string trimStr(const std::string &s) {
     size_t a = 0, b = s.size();
     while (a < b && std::isspace((unsigned char)s[a])) ++a;
@@ -52,7 +54,9 @@ static inline bool parseBool(const std::string &s) {
     throw std::runtime_error("parseBool: cannot parse boolean from '" + s + "'");
 }
 
-// ---------- RunConfig ----------
+/**
+ * Run the configuration
+ */
 struct RunConfig {
     // model / training
     std::string trainer = "online";                 // "online" or "batch"
@@ -86,6 +90,8 @@ struct RunConfig {
     std::string calib_mat = "";
     std::string weights_csv = "";
     std::string weights_bin = "";
+    std::string weights_vec_csv = "";
+    std::string weights_vec_bin = "";
     std::string real_calib = "";
     std::string pred_calib = "";
     std::string real_valid = "";
@@ -94,7 +100,9 @@ struct RunConfig {
     std::string metrics_val = "";
 };
 
-// ---------- mapping helpers (adapt these if your enum names differ) ----------
+/**
+ * Mapping the helpers
+ */
 inline activ_func_type strToActivation(const std::string &s) {
     std::string u;
     for (char c : s) u.push_back(static_cast<char>(std::toupper((unsigned char)c)));
@@ -128,7 +136,9 @@ inline transform_type strToTransformType(const std::string &s) {
     throw std::runtime_error("Unknown transform: " + s);
 }
 
-// ---------- INI parser ----------
+/**
+ * Parse the ini to map
+ */
 inline std::unordered_map<std::string, std::string> parseIniToMap(const std::string &path) {
     std::ifstream ifs(path);
     if (!ifs.is_open()) throw std::runtime_error("Cannot open INI file: " + path);
@@ -158,7 +168,9 @@ inline std::unordered_map<std::string, std::string> parseIniToMap(const std::str
     return kv;
 }
 
-// ---------- convert string list to numeric lists ----------
+/**
+ * Convert string list to numeric lists
+ */
 inline std::vector<unsigned> parseUnsignedList(const std::string &s) {
     std::vector<unsigned> out;
     for (auto &tok : splitCommaList(s)) {
@@ -189,7 +201,9 @@ inline std::vector<std::string> parseStringList(const std::string &s) {
     return splitCommaList(s);
 }
 
-// ---------- parse config from ini ----------
+/**
+ * Parse config from ini 
+ */
 inline RunConfig parseConfigIni(const std::string &path) {
     auto kv = parseIniToMap(path);
     RunConfig cfg;
@@ -276,6 +290,10 @@ inline RunConfig parseConfigIni(const std::string &path) {
     if (!sweil.empty()) cfg.weights_csv = trimStr(sweil);
     std::string swellbin = get("weights_bin");
     if (!swellbin.empty()) cfg.weights_bin = trimStr(swellbin);
+    std::string sweilvec = get("weights_vec_csv");
+    if (!sweilvec.empty()) cfg.weights_vec_csv = trimStr(sweilvec);
+    std::string swellbinvec = get("weights_vec_bin");
+    if (!swellbinvec.empty()) cfg.weights_vec_bin = trimStr(swellbinvec);
     std::string srealc = get("real_calib");
     if (!srealc.empty()) cfg.real_calib = trimStr(srealc);
     std::string spredc = get("pred_calib");

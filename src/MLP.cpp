@@ -370,6 +370,70 @@ bool MLP::saveWeightsBinary(const std::string &path) const {
 }
 
 /**
+ * Save vector of weights in readable CSV text (per-layer blocks)
+ */
+bool MLP::saveWeightsVectorCsv(const std::string &path) const {
+    namespace fs = std::filesystem;
+    if (path.empty()) {
+        std::cerr << "[MLP::saveWeightsVectorCsv] Path is empty\n";
+        return false;
+    }
+    try {
+        fs::path p(path);
+        if (p.has_parent_path()) fs::create_directories(p.parent_path());
+    } catch (const std::exception &e) {
+        std::cerr << "[MLP::saveWeightsVectorCsv] Cannot create parent directories: "
+                  << e.what() << "\n";
+        return false;
+    }
+
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) {
+        std::cerr << "[MLP::saveWeightsVectorCsv] Cannot open file: " << path << "\n";
+        return false;
+    }
+    ofs << std::setprecision(12);
+
+    // save as column vector
+    for (int i = 0; i < weightsVectorMlp.size(); ++i) {
+        ofs << weightsVectorMlp[i] << "\n";
+    }
+
+    // save as row vector
+    // for (int i = 0; i < weightsVectorMlp.size(); ++i) {
+    //     ofs << weightsVectorMlp[i];
+    //     if (i + 1 < weightsVectorMlp.size()) ofs << ",";
+    // }
+
+    ofs << "\n";
+    ofs.close();
+    return !ofs.fail();
+}
+
+/**
+ * Save vector of weights in compact binary
+ */
+bool MLP::saveWeightsVectorBinary(const std::string &path) const {
+    try {
+        std::filesystem::path p(path);
+        if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
+        std::ofstream ofs(path, std::ios::binary);
+        if (!ofs.is_open()) {
+            std::cerr << "[MLP::saveWeightsVectorBinary] Cannot open: " << path << "\n";
+            return false;
+        }
+        int64_t len = weightsVectorMlp.size();
+        ofs.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        ofs.write(reinterpret_cast<const char*>(weightsVectorMlp.data()), len * sizeof(double));
+        ofs.close();
+        return true;
+    } catch (const std::exception &ex) {
+        std::cerr << "[MLP::saveWeightsVectorBinary] Exception: " << ex.what() << "\n";
+        return false;
+    }
+}
+
+/**
  * Getter for output
  */
 Eigen::VectorXd& MLP::getOutput(){

@@ -883,9 +883,12 @@ int main() {
   // Save weights
   configBatchMLP.saveWeightsCsv(cfg.weights_csv);
   configBatchMLP.saveWeightsBinary(cfg.weights_bin);
+  configBatchMLP.weightsToVectorMlp();
+  configBatchMLP.saveWeightsVectorCsv(cfg.weights_vec_csv);
+  configBatchMLP.saveWeightsVectorBinary(cfg.weights_vec_bin);
 
   std::cout << "[I/O] Saved weights to: '" << cfg.weights_csv << "', and '" << cfg.weights_bin << "'\n";
-
+  std::cout << "[I/O] Saved weights vector to: '" << cfg.weights_vec_csv << "', and '" << cfg.weights_vec_bin << "'\n";
 
   // Set MLP and run validation
 
