@@ -1,21 +1,22 @@
-// ********* 4. 9. 2025 *********
-// **DONE**: Add more metrics (PI, NS, KGE, ...)
-// **DONE**: Add batch Adam
-// **DONE**: Remove rows with NA in the calibMat
-// TODO: Add k-fold validation
-// **DONE**: Read data and setting of the MLP from file ('settings/config_model.ini')
-// **DONE**: Save final metrics into file ('data/outputs/metrics_calib.csv', path defined in 'config_model.ini')
-// **DONE**: Save real and predict calib data into file ('data/outputs/real_calib.csv' and 'data/outputs/pred_calib.csv', path defined in 'config_model.ini')
-// **DONE**: Save final matrix of weights from training to be used in testing ('data/outputs/weights.csv')
+// ********* 16. 9. 2025 *********
+// **DONE**: Save initial matrix and vector of weights
+// **DONE**: Save final vector of weights
+// **DONE**: Save other needed params into file, e.g., #iteration, duration, etc.
 // TODO: Create method for loading weights
-// TODO: Save other needed params or results into files, e.g., #iteration, etc.
-// TODO: Create validation run, i.e., read data and setting from files, no training
+// TODO: Prepare validation run, i.e., read data and settings from files, no training
+// TODO: Clean the code from unused methods
+// TODO: Use 'main()' only for read data and setting, run, save
+// TODO: Use more detailed data, i.e., hourly or 15-min, and prepare all datasets (in R?) 
+// TODO: Prepare many MLPs configuration, i.e., 'config_model.ini' (in R?)
+// TODO: Prepare tree structure of files and folders for running each MLP configuration with corresponding setting and data
+// TODO: Solve the running of scenarios in a loop (with Rcpp or in .sh file?)
 
-// *** Before running the model:
-// TODO: Use more detailed data, i.e., hourly or 15-min
-// TODO: Clean the code, use 'main()' only for read data and setting, run, save
-// TODO: Prepare many scenarios for running together with the tree structure of files and folders
-// TODO: Solve the running of scenarios in a loop over all sensor IDs (with Rcpp?)
+// ********* MetaCentrum *********
+// TODO: Upload all case folders
+// TODO: Compile the C++ code on MetaCentrum using an interactive job 
+// TODO: Put the bin file inside each case folder
+// TODO: Test the code, i.e., run MLP with the same seed many times (approx. 100) (must have the same results!!)
+// TODO: Create .sh file for running qsub job on MetaCentrum
 // *******************************
 
 #include <ctime>
