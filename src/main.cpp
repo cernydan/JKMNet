@@ -3,8 +3,8 @@
 // **DONE**: Save final vector of weights
 // **DONE**: Save other needed params into file, e.g., #iteration, duration, etc.
 // **DONE**: Split data into calib and valid dataset
-// TODO Create method for loading weights
-// TODO: Prepare validation run, i.e.,: read data and settings from files, no training
+// **DONE**: Create method for loading weights
+// **DONE**: Prepare validation run, i.e.,: read data and settings from files, no training
 // TODO: Clean the code from unused methods
 // TODO: Use 'main()' only for read data and setting, run, save
 // TODO: Use more detailed data, i.e., hourly or 15-min, and prepare all datasets (in R?) 
@@ -920,7 +920,6 @@ int main() {
   Eigen::MatrixXd Y_true_calib = configData.getCalibOutsMat();   
   Eigen::MatrixXd Y_pred_calib = configBatchMLP.getOutputs();    
 
-  // Add after implementing transformation of data!!
   try {
     Y_true_calib = configData.inverseTransformOutputs(Y_true_calib);
     Y_pred_calib = configData.inverseTransformOutputs(Y_pred_calib);
@@ -943,22 +942,24 @@ int main() {
             << ", iterations = " << trainingResult.iterations
             << ", converged = " << std::boolalpha << trainingResult.converged << "\n";
   
-  // Save run info to CSV
+  // ------------------------------------------------------
+  // Save run info and weights
+  // ------------------------------------------------------
   Metrics::appendRunInfoCsv(cfg.run_info,
-                          configBatchMLP.getLastIterations(),
-                          configBatchMLP.getLastError(),
-                          trainingResult.converged,
-                          configBatchMLP.getLastRuntimeSec(),
-                          cfg.id);
-  std::cout << "[I/O] Run info saved to: '" << cfg.run_info <<"' \n";
+                            configBatchMLP.getLastIterations(),
+                            configBatchMLP.getLastError(),
+                            trainingResult.converged,
+                            configBatchMLP.getLastRuntimeSec(),
+                            cfg.id);
+  std::cout << "[I/O] Run info saved to: '" << cfg.run_info << "' \n";
 
-  // metrics
+  // Print metrics
   double configMSE = 0.0, configRMSE = 0.0; 
   try {
       configMSE = Metrics::mse(Y_true_calib, Y_pred_calib);
       configRMSE = Metrics::rmse(Y_true_calib, Y_pred_calib);
 
-      std::cout << "Metrics (calib): MSE = " << configMSE << ", RMSE = " << configRMSE << "\n";
+      std::cout << "Metrics (calib): MSE = " << configMSE << ", RMSE = " << configRMSE << ", ...\n";
   } catch (const std::exception &ex) {
       std::cerr << "[Error] cannot compute metrics: " << ex.what() << "\n";
   }
@@ -976,24 +977,53 @@ int main() {
   bool ok1 = configData.saveMatrixCsv(cfg.real_calib, Y_true_calib, colNames);
   bool ok2 = configData.saveMatrixCsv(cfg.pred_calib, Y_pred_calib, colNames);
   if (ok1 && ok2) {
-      std::cout << "[I/O] Saved REAL CALIB data to: '" << cfg.real_calib << "', PRED CALIB data to '" << cfg.pred_calib << "' \n";
+      std::cout << "[I/O] Saved REAL CALIB data to: '" << cfg.real_calib << "', and PRED CALIB data to '" << cfg.pred_calib << "' \n";
   } else {
       std::cerr << "[I/O] Saving calib matrices failed\n";
   }
 
-  // Save weights
   configBatchMLP.saveWeightsCsv(cfg.weights_csv);
   configBatchMLP.saveWeightsBinary(cfg.weights_bin);
   configBatchMLP.weightsToVectorMlp();
   configBatchMLP.saveWeightsVectorCsv(cfg.weights_vec_csv);
   configBatchMLP.saveWeightsVectorBinary(cfg.weights_vec_bin);
 
-  std::cout << "[I/O] Saved FINAL weights to: '" << cfg.weights_csv << "', and '" << cfg.weights_bin << "'\n";
-  std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg.weights_vec_csv << "', and '" << cfg.weights_vec_bin << "'\n";
+  std::cout << "[I/O] Saved FINAL weights to: '" << cfg.weights_csv
+            << "', and '" << cfg.weights_bin << "'\n";
+  std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg.weights_vec_csv
+            << "', and '" << cfg.weights_vec_bin << "'\n";
 
-  // Set MLP and run validation
 
+  // ------------------------------------------------------
+  // Evaluate validation set
+  // ------------------------------------------------------
+  configBatchMLP.calculateOutputs(X_valid);
 
+  Eigen::MatrixXd Y_pred_valid = configBatchMLP.getOutputs();
+  Eigen::MatrixXd Y_true_valid = Y_valid;
 
+  try {
+      Y_true_valid = configData.inverseTransformOutputs(Y_true_valid);
+      Y_pred_valid = configData.inverseTransformOutputs(Y_pred_valid);
+  } catch (const std::exception &ex) {
+      std::cerr << "[Warning] inverseTransformOutputs failed (valid): " << ex.what() << "\n";
+  }
+
+  double mse_valid = Metrics::mse(Y_true_valid, Y_pred_valid);
+  double rmse_valid = Metrics::rmse(Y_true_valid, Y_pred_valid);
+  std::cout << "Metrics (valid): MSE = " << mse_valid << ", RMSE = " << rmse_valid << ", ...\n";
+
+  // Save metrics into CSV file 
+  Metrics::computeAndAppendFinalMetrics(Y_true_valid, Y_pred_valid, cfg.metrics_val, cfg.id);
+
+  // Save real and predicted calib data
+  bool ok1V = configData.saveMatrixCsv(cfg.real_valid, Y_true_valid, colNames);
+  bool ok2V = configData.saveMatrixCsv(cfg.pred_valid, Y_pred_valid, colNames);
+  if (ok1V && ok2V) {
+      std::cout << "[I/O] Saved REAL VALID data to: '" << cfg.real_valid << "', and PRED VALID data to '" << cfg.pred_valid<< "' \n";
+  } else {
+      std::cerr << "[I/O] Saving calib matrices failed\n";
+  }
+  
   return 0;
 }
