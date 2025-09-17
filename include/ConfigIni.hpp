@@ -71,6 +71,7 @@ struct RunConfig {
     unsigned seed = 42;
     int batch_size = 30;
     double train_fraction = 0.8;
+    bool split_shuffle = true;
 
     // transforms
     std::string transform = "NONE";
@@ -273,6 +274,9 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     std::string strainf = get("train_fraction");
     if (!strainf.empty()) cfg.train_fraction = std::stod(strainf);
+
+    std::string ssplitshuffle = get("split_shuffle");
+    if (!ssplitshuffle.empty()) cfg.split_shuffle = parseBool(ssplitshuffle);
 
     std::string strans = get("transform");
     if (!strans.empty()) cfg.transform = trimStr(strans);

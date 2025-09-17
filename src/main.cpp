@@ -5,6 +5,7 @@
 // **DONE**: Split data into calib and valid dataset
 // **DONE**: Create method for loading weights
 // **DONE**: Prepare validation run, i.e.,: read data and settings from files, no training
+// TODO: Split data to calib and valid with or without schuffle, i.e., randomly or historically 
 // TODO: Clean the code from unused methods
 // TODO: Use 'main()' only for read data and setting, run, save
 // TODO: Use more detailed data, i.e., hourly or 15-min, and prepare all datasets (in R?) 
@@ -827,7 +828,7 @@ int main() {
   configData.makeCalibMatsSplit(cfg.input_numbers, (int)cfg.mlp_architecture.back());
   Eigen::MatrixXd calibMat = configData.getCalibMat();
 
-  auto [trainMat, validMat, trainIdx, validIdx] = configData.splitCalibMatWithIdx(cfg.train_fraction, true, cfg.seed);
+  auto [trainMat, validMat, trainIdx, validIdx] = configData.splitCalibMatWithIdx(cfg.train_fraction, cfg.split_shuffle, cfg.seed);
 
   int inpSize = (int)trainMat.cols() - (int)cfg.mlp_architecture.back();
   int outSize = (int)cfg.mlp_architecture.back();
