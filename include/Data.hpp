@@ -65,6 +65,9 @@ class Data {
 
         void splitCalibMat(int inpLength);  //!< Split created calibration matrix into separate inps and outs matrices 
     
+        std::pair<Eigen::MatrixXd, Eigen::MatrixXd>
+        splitInputsOutputs(const Eigen::MatrixXd &mat, int inpSize, int outSize) const;  //!< Split calib and valid dataset
+
         std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
         splitCalibMatWithIdx(double trainFraction = 0.8, bool shuffle = true, unsigned seed = 0) const;  //!< Split calibration matrix into train/validation and also return indices
 

@@ -54,6 +54,31 @@ class JKMNet {
             unsigned rngSeed = 42
         );
 
+        //!< Train an MLP with online Adam without splitting (already done before training)
+        TrainingResult trainAdamOnline(
+            MLP &mlp,
+            const Eigen::MatrixXd &X,
+            const Eigen::MatrixXd &Y,
+            int maxIterations,
+            double maxError,
+            double learningRate,
+            bool shuffle,
+            unsigned rngSeed
+        );
+
+        //!< Train an MLP with batch Adam without splitting (already done before training)
+        TrainingResult trainAdamBatch(
+            MLP &mlp,
+            const Eigen::MatrixXd &X,
+            const Eigen::MatrixXd &Y,
+            int batchSize,
+            int maxIterations,
+            double maxError,
+            double learningRate,
+            bool shuffle,
+            unsigned rngSeed
+        );
+
     protected:
 
     private:

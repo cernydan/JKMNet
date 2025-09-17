@@ -923,6 +923,22 @@ void Data::splitCalibMat(int inpLength){
 }
 
 /**
+ * Split calib and valid dataset
+ */
+std::pair<Eigen::MatrixXd, Eigen::MatrixXd>
+Data::splitInputsOutputs(const Eigen::MatrixXd &mat, int inpSize, int outSize) const {
+    if (inpSize + outSize != mat.cols()) {
+        throw std::runtime_error("[Data::splitInputsOutputs] Column mismatch: "
+                                 + std::to_string(inpSize + outSize) +
+                                 " expected, got " + std::to_string(mat.cols()));
+    }
+
+    Eigen::MatrixXd X = mat.leftCols(inpSize);
+    Eigen::MatrixXd Y = mat.rightCols(outSize);
+    return {X, Y};
+}
+
+/**
  * Split calibration matrix into train/validation and also return indices
  */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>

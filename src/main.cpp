@@ -2,8 +2,9 @@
 // **DONE**: Save initial matrix and vector of weights
 // **DONE**: Save final vector of weights
 // **DONE**: Save other needed params into file, e.g., #iteration, duration, etc.
-// TODO: Create method for loading weights
-// TODO: Prepare validation run, i.e., read data and settings from files, no training
+// **DONE**: Split data into calib and valid dataset
+// TODO Create method for loading weights
+// TODO: Prepare validation run, i.e.,: read data and settings from files, no training
 // TODO: Clean the code from unused methods
 // TODO: Use 'main()' only for read data and setting, run, save
 // TODO: Use more detailed data, i.e., hourly or 15-min, and prepare all datasets (in R?) 
@@ -741,9 +742,12 @@ int main() {
   
 
   std::cout << "\n-------------------------------------------" << std::endl;
-  std::cout << "-- Read settings from file --" << std::endl;
+  std::cout << "-- FINAL REAL EXAMPLE --" << std::endl;
   std::cout << "-------------------------------------------" << std::endl;
 
+  // ------------------------------------------------------
+  // Read setting file
+  // ------------------------------------------------------  
   RunConfig cfg = parseConfigIni("settings/config_model.ini");
   std::cout << "Loaded config: \n";
   std::cout << "  data_file = " << cfg.data_file << ", trainer = " << cfg.trainer << ", \n";
@@ -766,6 +770,9 @@ int main() {
   }
   std::cout << "}\n";
 
+  // ------------------------------------------------------
+  // Load and filter data
+  // ------------------------------------------------------  
   // Load the data
   Data configData;
   
@@ -787,7 +794,10 @@ int main() {
       }
       std::cout << "\n";
   }
-  
+
+  // ------------------------------------------------------
+  // Transform data
+  // ------------------------------------------------------  
   // Configure transform to numeric data 
   transform_type tt = transform_type::NONE;
   try {
@@ -811,6 +821,28 @@ int main() {
   // Set MLP and run calibration
   MLP configBatchMLP;
 
+  // ------------------------------------------------------
+  // Build calibration matrix and split into train/valid
+  // ------------------------------------------------------
+  configData.makeCalibMatsSplit(cfg.input_numbers, (int)cfg.mlp_architecture.back());
+  Eigen::MatrixXd calibMat = configData.getCalibMat();
+
+  auto [trainMat, validMat, trainIdx, validIdx] = configData.splitCalibMatWithIdx(cfg.train_fraction, true, cfg.seed);
+
+  int inpSize = (int)trainMat.cols() - (int)cfg.mlp_architecture.back();
+  int outSize = (int)cfg.mlp_architecture.back();
+
+  auto [X_train, Y_train] = configData.splitInputsOutputs(trainMat, inpSize, outSize);
+  auto [X_valid, Y_valid] = configData.splitInputsOutputs(validMat, inpSize, outSize);
+
+  std::cout << "Train shapes: X = (" << X_train.rows() << " × " << X_train.cols()
+          << "), Y = (" << Y_train.rows() << " × " << Y_train.cols() << ")\n";
+  std::cout << "Valid shapes: X = (" << X_valid.rows() << " × " << X_valid.cols()
+          << "), Y = (" << Y_valid.rows() << " × " << Y_valid.cols() << ")\n";
+
+  // ------------------------------------------------------
+  // Configure and initialize MLP
+  // ------------------------------------------------------
   configBatchMLP.setArchitecture(cfg.mlp_architecture);
   std::vector<activ_func_type> realActivs(cfg.mlp_architecture.size(), strToActivation(cfg.activation));
   configBatchMLP.setActivations(realActivs);
@@ -846,22 +878,43 @@ int main() {
   std::cout << "[I/O] Saved INIT weights to: '" << cfg.weights_csv_init << "', and '" << cfg.weights_bin_init << "'\n";
   std::cout << "[I/O] Saved INIT weights vector to: '" << cfg.weights_vec_csv_init << "', and '" << cfg.weights_vec_bin_init << "'\n";
 
-  // Run training
-  auto configBatch = net.trainAdamBatchSplit(
-      configBatchMLP, 
-      configData, 
-      cfg.mlp_architecture, 
-      cfg.input_numbers,  //use 1 value from T3 (current), 2 from moisture (current + 1 lag)
-      strToActivation(cfg.activation), 
-      strToWeightInit(cfg.weight_init), 
-      cfg.batch_size,
-      cfg.max_iterations, 
-      cfg.max_error, 
-      cfg.learning_rate, 
-      cfg.shuffle, 
-      cfg.seed
-    );
+  // ------------------------------------------------------
+  // Run training (on calibration/train set only)
+  // ------------------------------------------------------
+  TrainingResult trainingResult;
 
+  if (cfg.trainer == "online") {
+    trainingResult = net.trainAdamOnline(
+        configBatchMLP,
+        X_train,
+        Y_train,
+        cfg.max_iterations,
+        cfg.max_error,
+        cfg.learning_rate,
+        cfg.shuffle,
+        cfg.seed
+    );
+  } else if (cfg.trainer == "batch") {
+    trainingResult = net.trainAdamBatch(
+        configBatchMLP,
+        X_train,
+        Y_train,
+        cfg.batch_size,
+        cfg.max_iterations,
+        cfg.max_error,
+        cfg.learning_rate,
+        cfg.shuffle,
+        cfg.seed
+    );
+  } else {
+    throw std::invalid_argument("Unknown trainer type: " + cfg.trainer +
+                                " (must be 'online' or 'batch')");
+  }
+
+
+  // ------------------------------------------------------
+  // Evaluate calibration/train set
+  // ------------------------------------------------------
   configBatchMLP.calculateOutputs(configData.getCalibInpsMat());
 
   Eigen::MatrixXd Y_true_calib = configData.getCalibOutsMat();   
@@ -886,15 +939,15 @@ int main() {
   std::cout<<"observed outputs (calib): \n" << Y_true_calib.topRows(5)<<"\n\n";
   std::cout<<"modelled outputs (calib): \n" << Y_pred_calib.topRows(5)<<"\n\n";
 
-  std::cout << "Training finished; final MSE = " << configBatch.finalLoss
-            << ", iterations = " << configBatch.iterations
-            << ", converged = " << std::boolalpha << configBatch.converged << "\n";
+  std::cout << "Training finished; final MSE = " << trainingResult.finalLoss
+            << ", iterations = " << trainingResult.iterations
+            << ", converged = " << std::boolalpha << trainingResult.converged << "\n";
   
   // Save run info to CSV
   Metrics::appendRunInfoCsv(cfg.run_info,
                           configBatchMLP.getLastIterations(),
                           configBatchMLP.getLastError(),
-                          configBatch.converged,
+                          trainingResult.converged,
                           configBatchMLP.getLastRuntimeSec(),
                           cfg.id);
   std::cout << "[I/O] Run info saved to: '" << cfg.run_info <<"' \n";
@@ -939,6 +992,8 @@ int main() {
   std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg.weights_vec_csv << "', and '" << cfg.weights_vec_bin << "'\n";
 
   // Set MLP and run validation
+
+
 
   return 0;
 }
