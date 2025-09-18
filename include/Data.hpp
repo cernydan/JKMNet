@@ -56,13 +56,8 @@ class Data {
         std::vector<size_t> calibPatternOriginalIndices() const { return m_calib_pattern_orig_indices; }
         std::vector<int> calibPatternFilteredIndices() const { return m_calib_pattern_filtered_indices; }
         
-        void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix (with NA removal)
-        void makeCalibMatD(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix
-        void makeCalibMat2(int inpRows, int outRows); //!< Create calibration matrix  (both inps + outs) for backpropagation from data matrix
-        
+        void makeCalibMat(std::vector<int> inpNumsOfVars, int outRows); //!< Create calibration matrix (both inps + outs) for backpropagation from data matrix (with NA removal)  
         void makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix (with NA removal)
-        void makeCalibMatsSplitD(std::vector<int> inpNumsOfVars, int outRows); //!< Create separate calibration inps and outs matrices for backpropagation from data matrix
-
         void splitCalibMat(int inpLength);  //!< Split created calibration matrix into separate inps and outs matrices 
     
         std::pair<Eigen::MatrixXd, Eigen::MatrixXd>

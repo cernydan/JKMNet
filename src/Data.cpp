@@ -703,81 +703,6 @@ void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows) {
 }
 
 /**
- * Create matrix for backpropagation from data matrix
- */
-void Data::makeCalibMatD(std::vector<int> inpNumsOfVars, int outRows){
-    if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
-        throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
-
-    // ! Assuming predicted variable is in last column of data
-    const auto maxR = *std::max_element(inpNumsOfVars.begin(),inpNumsOfVars.end());    // max number of input variable values
-    if (maxR == 0)
-        throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
-
-    const size_t DC = m_data.cols();   // number of cols in input data matrix
-    if (DC < 1)
-        throw std::runtime_error("Data has no columns");
-    if (inpNumsOfVars.size() != DC)
-        throw std::invalid_argument("inpNumsOfVars size does not match data columns");
-
-    const int CR = m_data.rows() - maxR - outRows + 1;   // number of rows of calibration matrix
-    if (CR <= 0)
-        throw std::runtime_error("Not enough rows to build calibration matrix with given inpNumsOfVars/outRows");
-    
-    const int CC = std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0) + outRows;  // number of cols of calibration matrix
-    calibMat = Eigen::MatrixXd(CR , CC);
-    for(int i = 0; i < CR; i++){
-        int col_idx = 0;
-        for (size_t j = 0; j < DC; j++) {
-            for(int l = 0; l < inpNumsOfVars[j]; l++){
-                calibMat(i, col_idx++) = m_data(i + maxR - inpNumsOfVars[j] + l, j);
-            }
-        }
-        for (int j = 0; j < outRows; j++) {
-            calibMat(i, col_idx++) = m_data(i + maxR + j, DC - 1);
-        }
-    }
-}
-
-/**
- * Create matrix for backpropagation from data matrix - created by MJ due to errors in Moisture data...
- * na realna data mi to neslo aplikovat, zatim to neresim, jdu delat neco jineho...
- */
-void Data::makeCalibMat2(int inpRows, int outRows){
-    if (inpRows <= 0 || outRows <= 0)
-        throw std::invalid_argument("inpRows and outRows must be positive");
-
-    const int totalCols = static_cast<int>(m_data.cols());
-    if (totalCols < 1)
-        throw std::runtime_error("Data has no columns");
-
-    const int inputCols = totalCols - 1; // last column is target
-    if (inputCols <= 0)
-        throw std::runtime_error("Need at least one input column (data must contain at least one feature + target)");
-
-    const int totalRows = static_cast<int>(m_data.rows());
-    const int CR = totalRows - inpRows - outRows + 1;   // number of calibration rows
-    if (CR <= 0)
-        throw std::runtime_error("Not enough rows to build calibration matrix with given inpRows/outRows");
-
-    const int CC = inpRows * inputCols + outRows;  // columns: stacked input-window + outRows
-    calibMat = Eigen::MatrixXd(CR, CC);
-
-    for (int i = 0; i < CR; ++i) {
-        int col_idx = 0;
-        // inputs: for each feature column (except target), stack inpRows values
-        for (int j = 0; j < inputCols; ++j) {
-            for (int k = 0; k < inpRows; ++k) {
-                calibMat(i, col_idx++) = m_data(i + k, j);
-            }
-        }
-        // outputs: take outRows consecutive values from the target column (last column)
-        for (int j = 0; j < outRows; ++j) {
-            calibMat(i, col_idx++) = m_data(i + inpRows + j, totalCols - 1);
-        }
-    }
-}
-/**
  * Create separate calibration inps and outs matrices for backpropagation from data matrix (with NA removal)
  */
 void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows) {
@@ -869,45 +794,6 @@ void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows) {
     if (valid > 0) {
         calibMat.leftCols(inpC) = calibInpsMat;
         calibMat.rightCols(outRows) = calibOutsMat;
-    }
-}
-
-/**
- * Create separate calibration inps and outs matrices for backpropagation from data matrix
- */
-void Data::makeCalibMatsSplitD(std::vector<int> inpNumsOfVars, int outRows){
-    if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
-        throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
-
-    // ! Assuming predicted variable is in last column of data
-    const auto maxR = *std::max_element(inpNumsOfVars.begin(),inpNumsOfVars.end());    // max number of input variable values
-    if (maxR == 0)
-        throw std::runtime_error("At least one value in inpNumsOfVars must be greater than 0");
-
-    const size_t DC = m_data.cols();   // number of cols in input data matrix
-    if (DC < 1)
-        throw std::runtime_error("Data has no columns");
-    if (inpNumsOfVars.size() != DC)
-        throw std::invalid_argument("inpNumsOfVars size doesnt match data columns");
-
-    const int CR = m_data.rows() - maxR - outRows + 1;   // number of rows of matrices
-    if (CR <= 0)
-        throw std::runtime_error("Not enough rows to build calibration matrices with given inpNumsOfVars/outRows");
-    
-    const int inpC = std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0);  // number of cols of inps calibration matrix
-    calibInpsMat = Eigen::MatrixXd(CR , inpC);
-    calibOutsMat = Eigen::MatrixXd(CR , outRows);
-
-    for(int i = 0; i < CR; i++){
-        int col_idx = 0;
-        for (size_t j = 0; j < DC; j++) {
-            for(int l = 0; l < inpNumsOfVars[j]; l++){
-                calibInpsMat(i, col_idx++) = m_data(i + maxR - inpNumsOfVars[j] + l, j);
-            }
-        }
-        for (int j = 0; j < outRows; j++) {
-            calibOutsMat(i, j) = m_data(i + maxR + j, DC - 1);
-        }
     }
 }
 
