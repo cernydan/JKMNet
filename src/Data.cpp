@@ -1175,3 +1175,119 @@ Eigen::MatrixXd Data::expandPredictionsFromCalib(const Eigen::MatrixXd& preds, i
 
     return full;
 }
+
+/**
+ * Make cal + val matrices for current fold in k-fold 
+ */
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> 
+Data::makeKFoldMats(
+    std::vector<int> inpNumsOfVars,
+    int outRows,
+    int kFolds,
+    int foldIdx,
+    bool shuffle,
+    bool largerPieceCalib,
+    unsigned seed)
+{
+    if (kFolds < 2) throw std::invalid_argument("kFolds must be >= 2");
+    if (foldIdx < 0 || foldIdx >= kFolds) throw std::invalid_argument("Invalid fold index");
+
+    const auto maxR = *std::max_element(inpNumsOfVars.begin(), inpNumsOfVars.end());
+    if (maxR <= 0) throw std::runtime_error("At least one value in inpNumsOfVars must be > 0");
+
+    const size_t DC = m_data.cols();
+    if (DC < 1) throw std::runtime_error("Data has no columns");
+    if (inpNumsOfVars.size() != DC) throw std::invalid_argument("inpNumsOfVars size does not match data columns");
+
+    const int CRcand = static_cast<int>(m_data.rows()) - maxR - outRows + 1;
+    if (CRcand <= 0) throw std::runtime_error("Not enough rows to build calibration matrices");
+
+    const int inpC = static_cast<int>(std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0));
+    std::vector<std::vector<double>> rowsIn;
+    std::vector<std::vector<double>> rowsOut;
+    rowsIn.reserve(static_cast<size_t>(CRcand));
+    rowsOut.reserve(static_cast<size_t>(CRcand));
+
+    for (int i = 0; i < CRcand; ++i) {
+        bool ok = true;
+        std::vector<double> inrow;
+        inrow.reserve(inpC);
+
+        for (size_t j = 0; j < DC; ++j) {
+            for (int l = 0; l < inpNumsOfVars[j]; ++l) {
+                int rindex = i + maxR - inpNumsOfVars[j] + l;
+                double v = m_data(rindex, static_cast<Eigen::Index>(j));
+                if (!std::isfinite(v)) { ok = false; break; }
+                inrow.push_back(v);
+            }
+            if (!ok) break;
+        }
+        if (!ok) continue;
+
+        std::vector<double> outrow;
+        outrow.reserve(outRows);
+        for (int j = 0; j < outRows; ++j) {
+            int rindex = i + maxR + j;
+            double v = m_data(rindex, static_cast<Eigen::Index>(DC - 1));
+            if (!std::isfinite(v)) { ok = false; break; }
+            outrow.push_back(v);
+        }
+        if (!ok) continue;
+
+        rowsIn.push_back(std::move(inrow));
+        rowsOut.push_back(std::move(outrow));
+    }
+
+    const int N = static_cast<int>(rowsIn.size());
+    if (N == 0) throw std::runtime_error("No valid calibration patterns");
+
+    Eigen::MatrixXd allInps(N, inpC);
+    Eigen::MatrixXd allOuts(N, outRows);
+    for (int r = 0; r < N; ++r) {
+        for (int c = 0; c < inpC; ++c) allInps(r, c) = rowsIn[r][c];
+        for (int c = 0; c < outRows; ++c) allOuts(r, c) = rowsOut[r][c];
+    }
+
+    std::vector<int> allIdx(N);
+    std::iota(allIdx.begin(), allIdx.end(), 0);
+
+    int foldSize  = N / kFolds;
+    int foldStart = foldIdx * foldSize;
+    int foldEnd   = (foldIdx == kFolds - 1) ? N : (foldStart + foldSize);
+
+    std::vector<int> trainIdx;
+    std::vector<int> validIdx;
+
+    if(largerPieceCalib){
+        for (int i = 0; i < N; ++i) {
+            if (i >= foldStart && i < foldEnd) validIdx.push_back(allIdx[i]);
+            else trainIdx.push_back(allIdx[i]);
+        }
+    } else{
+        for (int i = 0; i < N; ++i) {
+            if (i >= foldStart && i < foldEnd) trainIdx.push_back(allIdx[i]);
+            else validIdx.push_back(allIdx[i]);
+        }
+    }
+
+    if (shuffle) {
+        std::mt19937 gen(seed);
+        std::shuffle(trainIdx.begin(), trainIdx.end(), gen);
+    }
+
+    Eigen::MatrixXd trainInps(trainIdx.size(), inpC);
+    Eigen::MatrixXd trainOuts(trainIdx.size(), outRows);
+    Eigen::MatrixXd validInps(validIdx.size(), inpC);
+    Eigen::MatrixXd validOuts(validIdx.size(), outRows);
+
+    for (int i = 0; i < (int)trainIdx.size(); ++i) {
+        trainInps.row(i) = allInps.row(trainIdx[i]);
+        trainOuts.row(i) = allOuts.row(trainIdx[i]);
+    }
+    for (int i = 0; i < (int)validIdx.size(); ++i) {
+        validInps.row(i) = allInps.row(validIdx[i]);
+        validOuts.row(i) = allOuts.row(validIdx[i]);
+    }
+
+    return { trainInps, trainOuts, validInps, validOuts };
+}

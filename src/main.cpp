@@ -39,32 +39,6 @@
 
 using namespace std;
 
-void testAdamOnlineSplitD(MLP& adamlp,
-                          Data& dataA, 
-                          std::vector<unsigned> mlpArchitecture,
-                          const std::vector<int>& numbersOfPastVarsValues,
-                          activ_func_type activationType,
-                          weight_init_type weightsInitType,
-                          int maxIterations,
-                          double maxError,
-                          double learningRate){           
-  dataA.makeCalibMatsSplit(numbersOfPastVarsValues,mlpArchitecture.back());
-  std::vector<int>permutVector = dataA.permutationVector(dataA.getCalibInpsMat().rows());
-  dataA.setCalibInpsMat(dataA.shuffleMatrix(dataA.getCalibInpsMat(),permutVector));
-  dataA.setCalibOutsMat(dataA.shuffleMatrix(dataA.getCalibOutsMat(),permutVector));
-  adamlp.setArchitecture(mlpArchitecture);
-  std::vector<activ_func_type> activations;
-  std::vector<weight_init_type> weightInits;
-  for(size_t i = 0; i < mlpArchitecture.size(); i++){
-    activations.push_back(activationType);
-    weightInits.push_back(weightsInitType);
-  }
-  adamlp.setActivations(activations);
-  adamlp.setWInitType(weightInits);
-  adamlp.initMLP(dataA.getCalibInpsMat().row(0));
-  adamlp.onlineAdam(maxIterations, maxError, learningRate, dataA.getCalibInpsMat(), dataA.getCalibOutsMat());
-}
-
 int main() {
 
   std::cout << "-------------------------------------------" << std::endl;
@@ -1026,5 +1000,8 @@ int main() {
       std::cerr << "[I/O] Saving calib matrices failed\n";
   }
   
+  net.KFold(configData,{3,2,2},{0,1,2,3},activ_func_type::RELU,weight_init_type::RANDOM,4,true,true,42,200,0.0005,0.001,3);
+  net.KFold(configData,{3,2,2},{0,1,2,3},activ_func_type::RELU,weight_init_type::RANDOM,4,true,false,42,200,0.0005,0.001,3);
+
   return 0;
 }

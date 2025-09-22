@@ -89,6 +89,16 @@ class Data {
         const std::vector<size_t>& removedRowIndices() const { return m_na_row_indices; }   //!< Get indices of rows removed 
         size_t validRowCount() const { return static_cast<size_t>(m_data.rows()); }  //!< Number of valid rows currently in m_data
 
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> //!< Make cal + val matrices for current fold in k-fold 
+        makeKFoldMats(
+            std::vector<int> inpNumsOfVars,
+            int outRows,
+            int kFolds,
+            int foldIdx,
+            bool shuffle,
+            bool largerPieceCalib,
+            unsigned seed);
+
     protected:
 
     private:
