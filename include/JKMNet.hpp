@@ -4,6 +4,7 @@
 #include "MLP.hpp"
 #include "Layer.hpp"
 #include "Data.hpp"
+#include "Metrics.hpp"
 
 #include <stdio.h>
 #include <iostream>
@@ -77,6 +78,22 @@ class JKMNet {
             double learningRate,
             bool shuffle,
             unsigned rngSeed
+        );
+        //!< K-fold validation (online Adam) 
+        void KFold(
+            Data &data,
+            const std::vector<unsigned> &mlpArchitecture,
+            const std::vector<int> &numbersOfPastVarsValues,
+            activ_func_type activationType,
+            weight_init_type weightsInitType,
+            int kFolds,
+            bool shuffle,
+            bool largerPieceCalib,
+            unsigned seed,
+            int maxIterations,
+            double maxError,
+            double learningRate,
+            int runsPerFold
         );
 
     protected:

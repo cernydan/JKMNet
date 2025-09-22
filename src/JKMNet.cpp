@@ -338,3 +338,75 @@ TrainingResult JKMNet::trainAdamBatch(
 
     return result;
 }
+
+/**
+ * K-fold validation (online Adam) 
+ */
+void JKMNet::KFold(
+    Data &data,
+    const std::vector<unsigned> &mlpArchitecture,
+    const std::vector<int> &numbersOfPastVarsValues,
+    activ_func_type activationType,
+    weight_init_type weightsInitType,
+    int kFolds,
+    bool shuffle,
+    bool largerPieceCalib,
+    unsigned seed,
+    int maxIterations,
+    double maxError,
+    double learningRate,
+    int runsPerFold)
+{
+
+    // Basic check of architecture
+    if (mlpArchitecture.empty())
+        throw std::invalid_argument("mlpArchitecture must be non-empty");
+    if (numbersOfPastVarsValues.empty())
+        throw std::invalid_argument("numbersOfPastVarsValues must be non-empty");
+    if (maxIterations <= 0)
+        throw std::invalid_argument("maxIterations must be > 0");
+
+    // Set MLP
+    MLP testMlp;
+    testMlp.setArchitecture(const_cast<std::vector<unsigned>&>(mlpArchitecture));
+    std::vector<activ_func_type> activations(mlpArchitecture.size(), activationType);
+    std::vector<weight_init_type> weightInits(mlpArchitecture.size(), weightsInitType);
+    testMlp.setActivations(activations);
+    testMlp.setWInitType(weightInits);
+
+    std::vector<double> foldsMse;
+
+    for(int foldIdx = 0; foldIdx < kFolds; foldIdx++){
+        double meanFoldMse = 0.0; 
+        auto [trainInps, trainOuts, validInps, validOuts] = data.makeKFoldMats(numbersOfPastVarsValues,
+                                                                    static_cast<int>(mlpArchitecture.back()),
+                                                                    kFolds,
+                                                                    foldIdx,
+                                                                    shuffle,
+                                                                    largerPieceCalib,
+                                                                    seed);
+        for(int run = 0; run < runsPerFold; run++){
+            // Initialize MLP
+            int inputSize = static_cast<int>(trainInps.cols()); // each pattern is a row of inputs (flattened)
+            Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
+            testMlp.initMLP(zeroIn);
+
+            // Run training with onlineAdam method
+            try {
+                testMlp.onlineAdam(maxIterations, maxError, learningRate, trainInps, trainOuts);
+            } catch (const std::exception &ex) {
+                std::cerr << "[trainAdamOnlineSplit] training failed: " << ex.what() << "\n";
+                throw;
+            }
+
+            // Validation
+            testMlp.calculateOutputs(validInps);
+            meanFoldMse += Metrics::mse(data.inverseTransformOutputs(validOuts),
+                                        data.inverseTransformOutputs(testMlp.getOutputs()));
+        }
+        foldsMse.push_back(meanFoldMse / runsPerFold);
+    }
+    for(int fold = 0; fold < kFolds; fold++){
+        std::cout<<"Fold "<<fold<<" validation mean MSE = "<<foldsMse[fold]<<"\n";
+    }
+}
