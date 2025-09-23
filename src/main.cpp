@@ -36,6 +36,7 @@
 #include "Data.hpp"
 #include "Metrics.hpp"
 #include "ConfigIni.hpp"
+#include "CNNLayer.hpp"
 
 using namespace std;
 
