@@ -127,6 +127,7 @@ inline weight_init_type strToWeightInit(const std::string &s) {
     if (u == "RANDOM") return weight_init_type::RANDOM;
     if (u == "LHS") return weight_init_type::LHS;
     if (u == "LHS2") return weight_init_type::LHS2;
+    if (u == "HE") return weight_init_type::HE;
 
     throw std::runtime_error("Unknown weight_init: " + s);
 }

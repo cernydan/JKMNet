@@ -97,6 +97,7 @@ std::string Layer::wInitTypeName(weight_init_type w) {
         case weight_init_type::RANDOM: return "RANDOM";
         case weight_init_type::LHS: return "LHS";
         case weight_init_type::LHS2: return "LHS2";
+        case weight_init_type::HE: return "HE";
     }
     return "Unknown";
 }
@@ -232,6 +233,10 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
             }
 
             break;
+        }
+
+        case weight_init_type::HE: {
+            weights = Eigen::MatrixXd::Random(numNeurons, numInputs) * std::sqrt(6.0 / (numInputs));
         }
                
         default:
