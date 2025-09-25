@@ -19,6 +19,15 @@ public:
     CNNLayer(const CNNLayer&) = default;  //!< The copy constructor
     CNNLayer& operator=(const CNNLayer&) = default;   //!< The assignment operator
 
+    //!< Initialize a CNN layer 
+    void init1DCNNLayer(int numberOfFilters, 
+                        int filterSize, 
+                        int inputRows,
+                        int inputCols,
+                        std::string initType = "RANDOM",
+                        std::string activFunc = "RELU",
+                        double minVal = 0.0,
+                        double maxVal = 1.0);
     void setFilters1D(const Eigen::MatrixXd& newFilters);    //!< Setter for 1D filters matrix
     void setBias1D(const Eigen::VectorXd& newBias);    //!< Setter for 1D bias vector
     Eigen::MatrixXd getFilters1D();    //!< Getter for 1D filters matrix
@@ -37,6 +46,7 @@ private:
     Eigen::VectorXd bias1D;     //!< Vector of bias values for each filter
     Eigen::MatrixXd activation1D;   //!< Calculated layer activations matrix
     Eigen::MatrixXd output1D;   //!< Calculated layer output matrix
+    activ_func_type activ_func = activ_func_type::RELU;  //!< The type of activation function, where default is RELU
 };
 
 #endif // CNNLAYER_HPP
