@@ -26,14 +26,14 @@ static inline std::string trimStr(const std::string &s) {
     return s.substr(a, b-a);
 }
 
-static std::string join(const std::vector<std::string>& v, const std::string& sep = ", ") {
-    std::string out;
-    for (size_t i = 0; i < v.size(); ++i) {
-        out += v[i];
-        if (i + 1 < v.size()) out += sep;
-    }
-    return out;
-}
+// static std::string join(const std::vector<std::string>& v, const std::string& sep = ", ") {
+//     std::string out;
+//     for (size_t i = 0; i < v.size(); ++i) {
+//         out += v[i];
+//         if (i + 1 < v.size()) out += sep;
+//     }
+//     return out;
+// }
 
 static inline std::vector<std::string> splitCommaList(const std::string &s) {
     std::vector<std::string> out;

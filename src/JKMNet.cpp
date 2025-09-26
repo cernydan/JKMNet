@@ -9,7 +9,7 @@ using namespace std;
  * The constructor
  */
 JKMNet::JKMNet(){
-    std::cout << "** Initialization of the net **" << std::endl;
+    std::cout << "** Running the JKMNet **" << std::endl;
 }
 
 /**

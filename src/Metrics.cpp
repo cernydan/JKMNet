@@ -185,7 +185,7 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     // inform about saving of the metrics
     if (verbose) {
         if (ok) {
-            std::cout << "[Metrics] Saved metrics to '" << path << "' (time: " << timeStr << ", id: " << idToWrite << ")\n";
+            //std::cout << "[Metrics] Saved metrics to '" << path << "' (time: " << timeStr << ", id: " << idToWrite << ")\n";
         } else {
             std::cerr << "[Metrics] Failed to save metrics to '" << path << "'\n";
         }
@@ -288,8 +288,7 @@ bool Metrics::appendRunInfoCsv(const std::string &path,
 
     if (verbose) {
         if (ok) {
-            std::cout << "[Metrics] Saved run info to '" << path
-                      << "' (time: " << timeStr << ", id: " << idToWrite << ")\n";
+            //std::cout << "[Metrics] Saved run info to '" << path << "' (time: " << timeStr << ", id: " << idToWrite << ")\n";
         } else {
             std::cerr << "[Metrics] Failed to save run info to '" << path << "'\n";
         }
