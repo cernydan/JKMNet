@@ -115,14 +115,13 @@ axes[0].axvline(0, color="red", linestyle="--")
 axes[0].set_title("Calibration residuals distribution")
 axes[0].set_xlabel("Residual (Measured - Predicted)")
 axes[0].set_ylabel("Frequency")
-axes[0].legend()
+axes[0].legend()  # legend only on calibration
 
 # Validation residuals
 axes[1].hist(residuals_valid, bins=30, stacked=True, label=[f"Col {i+1}" for i in range(n_outputs)], alpha=0.7)
 axes[1].axvline(0, color="red", linestyle="--")
 axes[1].set_title("Validation residuals distribution")
 axes[1].set_xlabel("Residual (Measured - Predicted)")
-axes[1].legend()
 
 plt.suptitle("Residual histograms per output column")
 plt.tight_layout()
