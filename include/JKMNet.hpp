@@ -79,6 +79,32 @@ class JKMNet {
             bool shuffle,
             unsigned rngSeed
         );
+
+        Eigen::MatrixXd trainAdamOnlineEpochVal(
+            MLP &mlp,
+            const Eigen::MatrixXd &CalInp,
+            const Eigen::MatrixXd &CalOut,
+            const Eigen::MatrixXd &ValInp,
+            const Eigen::MatrixXd &ValOut,
+            int maxIterations,
+            double maxError,
+            double learningRate,
+            bool shuffle,
+            unsigned rngSeed);
+
+        Eigen::MatrixXd trainAdamBatchEpochVal(
+            MLP &mlp,
+            const Eigen::MatrixXd &CalInp,
+            const Eigen::MatrixXd &CalOut,
+            const Eigen::MatrixXd &ValInp,
+            const Eigen::MatrixXd &ValOut,
+            int batchSize,
+            int maxIterations,
+            double maxError,
+            double learningRate,
+            bool shuffle,
+            unsigned rngSeed);
+
         //!< K-fold validation (online Adam) 
         void KFold(
             Data &data,

@@ -339,6 +339,161 @@ TrainingResult JKMNet::trainAdamBatch(
     return result;
 }
 
+Eigen::MatrixXd JKMNet::trainAdamOnlineEpochVal(
+    MLP &mlp,
+    const Eigen::MatrixXd &CalInp,
+    const Eigen::MatrixXd &CalOut,
+    const Eigen::MatrixXd &ValInp,
+    const Eigen::MatrixXd &ValOut,
+    int maxIterations,
+    double maxError,
+    double learningRate,
+    bool shuffle,
+    unsigned rngSeed)
+{
+
+    if (CalInp.rows() == 0 || CalOut.rows() == 0 || ValInp.rows() == 0 || ValOut.rows() == 0)
+        throw std::invalid_argument("Empty data passed to trainAdamOnlineEpochVal");
+    if (CalInp.rows() != CalOut.rows())
+        throw std::invalid_argument("CalInp and CalOut row counts must match in trainAdamOnlineEpochVal");
+    if (ValInp.rows() != ValOut.rows())
+        throw std::invalid_argument("ValInp and ValOut row counts must match in trainAdamOnlineEpochVal");
+    if (maxIterations <= 0)
+        throw std::invalid_argument("maxIterations must be > 0");
+
+    Eigen::MatrixXd Xtrain = CalInp;
+    Eigen::MatrixXd Ytrain = CalOut;
+    Eigen::MatrixXd Xval = ValInp;
+    Eigen::MatrixXd Yval = ValOut;
+
+
+    // Shuffle rows if requested
+    if (shuffle) {
+        std::vector<int> perm(Xtrain.rows());
+        std::iota(perm.begin(), perm.end(), 0);
+        std::mt19937 gen(rngSeed);
+        std::shuffle(perm.begin(), perm.end(), gen);
+
+        auto shuffleMatrix = [](const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
+            Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
+            for (std::size_t i = 0; i < perm.size(); ++i) {
+                shuffled.row(static_cast<int>(i)) = mat.row(perm[i]);
+            }
+            return shuffled;
+        };
+
+        Xtrain = shuffleMatrix(Xtrain, perm);
+        Ytrain = shuffleMatrix(Ytrain, perm);
+    }
+
+    // Initialize MLP with zero input of correct size
+    Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
+    mlp.initMLP(zeroIn);
+
+    Eigen::MatrixXd predsCal;
+    Eigen::MatrixXd predsVal;
+    Eigen::MatrixXd resultErrors = Eigen::MatrixXd(maxIterations,2);
+
+    for(int epoch = 0; epoch < maxIterations; epoch++){
+        // Run online Adam
+        try {
+            mlp.onlineAdam(1, maxError, learningRate, Xtrain, Ytrain);
+        } catch (const std::exception &ex) {
+            std::cerr << "[trainAdamOnline] training failed: " << ex.what() << "\n";
+            throw;
+        }
+
+        // Compute final training loss
+        mlp.calculateOutputs(Xtrain);
+        predsCal = mlp.getOutputs();
+
+        mlp.calculateOutputs(Xval);
+        predsVal = mlp.getOutputs();
+
+        resultErrors(epoch,0) = Metrics::mse(Ytrain,predsCal);
+        resultErrors(epoch,1) = Metrics::mse(Yval,predsVal);
+    }
+    return resultErrors;
+}
+
+Eigen::MatrixXd JKMNet::trainAdamBatchEpochVal(
+    MLP &mlp,
+    const Eigen::MatrixXd &CalInp,
+    const Eigen::MatrixXd &CalOut,
+    const Eigen::MatrixXd &ValInp,
+    const Eigen::MatrixXd &ValOut,
+    int batchSize,
+    int maxIterations,
+    double maxError,
+    double learningRate,
+    bool shuffle,
+    unsigned rngSeed)
+{
+
+    if (CalInp.rows() == 0 || CalOut.rows() == 0 || ValInp.rows() == 0 || ValOut.rows() == 0)
+        throw std::invalid_argument("Empty data passed to trainAdamOnlineEpochVal");
+    if (CalInp.rows() != CalOut.rows())
+        throw std::invalid_argument("CalInp and CalOut row counts must match in trainAdamOnlineEpochVal");
+    if (ValInp.rows() != ValOut.rows())
+        throw std::invalid_argument("ValInp and ValOut row counts must match in trainAdamOnlineEpochVal");
+    if (maxIterations <= 0)
+        throw std::invalid_argument("maxIterations must be > 0");
+
+    Eigen::MatrixXd Xtrain = CalInp;
+    Eigen::MatrixXd Ytrain = CalOut;
+    Eigen::MatrixXd Xval = ValInp;
+    Eigen::MatrixXd Yval = ValOut;
+
+
+    // Shuffle rows if requested
+    if (shuffle) {
+        std::vector<int> perm(Xtrain.rows());
+        std::iota(perm.begin(), perm.end(), 0);
+        std::mt19937 gen(rngSeed);
+        std::shuffle(perm.begin(), perm.end(), gen);
+
+        auto shuffleMatrix = [](const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
+            Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
+            for (std::size_t i = 0; i < perm.size(); ++i) {
+                shuffled.row(static_cast<int>(i)) = mat.row(perm[i]);
+            }
+            return shuffled;
+        };
+
+        Xtrain = shuffleMatrix(Xtrain, perm);
+        Ytrain = shuffleMatrix(Ytrain, perm);
+    }
+
+    // Initialize MLP with zero input of correct size
+    Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
+    mlp.initMLP(zeroIn);
+
+    Eigen::MatrixXd predsCal;
+    Eigen::MatrixXd predsVal;
+    Eigen::MatrixXd resultErrors = Eigen::MatrixXd(maxIterations,2);
+
+    for(int epoch = 0; epoch < maxIterations; epoch++){
+        // Run online Adam
+        try {
+            mlp.batchAdam(1, maxError, batchSize, learningRate, Xtrain, Ytrain);
+        } catch (const std::exception &ex) {
+            std::cerr << "[trainAdamOnline] training failed: " << ex.what() << "\n";
+            throw;
+        }
+
+        // Compute final training loss
+        mlp.calculateOutputs(Xtrain);
+        predsCal = mlp.getOutputs();
+
+        mlp.calculateOutputs(Xval);
+        predsVal = mlp.getOutputs();
+
+        resultErrors(epoch,0) = Metrics::mse(Ytrain,predsCal);
+        resultErrors(epoch,1) = Metrics::mse(Yval,predsVal);
+    }
+    return resultErrors;
+}
+
 /**
  * K-fold validation (online Adam) 
  */
