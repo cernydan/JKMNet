@@ -1004,5 +1004,8 @@ int main() {
   net.KFold(configData,{3,2,2},{0,1,2,3},activ_func_type::RELU,weight_init_type::RANDOM,4,true,true,42,200,0.0005,0.001,3);
   net.KFold(configData,{3,2,2},{0,1,2,3},activ_func_type::RELU,weight_init_type::RANDOM,4,true,false,42,200,0.0005,0.001,3);
 
+  std::cout<<"\n Online MSE: \n"<<net.trainAdamOnlineEpochVal(configBatchMLP,X_train,Y_train,X_valid,Y_valid,100,0.0,0.001,false,0);
+  std::cout<<"\n Batch MSE: \n"<<net.trainAdamBatchEpochVal(configBatchMLP,X_train,Y_train,X_valid,Y_valid,20,100,0.0,0.001,false,0);
+
   return 0;
 }
