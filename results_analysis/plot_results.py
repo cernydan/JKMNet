@@ -103,4 +103,30 @@ for i in range(n_outputs):
     plt.savefig(os.path.join(out_dir, f"residuals_col{i}.png"))
     plt.close()
 
+# === HISTOGRAMS OF RESIDUALS PER COLUMN ===
+residuals_calib = [calib_real.iloc[:, i] - calib_pred.iloc[:, i] for i in range(n_outputs)]
+residuals_valid = [valid_real.iloc[:, i] - valid_pred.iloc[:, i] for i in range(n_outputs)]
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+
+# Calibration residuals
+axes[0].hist(residuals_calib, bins=30, stacked=True, label=[f"Col {i+1}" for i in range(n_outputs)], alpha=0.7)
+axes[0].axvline(0, color="red", linestyle="--")
+axes[0].set_title("Calibration residuals distribution")
+axes[0].set_xlabel("Residual (Measured - Predicted)")
+axes[0].set_ylabel("Frequency")
+axes[0].legend()
+
+# Validation residuals
+axes[1].hist(residuals_valid, bins=30, stacked=True, label=[f"Col {i+1}" for i in range(n_outputs)], alpha=0.7)
+axes[1].axvline(0, color="red", linestyle="--")
+axes[1].set_title("Validation residuals distribution")
+axes[1].set_xlabel("Residual (Measured - Predicted)")
+axes[1].legend()
+
+plt.suptitle("Residual histograms per output column")
+plt.tight_layout()
+plt.savefig(os.path.join(out_dir, "residuals_hist.png"))
+plt.close()
+
 print("Calibration and validation plots saved in:", out_dir)
