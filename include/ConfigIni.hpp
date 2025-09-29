@@ -64,6 +64,8 @@ struct RunConfig {
     std::vector<int> input_numbers;                 // e.g. [0,0,1,2]
     std::string activation = "RELU";
     std::string weight_init = "RANDOM";
+
+    int ensemble_runs = 25;
     int max_iterations = 500;
     double max_error = 0.002;
     double learning_rate = 0.001;
@@ -255,6 +257,9 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     std::string swinit = get("weight_init");
     if (!swinit.empty()) cfg.weight_init = trimStr(swinit);
+
+    std::string sensemblerun = get("ensemble_runs");
+    if (!sensemblerun.empty()) cfg.ensemble_runs = std::stoi(sensemblerun);
 
     std::string smaxit = get("max_iterations");
     if (!smaxit.empty()) cfg.max_iterations = std::stoi(smaxit);

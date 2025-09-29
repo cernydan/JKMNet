@@ -434,6 +434,87 @@ bool MLP::saveWeightsVectorBinary(const std::string &path) const {
 }
 
 /**
+ * Save vector of weights inside one file for ensemble run
+ */
+bool MLP::appendWeightsVectorCsv(const std::string &path, bool isFirstRun) const {
+    namespace fs = std::filesystem;
+    if (path.empty()) {
+        std::cerr << "[MLP::appendWeightsVectorCsv] Path is empty\n";
+        return false;
+    }
+    try {
+        fs::path p(path);
+        if (p.has_parent_path()) fs::create_directories(p.parent_path());
+    } catch (const std::exception &e) {
+        std::cerr << "[MLP::appendWeightsVectorCsv] Cannot create parent directories: "
+                  << e.what() << "\n";
+        return false;
+    }
+
+    // On first run: create/truncate and write column 1
+    if (isFirstRun) {
+        std::ofstream ofs(path, std::ios::out | std::ios::trunc);
+        if (!ofs.is_open()) {
+            std::cerr << "[MLP::appendWeightsVectorCsv] Cannot open file: " << path << "\n";
+            return false;
+        }
+        ofs << std::setprecision(12);
+        for (int i = 0; i < weightsVectorMlp.size(); ++i) {
+            ofs << weightsVectorMlp[i] << "\n";
+        }
+        ofs.close();
+        return true;
+    }
+
+    // For subsequent runs: read, append new column, overwrite
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) {
+        std::cerr << "[MLP::appendWeightsVectorCsv] Cannot open file for appending: " << path << "\n";
+        return false;
+    }
+
+    std::vector<std::vector<double>> matrix;
+    std::string line;
+    while (std::getline(ifs, line)) {
+        std::stringstream ss(line);
+        std::vector<double> row;
+        double val;
+        while (ss >> val) {
+            row.push_back(val);
+            if (ss.peek() == ',') ss.ignore();
+        }
+        matrix.push_back(row);
+    }
+    ifs.close();
+
+    if ((int)matrix.size() != weightsVectorMlp.size()) {
+        std::cerr << "[MLP::appendWeightsVectorCsv] Mismatch in vector size vs file rows\n";
+        return false;
+    }
+
+    for (int i = 0; i < weightsVectorMlp.size(); ++i) {
+        matrix[i].push_back(weightsVectorMlp[i]);
+    }
+
+    std::ofstream ofs(path, std::ios::out | std::ios::trunc);
+    if (!ofs.is_open()) {
+        std::cerr << "[MLP::appendWeightsVectorCsv] Cannot reopen file: " << path << "\n";
+        return false;
+    }
+    ofs << std::setprecision(12);
+    for (const auto &row : matrix) {
+        for (size_t j = 0; j < row.size(); ++j) {
+            ofs << row[j];
+            if (j + 1 < row.size()) ofs << ",";
+        }
+        ofs << "\n";
+    }
+    ofs.close();
+    return true;
+}
+
+
+/**
  * Getter for output
  */
 Eigen::VectorXd& MLP::getOutput(){

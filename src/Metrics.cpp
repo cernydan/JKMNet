@@ -115,11 +115,10 @@ double Metrics::kge(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred
  * Append a labeled row of metrics into CSV file
  */
 bool Metrics::appendMetricsCsv(const std::string &path,
-    const std::vector<std::pair<std::string,double>> &metrics,
-    const std::string &id,
-    bool verbose) {
-    
-    // Does file already exist?
+                               const std::vector<std::pair<std::string,double>> &metrics,
+                               const std::string &id,
+                               bool verbose) {
+    // check if file exists
     bool file_exists = false;
     {
         std::ifstream ifs(path);
@@ -128,25 +127,19 @@ bool Metrics::appendMetricsCsv(const std::string &path,
 
     std::ofstream ofs(path, std::ios::app);
     if (!ofs.is_open()) {
-        std::cerr << "[Metrics::appendMetricsCsv] Cannot open file for writing: " << path << "\n";
+        std::cerr << "[Metrics::appendMetricsCsv] Cannot open file: " << path << "\n";
         return false;
     }
     ofs << std::setprecision(12);
 
-    // if new file, write header: time,id,<metric names...>
+    // write header if needed
     if (!file_exists) {
         ofs << "time,id";
-        if (!metrics.empty()) ofs << ",";
-        for (size_t i = 0; i < metrics.size(); ++i) {
-            ofs << metrics[i].first;
-            if (i + 1 < metrics.size()) ofs << ",";
-        }
+        for (auto &kv : metrics) ofs << "," << kv.first;
         ofs << "\n";
-    } else {
-        // if file exists, we could validate header vs metrics names...
     }
 
-    // Generate timestamp string (human readable)
+    // generate timestamp
     using namespace std::chrono;
     auto t = system_clock::now();
     std::time_t tt = system_clock::to_time_t(t);
@@ -160,37 +153,18 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", &tm);
     std::string timeStr(timebuf);
 
-    // Determine ID to write: if id empty, use compact timestamp as fallback
-    std::string idToWrite = id;
-    if (idToWrite.empty()) {
-        char idbuf[32];
-        std::strftime(idbuf, sizeof(idbuf), "%Y%m%d-%H%M%S", &tm);
-        idToWrite = std::string(idbuf);
-    }
-
-    // write the row: time, id, metric values
-    ofs << timeStr << "," << idToWrite;
-    if (!metrics.empty()) ofs << ",";
-    for (size_t i = 0; i < metrics.size(); ++i) {
-        ofs << metrics[i].second;
-        if (i + 1 < metrics.size()) ofs << ",";
-    }
+    // write row
+    ofs << timeStr << "," << id;
+    for (auto &kv : metrics) ofs << "," << kv.second;
     ofs << "\n";
-    
-    // flush and check
+
     ofs.flush();
     bool ok = !(ofs.fail() || !ofs.good());
     ofs.close();
 
-    // inform about saving of the metrics
-    if (verbose) {
-        if (ok) {
-            //std::cout << "[Metrics] Saved metrics to '" << path << "' (time: " << timeStr << ", id: " << idToWrite << ")\n";
-        } else {
-            std::cerr << "[Metrics] Failed to save metrics to '" << path << "'\n";
-        }
+    if (verbose && ok) {
+        // std::cout << "[Metrics] Appended metrics row to " << path << " for id=" << id << "\n";
     }
-    
     return ok;
 }
 
@@ -323,4 +297,14 @@ bool Metrics::saveErrorsCsv(const std::string &path,
         //          << "' with " << errors.rows() << " epochs\n";
     }
     return true;
+}
+
+/**
+ * Helper function for adding run ID into filename
+ */
+std::string Metrics::addRunIdToFilename(const std::string &path, const std::string &run_id) {
+    std::filesystem::path p(path);
+    std::string stem = p.stem().string();
+    std::string ext  = p.extension().string();
+    return (p.parent_path() / (stem + "_" + run_id + ext)).string();
 }

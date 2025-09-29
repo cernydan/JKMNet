@@ -40,241 +40,243 @@
 
 using namespace std;
 
+
 int main() {
-  //!! ------------------------------------------------------------
-  //!! REAL DATA
-  //!! ------------------------------------------------------------
+    JKMNet net;
+    Data Data;
+    MLP MLP;
 
-  JKMNet net;
-  Data configData;
-  MLP configBatchMLP;
+    // ------------------------------------------------------
+    // Read setting file
+    // ------------------------------------------------------  
+    RunConfig cfg = parseConfigIni("settings/config_model.ini");
 
-  // ------------------------------------------------------
-  // Read setting file
-  // ------------------------------------------------------  
-  RunConfig cfg = parseConfigIni("settings/config_model.ini");
+    std::unordered_set<std::string> idFilter;
+    if (!cfg.id.empty()) {
+        std::vector<std::string> ids = parseStringList(cfg.id); 
+        idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
+    }
 
-  std::unordered_set<std::string> idFilter;
-  if (!cfg.id.empty()) {
-    std::vector<std::string> ids = parseStringList(cfg.id); // splits & trims on commas
-    idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
-  }
+    // ------------------------------------------------------
+    // Load and filter data
+    // ------------------------------------------------------    
+    Data.loadFilteredCSV(cfg.data_file, idFilter, cfg.columns, cfg.timestamp, cfg.id_col);
 
-  // ------------------------------------------------------
-  // Load and filter data
-  // ------------------------------------------------------    
-  configData.loadFilteredCSV(cfg.data_file, idFilter, cfg.columns, cfg.timestamp, cfg.id_col);
+    // ------------------------------------------------------
+    // Transform data
+    // ------------------------------------------------------  
+    transform_type tt = transform_type::NONE;
+    try {
+        tt = strToTransformType(cfg.transform);
+    } catch (const std::exception &ex) {
+        std::cerr << "[Warning] Unknown transform in config ('" << cfg.transform 
+                  << "'). Defaulting to NONE.\n";
+        tt = transform_type::NONE;
+    }
+    Data.setTransform(tt, cfg.transform_alpha, cfg.exclude_last_col_from_transform);
+    Data.applyTransform();
   
-  // ------------------------------------------------------
-  // Transform data
-  // ------------------------------------------------------  
-  transform_type tt = transform_type::NONE;
-  try {
-      tt = strToTransformType(cfg.transform);
-  } catch (const std::exception &ex) {
-      std::cerr << "[Warning] Unknown transform in config ('" << cfg.transform 
-                << "'). Defaulting to NONE.\n";
-      tt = transform_type::NONE;
-  }
+    // ------------------------------------------------------
+    // Build calibration matrix and split into train/valid
+    // ------------------------------------------------------
+    Data.makeCalibMatsSplit(cfg.input_numbers, (int)cfg.mlp_architecture.back());
+    Eigen::MatrixXd calibMat = Data.getCalibMat();
 
-  configData.setTransform(tt, cfg.transform_alpha, cfg.exclude_last_col_from_transform);
+    auto [trainMat, validMat, trainIdx, validIdx] = 
+        Data.splitCalibMatWithIdx(cfg.train_fraction, cfg.split_shuffle, cfg.seed);
 
-  // Apply transform
-  configData.applyTransform();
-  
-  // ------------------------------------------------------
-  // Build calibration matrix and split into train/valid
-  // ------------------------------------------------------
-  configData.makeCalibMatsSplit(cfg.input_numbers, (int)cfg.mlp_architecture.back());
-  Eigen::MatrixXd calibMat = configData.getCalibMat();
+    int inpSize = (int)trainMat.cols() - (int)cfg.mlp_architecture.back();
+    int outSize = (int)cfg.mlp_architecture.back();
 
-  auto [trainMat, validMat, trainIdx, validIdx] = configData.splitCalibMatWithIdx(cfg.train_fraction, cfg.split_shuffle, cfg.seed);
+    auto [X_train, Y_train] = Data.splitInputsOutputs(trainMat, inpSize, outSize);
+    auto [X_valid, Y_valid] = Data.splitInputsOutputs(validMat, inpSize, outSize);
 
-  int inpSize = (int)trainMat.cols() - (int)cfg.mlp_architecture.back();
-  int outSize = (int)cfg.mlp_architecture.back();
+    // ------------------------------------------------------
+    // Save ground-truth (real) calib and valid once
+    // ------------------------------------------------------
+    std::vector<std::string> colNames;
+    for (int c = 0; c < Y_train.cols(); ++c) {
+        colNames.push_back(std::string("h") + std::to_string(c+1));
+    }
 
-  auto [X_train, Y_train] = configData.splitInputsOutputs(trainMat, inpSize, outSize);
-  auto [X_valid, Y_valid] = configData.splitInputsOutputs(validMat, inpSize, outSize);
+    Eigen::MatrixXd Y_true_calib_save = Data.getCalibOutsMat();
+    Eigen::MatrixXd Y_true_valid_save = Y_valid;
 
-  
-  // ------------------------------------------------------
-  // Configure and initialize MLP
-  // ------------------------------------------------------
-  configBatchMLP.setArchitecture(cfg.mlp_architecture);
-  std::vector<activ_func_type> realActivs(cfg.mlp_architecture.size(), strToActivation(cfg.activation));
-  configBatchMLP.setActivations(realActivs);
-  std::vector<weight_init_type> realWeightInit(cfg.mlp_architecture.size(), strToWeightInit(cfg.weight_init));
-  configBatchMLP.setWInitType(realWeightInit);
+    try {
+        Y_true_calib_save = Data.inverseTransformOutputs(Y_true_calib_save);
+        Y_true_valid_save = Data.inverseTransformOutputs(Y_true_valid_save);
+    } catch (const std::exception &ex) {
+        std::cerr << "[Warning] inverseTransformOutputs failed when saving ground-truth: " 
+                  << ex.what() << "\n";
+    }
 
-  // initialize layers (build weights) using any input of the right length 
-  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(cfg.input_numbers.size());
-  configBatchMLP.initMLP(x0);
+    Data.saveMatrixCsv(cfg.real_calib, Y_true_calib_save, colNames);
+    Data.saveMatrixCsv(cfg.real_valid, Y_true_valid_save, colNames);
 
- 
-  // Save initialized weights
-  configBatchMLP.saveWeightsCsv(cfg.weights_csv_init);
-  configBatchMLP.saveWeightsBinary(cfg.weights_bin_init);
-  configBatchMLP.weightsToVectorMlp();
-  configBatchMLP.saveWeightsVectorCsv(cfg.weights_vec_csv_init);
-  configBatchMLP.saveWeightsVectorBinary(cfg.weights_vec_bin_init);
+    // ------------------------------------------------------
+    // Ensemble loop
+    // ------------------------------------------------------
+    for (int run = 0; run < cfg.ensemble_runs; ++run) {
+        std::string run_id = std::to_string(run + 1);
 
-  // ------------------------------------------------------
-  // Run training (on calibration/train set only)
-  // ------------------------------------------------------
-  TrainingResult trainingResult;
-  Eigen::MatrixXd resultErrors;
+        // ------------------------------------------------------
+        // Configure and initialize MLP
+        // ------------------------------------------------------
+        MLP.setArchitecture(cfg.mlp_architecture);
+        std::vector<activ_func_type> realActivs(cfg.mlp_architecture.size(), strToActivation(cfg.activation));
+        MLP.setActivations(realActivs);
+        std::vector<weight_init_type> realWeightInit(cfg.mlp_architecture.size(), strToWeightInit(cfg.weight_init));
+        MLP.setWInitType(realWeightInit);
 
-  if (cfg.trainer == "online") {
-      trainingResult = net.trainAdamOnline(
-          configBatchMLP,
-          X_train, Y_train,
-          cfg.max_iterations,
-          cfg.max_error,
-          cfg.learning_rate,
-          cfg.shuffle,
-          cfg.seed
-      );
-  }
-  else if (cfg.trainer == "batch") {
-      trainingResult = net.trainAdamBatch(
-          configBatchMLP,
-          X_train, Y_train,
-          cfg.batch_size,
-          cfg.max_iterations,
-          cfg.max_error,
-          cfg.learning_rate,
-          cfg.shuffle,
-          cfg.seed
-      );
-  }
-  else if (cfg.trainer == "online_epoch") {
-      resultErrors = net.trainAdamOnlineEpochVal(
-          configBatchMLP,
-          X_train, Y_train,
-          X_valid, Y_valid,
-          cfg.max_iterations,
-          cfg.max_error,
-          cfg.learning_rate,
-          cfg.shuffle,
-          cfg.seed
-      );
+        Eigen::VectorXd x0 = Eigen::VectorXd::Zero(cfg.input_numbers.size());
+        MLP.initMLP(x0);
 
-      trainingResult.finalLoss = resultErrors(resultErrors.rows() - 1, 1);
-      trainingResult.iterations = cfg.max_iterations;
-      trainingResult.converged = (trainingResult.finalLoss <= cfg.max_error);
+        // Save initialized weights (per run)
+        MLP.saveWeightsCsv(Metrics::addRunIdToFilename(cfg.weights_csv_init, run_id));
+        MLP.weightsToVectorMlp();
+        MLP.saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg.weights_vec_csv_init, run_id));
 
-      Metrics::saveErrorsCsv(cfg.errors_csv, resultErrors);
-  }
-  else if (cfg.trainer == "batch_epoch") {
-      resultErrors = net.trainAdamBatchEpochVal(
-          configBatchMLP,
-          X_train, Y_train,
-          X_valid, Y_valid,
-          cfg.batch_size,
-          cfg.max_iterations,
-          cfg.max_error,
-          cfg.learning_rate,
-          cfg.shuffle,
-          cfg.seed
-      );
+        // Save initialized weights into one combined file
+        MLP.appendWeightsVectorCsv(cfg.weights_vec_csv_init, run == 0);
 
-      trainingResult.finalLoss = resultErrors(resultErrors.rows()-1, 0);
-      trainingResult.iterations = cfg.max_iterations;
-      trainingResult.converged = (trainingResult.finalLoss <= cfg.max_error);
+        // ------------------------------------------------------
+        // Run training
+        // ------------------------------------------------------
+        TrainingResult trainingResult;
+        Eigen::MatrixXd resultErrors;
 
-      Metrics::saveErrorsCsv(cfg.errors_csv, resultErrors);
-  }
-  else {
-      throw std::invalid_argument(
-          "Unknown trainer type: " + cfg.trainer +
-          " (must be online, batch, online_epoch_val, or batch_epoch_val)"
-      );
-  }
+        if (cfg.trainer == "online") {
+            trainingResult = net.trainAdamOnline(
+                MLP,
+                X_train, Y_train,
+                cfg.max_iterations,
+                cfg.max_error,
+                cfg.learning_rate,
+                cfg.shuffle,
+                cfg.seed + run
+            );
+        }
+        else if (cfg.trainer == "batch") {
+            trainingResult = net.trainAdamBatch(
+                MLP,
+                X_train, Y_train,
+                cfg.batch_size,
+                cfg.max_iterations,
+                cfg.max_error,
+                cfg.learning_rate,
+                cfg.shuffle,
+                cfg.seed + run
+            );
+        }
+        else if (cfg.trainer == "online_epoch") {
+            resultErrors = net.trainAdamOnlineEpochVal(
+                MLP,
+                X_train, Y_train,
+                X_valid, Y_valid,
+                cfg.max_iterations,
+                cfg.max_error,
+                cfg.learning_rate,
+                cfg.shuffle,
+                cfg.seed + run
+            );
+            trainingResult.finalLoss = resultErrors(resultErrors.rows() - 1, 1);
+            trainingResult.iterations = cfg.max_iterations;
+            trainingResult.converged = (trainingResult.finalLoss <= cfg.max_error);
 
+            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg.errors_csv, run_id), resultErrors);
+        }
+        else if (cfg.trainer == "batch_epoch") {
+            resultErrors = net.trainAdamBatchEpochVal(
+                MLP,
+                X_train, Y_train,
+                X_valid, Y_valid,
+                cfg.batch_size,
+                cfg.max_iterations,
+                cfg.max_error,
+                cfg.learning_rate,
+                cfg.shuffle,
+                cfg.seed + run
+            );
+            trainingResult.finalLoss = resultErrors(resultErrors.rows()-1, 0);
+            trainingResult.iterations = cfg.max_iterations;
+            trainingResult.converged = (trainingResult.finalLoss <= cfg.max_error);
 
+            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg.errors_csv, run_id), resultErrors);
+        }
+        else {
+            throw std::invalid_argument(
+                "Unknown trainer type: " + cfg.trainer +
+                " (must be online, batch, online_epoch, or batch_epoch)"
+            );
+        }
 
-  // ------------------------------------------------------
-  // Evaluate calibration/train set
-  // ------------------------------------------------------
-  configBatchMLP.calculateOutputs(configData.getCalibInpsMat());
+        // ------------------------------------------------------
+        // Evaluate calibration/train set
+        // ------------------------------------------------------
+        MLP.calculateOutputs(Data.getCalibInpsMat());
 
-  Eigen::MatrixXd Y_true_calib = configData.getCalibOutsMat();   
-  Eigen::MatrixXd Y_pred_calib = configBatchMLP.getOutputs();    
+        Eigen::MatrixXd Y_true_calib = Data.getCalibOutsMat();   
+        Eigen::MatrixXd Y_pred_calib = MLP.getOutputs();    
 
-  try {
-    Y_true_calib = configData.inverseTransformOutputs(Y_true_calib);
-    Y_pred_calib = configData.inverseTransformOutputs(Y_pred_calib);
-  } catch (const std::exception &ex) {
-      std::cerr << "[Warning] inverseTransformOutputs failed: " << ex.what() << "\n"
-                << "Saving transformed values instead.\n";
-  }
+        try {
+            Y_true_calib = Data.inverseTransformOutputs(Y_true_calib);
+            Y_pred_calib = Data.inverseTransformOutputs(Y_pred_calib);
+        } catch (const std::exception &ex) {
+            std::cerr << "[Warning] inverseTransformOutputs failed: " << ex.what() << "\n";
+        }
 
-  // Shapes should match
-  if (Y_true_calib.rows() != Y_pred_calib.rows() || Y_true_calib.cols() != Y_pred_calib.cols()) {
-      std::cerr << "[Warning] shape mismatch: real vs pred ("
-                << Y_true_calib.rows() << "x" << Y_true_calib.cols() << ") vs ("
-                << Y_pred_calib.rows() << "x" << Y_pred_calib.cols() << ").\n";
-  }
+        Metrics::appendRunInfoCsv(
+            cfg.run_info,
+            MLP.getLastIterations(),
+            MLP.getLastError(),
+            trainingResult.converged,
+            MLP.getLastRuntimeSec(),
+            cfg.id + "_run" + run_id
+        );
 
-  // ------------------------------------------------------
-  // Save run info and weights
-  // ------------------------------------------------------
-  Metrics::appendRunInfoCsv(cfg.run_info,
-                          configBatchMLP.getLastIterations(),
-                          configBatchMLP.getLastError(),
-                          trainingResult.converged,
-                          configBatchMLP.getLastRuntimeSec(),
-                          cfg.id);
+        Metrics::computeAndAppendFinalMetrics(
+            Y_true_calib, Y_pred_calib,
+            cfg.metrics_cal,   // same file across runs
+            cfg.id + "_run" + run_id
+        );
 
-  // Save metrics into CSV file (need to have an existing folder "data/outputs")
-  Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg.metrics_cal, cfg.id);
+        // Save predicted calib outputs
+        Data.saveMatrixCsv(Metrics::addRunIdToFilename(cfg.pred_calib, run_id), Y_pred_calib, colNames);
 
-  // Save real and predicted calib data
-  std::vector<std::string> colNames;
-  for (int c = 0; c < Y_true_calib.cols(); ++c) {
-      colNames.push_back(std::string("h") + std::to_string(c+1));
-  }
+        // Save final weights
+        MLP.saveWeightsCsv(Metrics::addRunIdToFilename(cfg.weights_csv, run_id));
+        MLP.weightsToVectorMlp();
+        MLP.saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg.weights_vec_csv, run_id));
 
-  bool ok1 = configData.saveMatrixCsv(cfg.real_calib, Y_true_calib, colNames);
-  bool ok2 = configData.saveMatrixCsv(cfg.pred_calib, Y_pred_calib, colNames);
-  if (ok1 && ok2) {
-  } else {
-      std::cerr << "[I/O] Saving calib matrices failed\n";
-  }
+        // Save final weights into one combined file
+        MLP.appendWeightsVectorCsv(cfg.weights_vec_csv, run == 0);
 
-  configBatchMLP.saveWeightsCsv(cfg.weights_csv);
-  configBatchMLP.saveWeightsBinary(cfg.weights_bin);
-  configBatchMLP.weightsToVectorMlp();
-  configBatchMLP.saveWeightsVectorCsv(cfg.weights_vec_csv);
-  configBatchMLP.saveWeightsVectorBinary(cfg.weights_vec_bin);
+        // ------------------------------------------------------
+        // Evaluate validation set
+        // ------------------------------------------------------
+        MLP.calculateOutputs(X_valid);
 
-  // ------------------------------------------------------
-  // Evaluate validation set
-  // ------------------------------------------------------
-  configBatchMLP.calculateOutputs(X_valid);
+        Eigen::MatrixXd Y_pred_valid = MLP.getOutputs();
+        Eigen::MatrixXd Y_true_valid = Y_valid;
 
-  Eigen::MatrixXd Y_pred_valid = configBatchMLP.getOutputs();
-  Eigen::MatrixXd Y_true_valid = Y_valid;
+        try {
+            Y_true_valid = Data.inverseTransformOutputs(Y_true_valid);
+            Y_pred_valid = Data.inverseTransformOutputs(Y_pred_valid);
+        } catch (const std::exception &ex) {
+            std::cerr << "[Warning] inverseTransformOutputs failed (valid): " << ex.what() << "\n";
+        }
 
-  try {
-      Y_true_valid = configData.inverseTransformOutputs(Y_true_valid);
-      Y_pred_valid = configData.inverseTransformOutputs(Y_pred_valid);
-  } catch (const std::exception &ex) {
-      std::cerr << "[Warning] inverseTransformOutputs failed (valid): " << ex.what() << "\n";
-  }
+        Metrics::computeAndAppendFinalMetrics(
+            Y_true_valid, Y_pred_valid,
+            cfg.metrics_val,   // same file across runs
+            cfg.id + "_run" + run_id
+        );
 
-  // Save metrics into CSV file 
-  Metrics::computeAndAppendFinalMetrics(Y_true_valid, Y_pred_valid, cfg.metrics_val, cfg.id);
+        Data.saveMatrixCsv(Metrics::addRunIdToFilename(cfg.pred_valid, run_id), Y_pred_valid, colNames);
 
-  // Save real and predicted calib data
-  bool ok1V = configData.saveMatrixCsv(cfg.real_valid, Y_true_valid, colNames);
-  bool ok2V = configData.saveMatrixCsv(cfg.pred_valid, Y_pred_valid, colNames);
-  if (ok1V && ok2V) {
-  } else {
-      std::cerr << "[I/O] Saving calib matrices failed\n";
-  }
+        std::cout << "Run " << (run+1) << " finished." << "\n";
+    }
 
-  std::cout << "** JKMNet finished **" << endl;
-  
-  return 0;
+    std::cout << "** JKMNet finished **" << endl;
+    return 0;
 }
