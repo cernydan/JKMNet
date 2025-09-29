@@ -62,9 +62,15 @@ public:
         unsigned numNeurons,
         weight_init_type initType = weight_init_type::RANDOM, 
         activ_func_type  activFunc = activ_func_type::RELU,
+        int rngSeed = 0,
         double minVal = 0.0,
         double maxVal = 1.0);   
-    void initWeights(unsigned numNeurons, unsigned numInputs, weight_init_type initType, double minVal, double maxVal);   //!< Initialize weights using specified technique
+    void initWeights(unsigned numNeurons, 
+        unsigned numInputs, 
+        weight_init_type initType, 
+        double minVal, 
+        double maxVal, 
+        int rngSeed);   //!< Initialize weights using specified technique
 
     Eigen::VectorXd getInputs();  //!< Getter for inputs
     void setInputs(const Eigen::VectorXd &newInputs);  //!< Setter for inputs

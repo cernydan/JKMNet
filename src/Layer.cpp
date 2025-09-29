@@ -109,6 +109,7 @@ void Layer::initLayer(unsigned numInputs,
                       unsigned numNeurons,
                       weight_init_type initType,
                       activ_func_type  activFunc,
+                      int rngSeed,
                       double           minVal,
                       double           maxVal) 
 {
@@ -117,7 +118,7 @@ void Layer::initLayer(unsigned numInputs,
 
     // Initialize weights
     //weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
-    initWeights(numNeurons, numInputs + 1, initType, minVal, maxVal);
+    initWeights(numNeurons, numInputs + 1, initType, minVal, maxVal, rngSeed);
 
     // Initialize inputs (add the last element as 1.0 for bias)
     inputs = Eigen::VectorXd(numInputs + 1);
@@ -147,7 +148,12 @@ void Layer::initLayer(unsigned numInputs,
 /**
  * Initialize weights using specified technique
  */
-void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_type initType, double minVal, double maxVal) {
+void Layer::initWeights(unsigned numNeurons, 
+                        unsigned numInputs, 
+                        weight_init_type initType, 
+                        double minVal, 
+                        double maxVal, 
+                        int rngSeed) {
     // Initialize the weight matrix
     //weights = Eigen::MatrixXd(numNeurons, numInputs);
     
@@ -155,21 +161,18 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
         
         // Random initialization between minVal and maxVal
         case weight_init_type::RANDOM: { 
-            weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
+            weights = Eigen::MatrixXd(numNeurons, numInputs);
+            std::mt19937 gen(rngSeed);
+            std::uniform_real_distribution<> dist(minVal, maxVal);
             
-            // Scale to desired range
-            if (minVal != -1.0 || maxVal != 1.0) {
-                weights = minVal + (weights.array() + 1.0) * 0.5 * (maxVal - minVal);
-            }
-
+            weights = weights.unaryExpr([&](double) { return dist(gen); });
             break;
         }
         
         // Latin Hypercube Sampling initialization
         case weight_init_type::LHS: {
-            // one shared random number generator
-            static std::mt19937 gen{std::random_device{}()};
-            // static std::mt19937 gen{ 42 };  // always the same seed for debugging
+            // always the same seed for debugging
+            std::mt19937 gen(rngSeed);
 
             // use size_t for all sizes and indices
             const std::size_t rows = static_cast<std::size_t>(numNeurons);
@@ -208,8 +211,7 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
             float range = maxVal - minVal;
             float range_interval = range / static_cast<float>(numNeurons);
 
-            std::random_device rd;
-            std::mt19937 gen(rd());
+            std::mt19937 gen(rngSeed);
             std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
             weights.resize(numNeurons, numInputs);  // output matrix
@@ -236,16 +238,22 @@ void Layer::initWeights(unsigned numNeurons, unsigned numInputs, weight_init_typ
         }
 
         case weight_init_type::HE: {
-            weights = Eigen::MatrixXd::Random(numNeurons, numInputs) * std::sqrt(6.0 / (numInputs));
+            weights = Eigen::MatrixXd(numNeurons, numInputs);
+            std::mt19937 gen(rngSeed);
+            std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (numInputs)));
+            
+            weights = weights.unaryExpr([&](double) { return dist(gen); });
+            break;
         }
                
         default:
             std::cerr << "[Error]: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
             // Select random initialization
-            weights = Eigen::MatrixXd::Random(numNeurons, numInputs);
-            // Scale to desired range
-            weights = weights.array() * (maxVal - minVal) / 2.0 + (maxVal + minVal) / 2.0;
+            weights = Eigen::MatrixXd(numNeurons, numInputs);
+            std::mt19937 gen(rngSeed);
+            std::uniform_real_distribution<> dist(minVal, maxVal);
             
+            weights = weights.unaryExpr([&](double) { return dist(gen); });
             break;
     }
 }

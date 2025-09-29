@@ -70,10 +70,10 @@ class MLP {
         Eigen::VectorXd& getOutput();   //!< Getter for output
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
-        Eigen::VectorXd initMLP(const Eigen::VectorXd& input);  //!< Forward pass through all layers     
+        Eigen::VectorXd initMLP(const Eigen::VectorXd& input, int rngSeed);  //!< Forward pass through all layers     
         Eigen::VectorXd runMLP(const Eigen::VectorXd& input);  //!< Forward pass reusing existing weights
-        bool compareInitAndRun(const Eigen::VectorXd& input, double tol = 1e-6) const;  //!< Compare if 'initMLP' and 'runMLP' produce the same output
-        bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8) const; //!< Repeatability check for 'runMLP'
+        bool compareInitAndRun(const Eigen::VectorXd& input, double tol = 1e-6, int rngSeed = 0) const;  //!< Compare if 'initMLP' and 'runMLP' produce the same output
+        bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8, int rngSeed = 0) const; //!< Repeatability check for 'runMLP'
         void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate); //!< Forward pass and update weights with backpropagation (one input)
 
         void onlineBP(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calMat);    //!< Online backpropagation - 1 calibration matrix

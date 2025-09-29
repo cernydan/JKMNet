@@ -129,7 +129,7 @@ int main() {
         MLP.setWInitType(realWeightInit);
 
         Eigen::VectorXd x0 = Eigen::VectorXd::Zero(cfg.input_numbers.size());
-        MLP.initMLP(x0);
+        MLP.initMLP(x0,cfg.seed);
 
         // Save initialized weights (per run)
         MLP.saveWeightsCsv(Metrics::addRunIdToFilename(cfg.weights_csv_init, run_id));

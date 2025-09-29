@@ -554,7 +554,7 @@ bool MLP::validateInputSize() {
 /**
  * Forward pass through all layers
  */
-Eigen::VectorXd MLP::initMLP(const Eigen::VectorXd& input) {
+Eigen::VectorXd MLP::initMLP(const Eigen::VectorXd& input, int rngSeed) {
     if (nNeurons.empty() || activFuncs.size() != nNeurons.size() || wInitTypes.size() != nNeurons.size())
         throw std::logic_error("MLP not fully configured (architecture/activ/weight init mismatch)");
 
@@ -567,7 +567,8 @@ Eigen::VectorXd MLP::initMLP(const Eigen::VectorXd& input) {
         /*numInputs=*/ input.size(),
         /*numNeurons=*/ nNeurons[0],
         /*wInitType=*/ wInitTypes[0],
-        /*func=*/ activFuncs[0]
+        /*func=*/ activFuncs[0],
+        /*seed=*/ rngSeed
     );
     layers_[0].setInputs(input);
     layers_[0].calculateLayerOutput(activFuncs[0]);
@@ -580,7 +581,8 @@ Eigen::VectorXd MLP::initMLP(const Eigen::VectorXd& input) {
             /*numInputs=*/ currentOutput.size(),
             /*numNeurons=*/ nNeurons[i],
             /*wInitType=*/ wInitTypes[i],
-            /*func=*/ activFuncs[i]
+            /*func=*/ activFuncs[i],
+        /*seed=*/ rngSeed
         );
         layers_[i].setInputs(currentOutput);
         layers_[i].calculateLayerOutput(activFuncs[i]);
@@ -614,10 +616,10 @@ Eigen::VectorXd MLP::runMLP(const Eigen::VectorXd& input) {
 /**
  * Compare if 'initMLP' and 'runMLP' produce the same output
  */
-bool MLP::compareInitAndRun(const Eigen::VectorXd& input, double tol) const {
+bool MLP::compareInitAndRun(const Eigen::VectorXd& input, double tol, int rngSeed) const {
     // Make a local copy of *this* so we can init on the copy
     MLP tmp = *this;
-    Eigen::VectorXd outInit = tmp.initMLP(input);
+    Eigen::VectorXd outInit = tmp.initMLP(input, rngSeed);
     Eigen::VectorXd outRun = tmp.runMLP(input);
 
     return outInit.isApprox(outRun, tol);
@@ -626,10 +628,10 @@ bool MLP::compareInitAndRun(const Eigen::VectorXd& input, double tol) const {
 /**
  * Test that 'runMLP' produces the same results over times
  */
-bool MLP::testRepeatable(const Eigen::VectorXd& input, int repeats, double tol) const {
+bool MLP::testRepeatable(const Eigen::VectorXd& input, int repeats, double tol, int rngSeed) const {
     // Initialize once to get the baseline output
     MLP tmp = *this;
-    Eigen::VectorXd baseline = tmp.initMLP(input);
+    Eigen::VectorXd baseline = tmp.initMLP(input, rngSeed);
 
     // Repeat run several times and compare
     for (int i = 0; i < repeats; ++i) {
