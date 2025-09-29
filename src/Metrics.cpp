@@ -295,3 +295,32 @@ bool Metrics::appendRunInfoCsv(const std::string &path,
     }
     return ok;
 }
+
+/**
+ * Save MSEs from training and validation into CSV file 
+ */
+bool Metrics::saveErrorsCsv(const std::string &path,
+                            const Eigen::MatrixXd &errors,
+                            bool verbose) {
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) {
+        std::cerr << "[Metrics::saveErrorsCsv] Cannot open file: " << path << "\n";
+        return false;
+    }
+
+    ofs << "epoch,mse_train,mse_valid\n";
+    ofs << std::setprecision(12);
+
+    for (int i = 0; i < errors.rows(); ++i) {
+        ofs << (i + 1) << ","        // epoch index (1-based)
+            << errors(i, 0) << ","
+            << errors(i, 1) << "\n";
+    }
+
+    ofs.close();
+    if (verbose) {
+        //std::cout << "[Metrics] Saved error curve to '" << path 
+        //          << "' with " << errors.rows() << " epochs\n";
+    }
+    return true;
+}

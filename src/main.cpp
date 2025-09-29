@@ -122,34 +122,75 @@ int main() {
   // Run training (on calibration/train set only)
   // ------------------------------------------------------
   TrainingResult trainingResult;
+  Eigen::MatrixXd resultErrors;
 
   if (cfg.trainer == "online") {
-    trainingResult = net.trainAdamOnline(
-        configBatchMLP,
-        X_train,
-        Y_train,
-        cfg.max_iterations,
-        cfg.max_error,
-        cfg.learning_rate,
-        cfg.shuffle,
-        cfg.seed
-    );
-  } else if (cfg.trainer == "batch") {
-    trainingResult = net.trainAdamBatch(
-        configBatchMLP,
-        X_train,
-        Y_train,
-        cfg.batch_size,
-        cfg.max_iterations,
-        cfg.max_error,
-        cfg.learning_rate,
-        cfg.shuffle,
-        cfg.seed
-    );
-  } else {
-    throw std::invalid_argument("Unknown trainer type: " + cfg.trainer +
-                                " (must be 'online' or 'batch')");
+      trainingResult = net.trainAdamOnline(
+          configBatchMLP,
+          X_train, Y_train,
+          cfg.max_iterations,
+          cfg.max_error,
+          cfg.learning_rate,
+          cfg.shuffle,
+          cfg.seed
+      );
   }
+  else if (cfg.trainer == "batch") {
+      trainingResult = net.trainAdamBatch(
+          configBatchMLP,
+          X_train, Y_train,
+          cfg.batch_size,
+          cfg.max_iterations,
+          cfg.max_error,
+          cfg.learning_rate,
+          cfg.shuffle,
+          cfg.seed
+      );
+  }
+  else if (cfg.trainer == "online_epoch") {
+      resultErrors = net.trainAdamOnlineEpochVal(
+          configBatchMLP,
+          X_train, Y_train,
+          X_valid, Y_valid,
+          cfg.max_iterations,
+          cfg.max_error,
+          cfg.learning_rate,
+          cfg.shuffle,
+          cfg.seed
+      );
+
+      trainingResult.finalLoss = resultErrors(resultErrors.rows() - 1, 1);
+      trainingResult.iterations = cfg.max_iterations;
+      trainingResult.converged = (trainingResult.finalLoss <= cfg.max_error);
+
+      Metrics::saveErrorsCsv(cfg.errors_csv, resultErrors);
+  }
+  else if (cfg.trainer == "batch_epoch") {
+      resultErrors = net.trainAdamBatchEpochVal(
+          configBatchMLP,
+          X_train, Y_train,
+          X_valid, Y_valid,
+          cfg.batch_size,
+          cfg.max_iterations,
+          cfg.max_error,
+          cfg.learning_rate,
+          cfg.shuffle,
+          cfg.seed
+      );
+
+      trainingResult.finalLoss = resultErrors(resultErrors.rows()-1, 0);
+      trainingResult.iterations = cfg.max_iterations;
+      trainingResult.converged = (trainingResult.finalLoss <= cfg.max_error);
+
+      Metrics::saveErrorsCsv(cfg.errors_csv, resultErrors);
+  }
+  else {
+      throw std::invalid_argument(
+          "Unknown trainer type: " + cfg.trainer +
+          " (must be online, batch, online_epoch_val, or batch_epoch_val)"
+      );
+  }
+
 
 
   // ------------------------------------------------------
@@ -179,11 +220,11 @@ int main() {
   // Save run info and weights
   // ------------------------------------------------------
   Metrics::appendRunInfoCsv(cfg.run_info,
-                            configBatchMLP.getLastIterations(),
-                            configBatchMLP.getLastError(),
-                            trainingResult.converged,
-                            configBatchMLP.getLastRuntimeSec(),
-                            cfg.id);
+                          configBatchMLP.getLastIterations(),
+                          configBatchMLP.getLastError(),
+                          trainingResult.converged,
+                          configBatchMLP.getLastRuntimeSec(),
+                          cfg.id);
 
   // Save metrics into CSV file (need to have an existing folder "data/outputs")
   Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg.metrics_cal, cfg.id);
@@ -235,11 +276,5 @@ int main() {
 
   std::cout << "** JKMNet finished **" << endl;
   
-  //net.KFold(configData,{3,2,2},{0,1,2,3},activ_func_type::RELU,weight_init_type::RANDOM,4,true,true,42,200,0.0005,0.001,3);
-  //net.KFold(configData,{3,2,2},{0,1,2,3},activ_func_type::RELU,weight_init_type::RANDOM,4,true,false,42,200,0.0005,0.001,3);
-
-  // std::cout<<"\n Online MSE: \n"<<net.trainAdamOnlineEpochVal(configBatchMLP,X_train,Y_train,X_valid,Y_valid,100,0.0,0.001,false,0);
-  // std::cout<<"\n Batch MSE: \n"<<net.trainAdamBatchEpochVal(configBatchMLP,X_train,Y_train,X_valid,Y_valid,20,100,0.0,0.001,false,0);
-
   return 0;
 }

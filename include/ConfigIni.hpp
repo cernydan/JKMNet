@@ -104,6 +104,7 @@ struct RunConfig {
     std::string metrics_cal = "";
     std::string metrics_val = "";
     std::string run_info = "";
+    std::string errors_csv;
 };
 
 /**
@@ -326,6 +327,8 @@ inline RunConfig parseConfigIni(const std::string &path) {
     if (!smetval.empty()) cfg.metrics_val = trimStr(smetval);
     std::string sruninfo = get("run_info");
     if (!sruninfo.empty()) cfg.run_info = trimStr(sruninfo);
+    std::string serrors = get("errors_csv");
+    if (!serrors.empty()) cfg.errors_csv = trimStr(serrors);
     
     // Basic validation
     if (cfg.mlp_architecture.empty()) throw std::runtime_error("config: architecture is required (e.g. architecture = 8,6,2)");

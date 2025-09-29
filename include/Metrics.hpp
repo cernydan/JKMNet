@@ -42,6 +42,10 @@ class Metrics {
             const std::string &id,
             bool verbose = true);  //!< Save run information into CSV file
 
+        static bool saveErrorsCsv(const std::string &path,
+                          const Eigen::MatrixXd &errors,
+                          bool verbose = true);  //!< Save MSEs from training and validation into CSV file   
+
     protected:
 
     private:
