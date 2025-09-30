@@ -41,18 +41,16 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
         
         // Random initialization between minVal and maxVal
         case weight_init_type::RANDOM: { 
-            filters1D = Eigen::MatrixXd::Random(sizes.numFilt, sizes.filtSize);
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<> dist(minVal, maxVal);
-            
+            filters1D = Eigen::MatrixXd::Random(sizes.numFilt, sizes.filtSize);         
             filters1D = filters1D.unaryExpr([&](double) { return dist(gen); });
             break;
         }
         
         // Latin Hypercube Sampling initialization
         case weight_init_type::LHS: {
-            // always the same seed for debugging
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
 
             // use size_t for all sizes and indices
             const std::size_t rows = static_cast<std::size_t>(sizes.filtSize);
@@ -91,7 +89,7 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
             float range = maxVal - minVal;
             float range_interval = range / static_cast<float>(sizes.numFilt);
 
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
             filters1D.resize(sizes.numFilt, sizes.filtSize);  // output matrix
@@ -118,10 +116,9 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
         }
 
         case weight_init_type::HE: {
-            filters1D = Eigen::MatrixXd(sizes.numFilt,sizes.filtSize);
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (sizes.numVars * sizes.filtSize)));
-            
+            filters1D = Eigen::MatrixXd(sizes.numFilt,sizes.filtSize);
             filters1D = filters1D.unaryExpr([&](double) { return dist(gen); });
             break;
         }
@@ -129,10 +126,9 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
         default:
             std::cerr << "[Error]: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
             // Select random initialization
-            filters1D = Eigen::MatrixXd(sizes.numFilt,sizes.filtSize);
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<> dist(minVal, maxVal);
-            
+            filters1D = Eigen::MatrixXd(sizes.numFilt,sizes.filtSize);
             filters1D = filters1D.unaryExpr([&](double) { return dist(gen); });
             break;
     }

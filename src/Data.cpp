@@ -1271,7 +1271,7 @@ Data::makeKFoldMats(
     }
 
     if (shuffle) {
-        std::mt19937 gen(seed);
+        std::mt19937 gen(seed == 0 ? std::random_device{}() : seed);
         std::shuffle(trainIdx.begin(), trainIdx.end(), gen);
     }
 

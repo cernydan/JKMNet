@@ -161,18 +161,16 @@ void Layer::initWeights(unsigned numNeurons,
         
         // Random initialization between minVal and maxVal
         case weight_init_type::RANDOM: { 
-            weights = Eigen::MatrixXd(numNeurons, numInputs);
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<> dist(minVal, maxVal);
-            
+            weights = Eigen::MatrixXd(numNeurons, numInputs);          
             weights = weights.unaryExpr([&](double) { return dist(gen); });
             break;
         }
         
         // Latin Hypercube Sampling initialization
         case weight_init_type::LHS: {
-            // always the same seed for debugging
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
 
             // use size_t for all sizes and indices
             const std::size_t rows = static_cast<std::size_t>(numNeurons);
@@ -211,7 +209,7 @@ void Layer::initWeights(unsigned numNeurons,
             float range = maxVal - minVal;
             float range_interval = range / static_cast<float>(numNeurons);
 
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
             weights.resize(numNeurons, numInputs);  // output matrix
@@ -238,10 +236,9 @@ void Layer::initWeights(unsigned numNeurons,
         }
 
         case weight_init_type::HE: {
-            weights = Eigen::MatrixXd(numNeurons, numInputs);
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (numInputs)));
-            
+            weights = Eigen::MatrixXd(numNeurons, numInputs);            
             weights = weights.unaryExpr([&](double) { return dist(gen); });
             break;
         }
@@ -249,10 +246,9 @@ void Layer::initWeights(unsigned numNeurons,
         default:
             std::cerr << "[Error]: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
             // Select random initialization
-            weights = Eigen::MatrixXd(numNeurons, numInputs);
-            std::mt19937 gen(rngSeed);
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<> dist(minVal, maxVal);
-            
+            weights = Eigen::MatrixXd(numNeurons, numInputs);          
             weights = weights.unaryExpr([&](double) { return dist(gen); });
             break;
     }

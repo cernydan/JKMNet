@@ -251,8 +251,8 @@ TrainingResult JKMNet::trainAdamOnline(
     }
 
     // Initialize MLP with zero input of correct size
-    Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn, rngSeed);
+    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
+    // mlp.initMLP(zeroIn, rngSeed);
 
     // Run online Adam
     try {
@@ -314,8 +314,8 @@ TrainingResult JKMNet::trainAdamBatch(
     }
 
     // Initialize MLP with zero input of correct size
-    Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn, rngSeed);
+    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
+    // mlp.initMLP(zeroIn, rngSeed);
 
     // Run batch Adam
     try {
@@ -387,8 +387,8 @@ Eigen::MatrixXd JKMNet::trainAdamOnlineEpochVal(
     }
 
     // Initialize MLP with zero input of correct size
-    Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn, rngSeed);
+    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
+    // mlp.initMLP(zeroIn, rngSeed);
 
     Eigen::MatrixXd predsCal;
     Eigen::MatrixXd predsVal;
@@ -465,8 +465,8 @@ Eigen::MatrixXd JKMNet::trainAdamBatchEpochVal(
     }
 
     // Initialize MLP with zero input of correct size
-    Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn, rngSeed);
+    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
+    // mlp.initMLP(zeroIn, rngSeed);
 
     Eigen::MatrixXd predsCal;
     Eigen::MatrixXd predsVal;
