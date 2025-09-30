@@ -100,7 +100,7 @@ TrainingResult JKMNet::trainAdamOnlineSplit(
     // Initialize MLP
     int inputSize = static_cast<int>(X.cols()); // each pattern is a row of inputs (flattened)
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
-    mlp.initMLP(zeroIn);
+    mlp.initMLP(zeroIn, rngSeed);
 
     // Run training with onlineAdam method
     try {
@@ -179,7 +179,7 @@ TrainingResult JKMNet::trainAdamBatchSplit(
     // Initialize MLP
     int inputSize = static_cast<int>(X.cols()); // each pattern is a row of inputs (flattened)
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
-    mlp.initMLP(zeroIn);
+    mlp.initMLP(zeroIn, rngSeed);
 
     // Run training with batchAdam method
     try {
@@ -252,7 +252,7 @@ TrainingResult JKMNet::trainAdamOnline(
 
     // Initialize MLP with zero input of correct size
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn);
+    mlp.initMLP(zeroIn, rngSeed);
 
     // Run online Adam
     try {
@@ -315,7 +315,7 @@ TrainingResult JKMNet::trainAdamBatch(
 
     // Initialize MLP with zero input of correct size
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn);
+    mlp.initMLP(zeroIn, rngSeed);
 
     // Run batch Adam
     try {
@@ -388,7 +388,7 @@ Eigen::MatrixXd JKMNet::trainAdamOnlineEpochVal(
 
     // Initialize MLP with zero input of correct size
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn);
+    mlp.initMLP(zeroIn, rngSeed);
 
     Eigen::MatrixXd predsCal;
     Eigen::MatrixXd predsVal;
@@ -466,7 +466,7 @@ Eigen::MatrixXd JKMNet::trainAdamBatchEpochVal(
 
     // Initialize MLP with zero input of correct size
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    mlp.initMLP(zeroIn);
+    mlp.initMLP(zeroIn, rngSeed);
 
     Eigen::MatrixXd predsCal;
     Eigen::MatrixXd predsVal;
@@ -544,7 +544,7 @@ void JKMNet::KFold(
             // Initialize MLP
             int inputSize = static_cast<int>(trainInps.cols()); // each pattern is a row of inputs (flattened)
             Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
-            testMlp.initMLP(zeroIn);
+            testMlp.initMLP(zeroIn, seed);
 
             // Run training with onlineAdam method
             try {
