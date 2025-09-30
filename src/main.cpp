@@ -128,7 +128,7 @@ int main() {
         std::vector<weight_init_type> realWeightInit(cfg.mlp_architecture.size(), strToWeightInit(cfg.weight_init));
         MLP.setWInitType(realWeightInit);
 
-        Eigen::VectorXd x0 = Eigen::VectorXd::Zero(cfg.input_numbers.size());
+        Eigen::VectorXd x0 = Eigen::VectorXd::Zero(std::accumulate(cfg.input_numbers.begin(), cfg.input_numbers.end(), 0));
         MLP.initMLP(x0,cfg.seed);
 
         // Save initialized weights (per run)
