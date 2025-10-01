@@ -41,7 +41,13 @@
 using namespace std;
 
 
-int main() {
+int main(int argc, char** argv) {
+    unsigned nthreads = 0;
+    unsigned i = atoi(argv[1]);
+    nthreads = i;
+
+    std::cout << "The numbers of thread is " << nthreads << std::endl;
+
     JKMNet net;
     Data Data;
     MLP MLP;
@@ -213,6 +219,10 @@ int main() {
                 " (must be online, batch, online_epoch, or batch_epoch)"
             );
         }
+
+
+    std::cout << "Data prepared and transformed" << std::endl;
+  
 
         // ------------------------------------------------------
         // Evaluate calibration/train set
