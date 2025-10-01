@@ -75,6 +75,7 @@ int main() {
     }
     Data.setTransform(tt, cfg.transform_alpha, cfg.exclude_last_col_from_transform);
     Data.applyTransform();
+    std::cout << "Data prepared and transformed" << std::endl;
   
     // ------------------------------------------------------
     // Build calibration matrix and split into train/valid
@@ -117,6 +118,9 @@ int main() {
     // Ensemble loop
     // ------------------------------------------------------
     for (int run = 0; run < cfg.ensemble_runs; ++run) {
+
+     std::cout << "Running ensemble Nu: " <<  run << std::endl;
+  
         std::string run_id = std::to_string(run + 1);
 
         // ------------------------------------------------------
