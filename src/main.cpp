@@ -40,9 +40,10 @@
 
 using namespace std;
 
-
+//JKMNet 8 //8 is number of threads
 int main(int argc, char** argv) {
-    unsigned nthreads = 0;
+    unsigned nthreads = 1;
+
     unsigned i = atoi(argv[1]);
     nthreads = i;
 
