@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
         idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
     }
     std::cout << "-> Settings loaded." << std::endl;
-    std::cout << "-> Settings loaded." << std::endl;
+    std::cout << "-> Output directory cleaned." << std::endl;
 
     // ------------------------------------------------------
     // Load and filter data
