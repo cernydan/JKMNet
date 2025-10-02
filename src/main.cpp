@@ -42,10 +42,22 @@ using namespace std;
 
 //JKMNet 8 //8 is number of threads
 int main(int argc, char** argv) {
-    unsigned nthreads = 1;
+    unsigned nthreads = 1;  // default value
 
-    unsigned i = atoi(argv[1]);
-    nthreads = i;
+    if (argc > 1) {
+        try {
+            int valueThread = std::stoi(argv[1]);
+            if (valueThread > 0) {
+                nthreads = static_cast<unsigned>(valueThread);
+            } else {
+                std::cerr << "[Warning] Invalid thread number: " << argv[1] 
+                          << ". Using default (1).\n";
+            }
+        } catch (const std::exception &e) {
+            std::cerr << "[Warning] Cannot parse thread number: " << argv[1] 
+                      << " (" << e.what() << "). Using default (1).\n";
+        }
+    }
 
     std::cout << "The numbers of thread is " << nthreads << std::endl;
 
