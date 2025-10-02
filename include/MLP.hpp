@@ -68,6 +68,7 @@ class MLP {
         bool saveWeightsVectorBinary(const std::string &path) const;  //!< Save vector of weights in compact binary
         bool appendWeightsVectorCsv(const std::string &path, bool isFirstRun) const;  //!< Save vector of weights inside one file for ensemble run
 
+        bool loadWeightsCsv(const std::string &path);   //!< Save weights from CSV text (per-layer blocks)
         bool loadWeightsBinary(const std::string &path);  //!< Load weights in compact binary
 
         Eigen::VectorXd& getOutput();   //!< Getter for output

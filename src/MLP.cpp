@@ -513,6 +513,153 @@ bool MLP::appendWeightsVectorCsv(const std::string &path, bool isFirstRun) const
     return true;
 }
 
+bool MLP::loadWeightsCsv(const std::string &path) {
+    if (path.empty()) {
+        std::cerr << "[MLP::loadWeightsCsv] Path is empty\n";
+        return false;
+    }
+
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) {
+        int e = errno;
+        std::cerr << "[MLP::loadWeightsCsv] Cannot open file: " << path
+                  << " errno=" << e << " (" << std::strerror(e) << ")\n";
+        return false;
+    }
+
+    std::string line;
+    struct LayerInfo {
+        size_t idx;
+        size_t rows;
+        size_t cols;
+        Eigen::MatrixXd W;
+    };
+    std::vector<LayerInfo> infos;
+
+    while (std::getline(ifs, line)) {
+        if (line.empty()) continue;
+        if (line[0] == '#') {
+            if (line.rfind("#layer", 0) == 0) {
+                std::stringstream ss(line);
+                std::string token;
+                std::getline(ss, token, ','); // "#layer"
+                size_t idx=0, rows=0, cols=0;
+                if (!(std::getline(ss, token, ',') && (idx = std::stoul(token), true))) continue;
+                if (!(std::getline(ss, token, ',') && (rows = std::stoul(token), true))) continue;
+                if (!(std::getline(ss, token, ',') && (cols = std::stoul(token), true))) continue;
+
+                LayerInfo li;
+                li.idx = idx;
+                li.rows = rows;
+                li.cols = cols;
+                li.W.resize(rows, cols);
+
+                for (size_t r = 0; r < rows; ++r) {
+                    if (!std::getline(ifs, line)) {
+                        std::cerr << "[MLP::loadWeightsCsv] Unexpected EOF at layer " << idx << "\n";
+                        return false;
+                    }
+                    std::stringstream ls(line);
+                    std::string val;
+                    for (size_t c = 0; c < cols; ++c) {
+                        if (!std::getline(ls, val, ',')) {
+                            std::cerr << "[MLP::loadWeightsCsv] Not enough columns at layer "
+                                      << idx << " row " << r << "\n";
+                            return false;
+                        }
+                        li.W(r, c) = std::stod(val);
+                    }
+                }
+                infos.push_back(std::move(li));
+            }
+            continue;
+        }
+    }
+
+    if (infos.empty()) {
+        std::cerr << "[MLP::loadWeightsCsv] No layer info found in file\n";
+        return false;
+    }
+
+    layers_.clear();
+    layers_.resize(infos.size());
+    for (const auto &li : infos) {
+        if (li.idx >= layers_.size()) {
+            std::cerr << "[MLP::loadWeightsCsv] Layer index " << li.idx
+                      << " out of range (have " << layers_.size() << ")\n";
+            return false;
+        }
+
+        layers_[li.idx].initLayer(
+            /*numInputs=*/ li.cols,
+            /*numNeurons=*/ li.rows,
+            /*wInitType=*/ weight_init_type::RANDOM,
+            /*func=*/ activ_func_type::RELU,       // prenastavit pred pouzitim nebo taky nacist ze souboru
+            /*seed=*/ 0
+        );
+        layers_[li.idx].setWeights(li.W);
+    }
+
+    return true;
+}
+
+bool MLP::loadWeightsBinary(const std::string &path) {
+    try {
+        std::ifstream ifs(path, std::ios::binary);
+        if (!ifs.is_open()) {
+            std::cerr << "[MLP::loadWeightsBinary] Cannot open: " << path << "\n";
+            return false;
+        }
+
+        size_t L = 0;
+        ifs.read(reinterpret_cast<char*>(&L), sizeof(L));
+        if (!ifs) {
+            std::cerr << "[MLP::loadWeightsBinary] Failed to read layer count\n";
+            return false;
+        }
+
+        layers_.clear();
+        layers_.resize(L);
+
+        for (size_t i = 0; i < L; ++i) {
+            uint64_t rows = 0, cols = 0;
+            ifs.read(reinterpret_cast<char*>(&rows), sizeof(rows));
+            ifs.read(reinterpret_cast<char*>(&cols), sizeof(cols));
+            if (!ifs) {
+                std::cerr << "[MLP::loadWeightsBinary] Failed to read dims for layer " << i << "\n";
+                return false;
+            }
+
+            Eigen::MatrixXd W(rows, cols);
+            for (uint64_t r = 0; r < rows; ++r) {
+                for (uint64_t c = 0; c < cols; ++c) {
+                    double v = 0.0;
+                    ifs.read(reinterpret_cast<char*>(&v), sizeof(v));
+                    if (!ifs) {
+                        std::cerr << "[MLP::loadWeightsBinary] Failed to read weight at "
+                                  << "layer " << i << " pos (" << r << "," << c << ")\n";
+                        return false;
+                    }
+                    W(r, c) = v;
+                }
+            }
+
+            layers_[i].initLayer(
+                /*numInputs=*/ static_cast<size_t>(cols),
+                /*numNeurons=*/ static_cast<size_t>(rows),
+                /*wInitType=*/ weight_init_type::RANDOM,
+                /*func=*/ activ_func_type::RELU,       // prenastavit pred pouzitim nebo taky nacist ze souboru
+                /*seed=*/ 0
+            );
+            layers_[i].setWeights(W);
+        }
+
+        return true;
+    } catch (const std::exception &ex) {
+        std::cerr << "[MLP::loadWeightsBinary] Exception: " << ex.what() << "\n";
+        return false;
+    }
+}
 
 /**
  * Getter for output
@@ -758,7 +905,7 @@ void MLP::onlineBP(int maxIter, double maxErr, double learningRate, const Eigen:
         throw std::invalid_argument("matrices have different number of rows");
 
     int numOfPatterns = calInpMat.rows();                // number of patterns in calibration matrix
-    int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
+    int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
     int outSize = nNeurons.back();                   // number of output neurons
     int lastLayerIndex = getNumLayers()-1;
 
@@ -910,7 +1057,7 @@ void MLP::onlineAdam(int maxIter, double maxErr, double learningRate, const Eige
         throw std::invalid_argument("matrices have different number of rows");
 
     int numOfPatterns = calInpMat.rows();                  // number of patterns in calibration matrix
-    int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
+    int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
     int outSize = nNeurons.back();                   // number of output neurons
     int lastLayerIndex = getNumLayers()-1;
 
@@ -1069,7 +1216,7 @@ void MLP::batchAdam(int maxIter, double maxErr, int batchSize, double learningRa
         throw std::invalid_argument("matrices have different number of rows");
 
     int numOfPatterns = calInpMat.rows();                  // number of patterns in calibration matrix
-    int inpSize = layers_[0].getInputs().size()-1;   // number of inputs to first layer (without bias)
+    int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
     int outSize = nNeurons.back();                   // number of output neurons
     int lastLayerIndex = getNumLayers()-1;
 
@@ -1161,7 +1308,7 @@ void MLP::calculateOutputs(const Eigen::MatrixXd& inputMat){
     if (layers_.empty())
         throw std::logic_error("calculateOutputs called before initMLP");
 
-    int inpSize = layers_[0].getInputs().size()-1;
+    int inpSize = layers_[0].getWeights().cols()-1;
     if (inpSize != inputMat.cols())
         throw std::invalid_argument("Input matrix row length doesnt match the initialized input size");
 
