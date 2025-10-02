@@ -91,7 +91,14 @@
         "any": "cpp",
         "forward_list": "cpp",
         "codecvt": "cpp",
-        "filesystem": "cpp"
+        "filesystem": "cpp",
+        "qtalignedmalloc": "cpp",
+        "*.main": "cpp",
+        "matrixfunctions": "cpp",
+        "cassert": "cpp",
+        "cerrno": "cpp",
+        "cfloat": "cpp",
+        "climits": "cpp"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

@@ -32,7 +32,7 @@ class Metrics {
             const Eigen::MatrixXd &Y_pred,
             const std::string &outCsv, 
             const std::string &id = "",
-            bool verbose = true);  //!< Compute final metrics for matrix pair and append a single row into CSV oputput file
+            bool verbose = false);  //!< Compute final metrics for matrix pair and append a single row into CSV oputput file
 
         static bool appendRunInfoCsv(const std::string &path,
             int iterations,

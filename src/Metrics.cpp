@@ -172,30 +172,83 @@ bool Metrics::appendMetricsCsv(const std::string &path,
  * Compute final metrics for matrix pair and append a single row into CSV oputput file
  */
 bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
-    const Eigen::MatrixXd &Y_pred,
-    const std::string &outCsv,
-    const std::string &id,
-    bool verbose) {
-
+                                           const Eigen::MatrixXd &Y_pred,
+                                           const std::string &outCsv,
+                                           const std::string &id,
+                                           bool verbose) 
+{
     if ((Y_true.rows() != Y_pred.rows()) || (Y_true.cols() != Y_pred.cols())) {
         std::cerr << "[Metrics::computeAndAppendFinalMetrics] Shape mismatch\n";
         return false;
     }
 
-    double mse_write = Metrics::mse(Y_true, Y_pred);
-    double rmse_write = Metrics::rmse(Y_true, Y_pred);
-    double pi_write = Metrics::pi(Y_true.col(0), Y_pred.col(0));
-    double ns_write = Metrics::ns(Y_true.col(0), Y_pred.col(0));
-    double kge_write = Metrics::kge(Y_true.col(0), Y_pred.col(0));
+    int nCols = Y_true.cols();
 
-    std::vector<std::pair<std::string,double>> metrics;
-    metrics.emplace_back("MSE", mse_write);
-    metrics.emplace_back("RMSE", rmse_write);
-    metrics.emplace_back("PI", pi_write);
-    metrics.emplace_back("NS", ns_write);
-    metrics.emplace_back("KGE", kge_write);
+    // Generate timestamp string
+    using namespace std::chrono;
+    auto t = system_clock::now();
+    std::time_t tt = system_clock::to_time_t(t);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &tt);
+#else
+    localtime_r(&tt, &tm);
+#endif
+    char timebuf[64];
+    std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", &tm);
+    std::string timeStr(timebuf);
 
-    return appendMetricsCsv(outCsv, metrics, id, verbose);
+    bool file_exists = false;
+    {
+        std::ifstream ifs(outCsv);
+        file_exists = ifs.good();
+    }
+
+    std::ofstream ofs(outCsv, std::ios::app);
+    if (!ofs.is_open()) {
+        std::cerr << "[Metrics::computeAndAppendFinalMetrics] Cannot open file: " << outCsv << "\n";
+        return false;
+    }
+    ofs << std::setprecision(12);
+
+    // Write header if first time
+    if (!file_exists) {
+        ofs << "time,id";
+        for (int c = 0; c < nCols; ++c) {
+            ofs << ",MSE_h" << (c+1)
+                << ",RMSE_h" << (c+1)
+                << ",PI_h" << (c+1)
+                << ",NS_h" << (c+1)
+                << ",KGE_h" << (c+1);
+        }
+        ofs << "\n";
+    }
+
+    // Write one row
+    ofs << timeStr << "," << id;
+    for (int c = 0; c < nCols; ++c) {
+        Eigen::VectorXd yt = Y_true.col(c);
+        Eigen::VectorXd yp = Y_pred.col(c);
+
+        double mse = Metrics::mse(yt, yp);
+        double rmse = Metrics::rmse(yt, yp);
+        double pi = Metrics::pi(yt, yp);
+        double ns = Metrics::ns(yt, yp);
+        double kge = Metrics::kge(yt, yp);
+
+        ofs << "," << mse
+            << "," << rmse
+            << "," << pi
+            << "," << ns
+            << "," << kge;
+    }
+    ofs << "\n";
+
+    ofs.close();
+    if (verbose) {
+        // std::cout << "[Metrics] Appended per-output metrics to '" << outCsv << "'\n";
+    }
+    return true;
 }
 
 /**
