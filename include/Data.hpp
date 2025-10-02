@@ -34,7 +34,10 @@ class Data {
             const std::string& timestampCol = "hour_start",  // name of timestamp column (e.g "hour_start", "date")
             const std::string& idCol = "ID");  // ID of the selected sensor
             //!< Returns number of loaded rows
-    
+        
+        static void cleanDirectory(const std::string &path);  //!< Clean all files in a directory 
+        static void cleanAllOutputs(const std::string &outDir);  //!< Clean all files in a otputs directory 
+
         bool saveMatrixCsv(const std::string &path,
             const Eigen::MatrixXd &M,
             const std::vector<std::string> &colNames = {},

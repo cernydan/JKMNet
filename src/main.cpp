@@ -58,16 +58,22 @@ int main(int argc, char** argv) {
     // ------------------------------------------------------  
     RunConfig cfg = parseConfigIni("settings/config_model.ini");
 
+    // Clean output directories before training
+    Data::cleanAllOutputs(cfg.out_dir);
+
     std::unordered_set<std::string> idFilter;
     if (!cfg.id.empty()) {
         std::vector<std::string> ids = parseStringList(cfg.id); 
         idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
     }
+    std::cout << "-> Settings loaded." << std::endl;
+    std::cout << "-> Settings loaded." << std::endl;
 
     // ------------------------------------------------------
     // Load and filter data
     // ------------------------------------------------------    
     Data.loadFilteredCSV(cfg.data_file, idFilter, cfg.columns, cfg.timestamp, cfg.id_col);
+    std::cout << "-> Data loaded." << std::endl;
 
     // ------------------------------------------------------
     // Transform data
@@ -82,7 +88,8 @@ int main(int argc, char** argv) {
     }
     Data.setTransform(tt, cfg.transform_alpha, cfg.exclude_last_col_from_transform);
     Data.applyTransform();
-    std::cout << "Data prepared and transformed" << std::endl;
+
+    std::cout << "-> Data transformed." << std::endl;
   
     // ------------------------------------------------------
     // Build calibration matrix and split into train/valid
@@ -99,8 +106,10 @@ int main(int argc, char** argv) {
     auto [X_train, Y_train] = Data.splitInputsOutputs(trainMat, inpSize, outSize);
     auto [X_valid, Y_valid] = Data.splitInputsOutputs(validMat, inpSize, outSize);
 
+    std::cout << "-> Data splitted to training and testing sets." << std::endl;
+
     // ------------------------------------------------------
-    // Save ground-truth (real) calib and valid once
+    // Save real calib and valid data
     // ------------------------------------------------------
     std::vector<std::string> colNames;
     for (int c = 0; c < Y_train.cols(); ++c) {
@@ -121,12 +130,14 @@ int main(int argc, char** argv) {
     Data.saveMatrixCsv(cfg.real_calib, Y_true_calib_save, colNames);
     Data.saveMatrixCsv(cfg.real_valid, Y_true_valid_save, colNames);
 
+    std::cout << "-> Real training and testing data saved." << std::endl;
+
     // ------------------------------------------------------
     // Ensemble loop
     // ------------------------------------------------------
     for (int run = 0; run < cfg.ensemble_runs; ++run) {
-
-     std::cout << "Running ensemble Nu: " <<  run << std::endl;
+        std::cout << "\n-------------------------------------------" << std::endl;
+        std::cout << "Run " <<  (run+1) << " starting..." << std::endl;
   
         std::string run_id = std::to_string(run + 1);
 
@@ -153,6 +164,8 @@ int main(int argc, char** argv) {
         // ------------------------------------------------------
         // Run training
         // ------------------------------------------------------
+        std::cout << "-> Training starting..." << std::endl;
+
         TrainingResult trainingResult;
         Eigen::MatrixXd resultErrors;
 
@@ -221,13 +234,14 @@ int main(int argc, char** argv) {
             );
         }
 
-
-    std::cout << "Data prepared and transformed" << std::endl;
+        std::cout << "-> Training finished." << std::endl;
   
 
         // ------------------------------------------------------
         // Evaluate calibration/train set
         // ------------------------------------------------------
+        std::cout << "-> Calculating metrics..." << std::endl;
+
         MLP.calculateOutputs(Data.getCalibInpsMat());
 
         Eigen::MatrixXd Y_true_calib = Data.getCalibOutsMat();   
@@ -289,9 +303,24 @@ int main(int argc, char** argv) {
 
         Data.saveMatrixCsv(Metrics::addRunIdToFilename(cfg.pred_valid, run_id), Y_pred_valid, colNames);
 
+        std::cout << "-> Metrics saved." << std::endl;
+
         std::cout << "Run " << (run+1) << " finished." << "\n";
+        std::cout << "-------------------------------------------" << std::endl;
+
     }
 
-    std::cout << "** JKMNet finished **" << endl;
+    std::cout << "\n[I/O] Saved REAL CALIB data to: '" << cfg.real_calib << "', and PRED CALIB data to '" << cfg.pred_calib << "' \n";
+    std::cout << "[I/O] Saved REAL VALID data to: '" << cfg.real_valid << "', and PRED VALID data to '" << cfg.pred_valid<< "' \n";
+    std::cout << "[I/O] Saved INIT weights vector to: '" << cfg.weights_vec_csv_init << "'\n";
+    std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg.weights_vec_csv << "'\n";
+    std::cout << "[I/O] Saved RUN INFO to: '" << cfg.run_info << "' \n";
+    std::cout << "[I/O] Saved CALIB METRICS to: '" << cfg.metrics_cal << "' \n";
+    std::cout << "[I/O] Saved VALID METRICS to: '" << cfg.metrics_val << "' \n";
+
+    std::cout << "\n-------------------------------------------" << std::endl;
+    std::cout << "-- JKMNet FINISHED --" << std::endl;
+    std::cout << "-------------------------------------------" << std::endl;
+    
     return 0;
 }

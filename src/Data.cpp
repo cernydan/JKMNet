@@ -283,6 +283,48 @@ size_t Data::loadFilteredCSV(const std::string& path,
 }
 
 /**
+ * Clean all files in a directory 
+ */
+void Data::cleanDirectory(const std::string &path) {
+    namespace fs = std::filesystem;
+    try {
+        if (fs::exists(path)) {
+            fs::remove_all(path);   // remove directory and everything inside
+        }
+        fs::create_directories(path); // recreate the empty directory
+    } catch (const std::exception &e) {
+        std::cerr << "[Data::cleanDirectory] Failed to clean: " << path 
+                  << " (" << e.what() << ")\n";
+    }
+}
+
+/**
+ * Clean all files in output directory 
+ */
+void Data::cleanAllOutputs(const std::string &outDir) {
+    namespace fs = std::filesystem;
+    try {
+        if (!fs::exists(outDir)) {
+            fs::create_directories(outDir);
+            return;
+        }
+
+        // Iterate subdirectories in outDir
+        for (const auto &entry : fs::directory_iterator(outDir)) {
+            if (fs::is_directory(entry)) {
+                fs::remove_all(entry.path());
+                fs::create_directories(entry.path()); // recreate empty
+            } else {
+                fs::remove(entry.path()); // remove stray files in root
+            }
+        }
+    } catch (const std::exception &e) {
+        std::cerr << "[Data::cleanAllOutputs] Failed to clean: " << outDir
+                  << " (" << e.what() << ")\n";
+    }
+}
+
+/**
  * Getter for the timestamps
  */
 std::vector<std::string> Data::timestamps() const {
