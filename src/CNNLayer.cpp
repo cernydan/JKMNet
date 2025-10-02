@@ -175,29 +175,41 @@ Eigen::MatrixXd CNNLayer::convolution1D(const Eigen::MatrixXd& inputs, const Eig
 }
 
 Eigen::MatrixXd CNNLayer::maxPool(const Eigen::MatrixXd& inputs, int size){
-    // const int inCols = inputs.cols(), filCols = filters.cols(), filRows = filters.rows(), 
-    //                    outRows = inputs.rows() - filRows + 1;
-    // Eigen::MatrixXd outM = Eigen::MatrixXd(outRows, inCols * filCols);
-    // for(int i = 0; i < filRows ; i++){
-    //     for(int j = 0; j < outRows; j++){
-    //         outM.block(j , i * inCols, 1 , inCols) = filters.row(i) * inputs.block(j , 0 , filCols,inCols);
-    //     }
-    // }
-    // return outM;
-    return inputs;
+    const int inCols = inputs.cols(), inRows = inputs.rows(); 
+    if (inRows < size)
+        throw std::invalid_argument("pool size can't be larger than input rows");
+
+    if (inRows % size != 0)
+        throw std::invalid_argument("number of input rows must be divisible by pool size");
+    
+    const int outRows = inRows / size;
+    Eigen::MatrixXd outM(outRows, inCols);
+
+    for (int i = 0; i < inCols; i++) {
+        for (int j = 0; j < outRows; j++) {
+            outM(j, i) = inputs.block(j * size, i, size, 1).maxCoeff();
+        }
+    }
+    return outM;
 }
 
 Eigen::MatrixXd CNNLayer::averagePool(const Eigen::MatrixXd& inputs, int size){
-    // const int inCols = inputs.cols(), filCols = filters.cols(), filRows = filters.rows(), 
-    //                    outRows = inputs.rows() - filRows + 1;
-    // Eigen::MatrixXd outM = Eigen::MatrixXd(outRows, inCols * filCols);
-    // for(int i = 0; i < filRows ; i++){
-    //     for(int j = 0; j < outRows; j++){
-    //         outM.block(j , i * inCols, 1 , inCols) = filters.row(i) * inputs.block(j , 0 , filCols,inCols);
-    //     }
-    // }
-    // return outM;
-    return inputs;
+    const int inCols = inputs.cols(), inRows = inputs.rows();
+    if (inRows < size)
+        throw std::invalid_argument("pool size can't be larger than input rows");
+
+    if (inRows % size != 0)
+        throw std::invalid_argument("number of input rows must be divisible by pool size");
+
+    const int outRows = inRows / size;
+    Eigen::MatrixXd outM(outRows, inCols);
+
+    for (int i = 0; i < inCols; i++) {
+        for (int j = 0; j < outRows; j++) {
+            outM(j, i) = inputs.block(j * size, i, size, 1).mean();
+        }
+    }
+    return outM;
 }
 
 Eigen::MatrixXd CNNLayer::biasAndActivation(){
