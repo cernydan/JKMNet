@@ -93,7 +93,7 @@ std::vector<activ_func_type> MLP::getActivations() {
 /**
  *  Setter: Sets the activation functions
  */
-void MLP::setActivations(std::vector<activ_func_type>& funcs) {
+void MLP::setActivations(const std::vector<activ_func_type>& funcs) {
     if (funcs.size() != nNeurons.size()) {
         throw std::invalid_argument("[MLP] Activation vector length must match number of layers");
     }
@@ -127,7 +127,7 @@ std::vector<weight_init_type> MLP::getWInitType() {
 /**
  *  Setter: Sets the weight initialization type
  */
-void MLP::setWInitType(std::vector<weight_init_type>& wInits) {
+void MLP::setWInitType(const std::vector<weight_init_type>& wInits) {
     if (wInits.size() != nNeurons.size()) {
         throw std::invalid_argument(
           "[MLP] wInitTypes length must equal number of layers (" +

@@ -28,12 +28,15 @@ class MLP {
 
         // Activations for each layer
         std::vector<activ_func_type> getActivations();  //!< Getter for the activation function
-        void setActivations(std::vector<activ_func_type>& funcs);  //!< Setter for the activation function
+        //void setActivations(std::vector<activ_func_type>& funcs);  //!< Setter for the activation function
         void printActivations();  //!< Print the activation function
+
+        void setActivations(const std::vector<activ_func_type>& funcs);
+        void setWInitType(const std::vector<weight_init_type>& wInits);
 
          // Weight‐init types per layer 
         std::vector<weight_init_type> getWInitType();  //!< Getter for the weight initialization type
-        void setWInitType(std::vector<weight_init_type>& wInits);  //!< Setter for the weight initialization type
+        //void setWInitType(std::vector<weight_init_type>& wInits);  //!< Setter for the weight initialization type
         void printWInitType();  //!< Print the weight initialization type
 
         //!< Number of layers

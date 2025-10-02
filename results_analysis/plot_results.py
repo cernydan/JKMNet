@@ -6,9 +6,9 @@ import os
 # === CONFIG ===
 base_dir = os.path.join("..", "data", "outputs")
 calib_real_file = os.path.join(base_dir, "calib_real.csv")
-calib_pred_file = os.path.join(base_dir, "calib_pred.csv")
+calib_pred_file = os.path.join(base_dir, "calib_pred_1.csv")
 valid_real_file = os.path.join(base_dir, "valid_real.csv")
-valid_pred_file = os.path.join(base_dir, "valid_pred.csv")
+valid_pred_file = os.path.join(base_dir, "valid_pred_1.csv")
 out_dir = "plot_results_compare"  # this will be created inside results_analysis/
 
 
