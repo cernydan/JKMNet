@@ -1,29 +1,18 @@
-// ********* 16. 9. 2025 *********
-// **DONE**: Save initial matrix and vector of weights
-// **DONE**: Save final vector of weights
-// **DONE**: Save other needed params into file, e.g., #iteration, duration, etc.
-// **DONE**: Split data into calib and valid dataset
-// **DONE**: Create method for loading weights
-// **DONE**: Prepare validation run, i.e.,: read data and settings from files, no training
-// **DONE**: Split data to calib and valid with or without schuffle, i.e., randomly or historically 
-// **DONE**: Clean the code from unused methods
-// **DONE**: Use 'main()' only for read data and setting, run, save
-// TODO: Use more detailed data, i.e., hourly or 15-min, and prepare all datasets (in R?) 
-// TODO: Prepare many MLPs configuration, i.e., 'config_model.ini' (in R?)
-// TODO: Prepare tree structure of files and folders for running each MLP configuration with corresponding setting and data
-// TODO: Solve the running of scenarios in a loop (with Rcpp or in .sh file?)
+// ********* 6. 10. 2025 *********
+// TODO: Add parallelization of the model using openML
+// TODO: [PSO] Save PSO best hyperparams into config_model.ini for MLP ensemble run
+// TODO: [PSO] Add all activation functions into PSO optim
+// TODO: [PSO] Add more hyperparams into PSO optim, i.e., architecture, weight_init, trainer, ...
+// TODO: [PSO] Change randomization in PSO using seed from config (?)
+// TODO: [PSO] Incease params of PSO, i.e., swarm size, max iteration (in HyperparamOptimizer.cpp)
 
-// ********* MetaCentrum *********
-// TODO: Upload all case folders
-// **DONE**: Compile the C++ code on MetaCentrum using an interactive job 
-// TODO: Put the bin file inside each case folder
-// TODO: Test the code, i.e., run MLP with the same seed many times (approx. 100) (must have the same results!!) - solve seeds!
-// TODO: Create .sh file for running qsub job on MetaCentrum
-// *******************************
 
 #include "ConfigIni.hpp"
 #include "Data.hpp"
 #include "EnsembleRunner.hpp"
+#include "PSO.hpp"
+#include "HyperparamObjective.hpp"
+#include "HyperparamOptimizer.hpp"
 #include <iostream>
 
 int main(int argc, char** argv) {
@@ -38,10 +27,16 @@ int main(int argc, char** argv) {
     }
 
     RunConfig cfg = parseConfigIni("settings/config_model.ini");
+    cfg = optimizeHyperparams(cfg);
+
     Data::cleanAllOutputs(cfg.out_dir);
 
+    std::cout << "\n===========================================\n";
+    std::cout << " Running Ensemble with Optimized Parameters\n";
+    std::cout << "===========================================\n";
     EnsembleRunner runner(cfg, nthreads);
     runner.run();
 
     return 0;
 }
+

@@ -88,6 +88,9 @@ struct RunConfig {
     std::string timestamp = "date";
     std::vector<std::string> columns;
 
+    // optimization
+    bool pso_optimize = true;
+
     // output paths (parsed from [paths] section)
     std::string out_dir = "";
     std::string calib_mat = "";
@@ -297,6 +300,9 @@ inline RunConfig parseConfigIni(const std::string &path) {
     std::string sremna = get("remove_na_before_calib");
     if (!sremna.empty()) cfg.remove_na_before_calib = parseBool(sremna);
 
+    std::string soptim = get("pso_optimize");
+    if (!soptim.empty()) cfg.pso_optimize = parseBool(soptim);
+    
     // paths (optional)
     std::string sout = get("out_dir");
     if (!sout.empty()) cfg.out_dir = trimStr(sout);

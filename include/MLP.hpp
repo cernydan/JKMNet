@@ -23,7 +23,7 @@ class MLP {
 
         //!< Architecture (neurons per layer)
         std::vector<unsigned> getArchitecture();  //!< Getter for the architecture
-        void setArchitecture(std::vector<unsigned>& architecture);  //!< Setter for the architecture
+        void setArchitecture(const std::vector<unsigned>& architecture);  //!< Setter for the architecture
         void printArchitecture();  //!< Print the architecture
 
         // Activations for each layer

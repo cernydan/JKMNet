@@ -1,48 +1,70 @@
-# Author: Petr Maca \
-Last revision: May 6 2025 \
-TODO: replace with pattern rules; mkdir for folders 
+# Author: Petr Maca
+# Last revision: Oct 6 2025
+# TODO: replace with pattern rules; mkdir for folders
 
 TARGET = bin/JKMNet
-CC = g++ 	# compiler
-#CPPFLAGS = -std=c++20 -Wall -pedantic -Iinclude -Iinclude/eigen-3.4 -fopenmp # bad code warnings and include header folder
-CPPFLAGS = -std=c++20 -Wall -pedantic -Iinclude -fopenmp # bad code warnings and include header folder
-OBJ = obj/main.o obj/JKMNet.o  obj/MLP.o obj/Layer.o obj/Data.o obj/Metrics.o obj/CNNLayer.o obj/EnsembleRunner.o # TODO
-LDFLAGS := -Llib 
+CC = g++
+CPPFLAGS = -std=c++20 -Wall -pedantic -Iinclude -fopenmp
+LDFLAGS := -Llib
 
-.PHONY: all clean
+# Object files
+OBJ = obj/main.o \
+      obj/JKMNet.o \
+      obj/MLP.o \
+      obj/Layer.o \
+      obj/Data.o \
+      obj/Metrics.o \
+      obj/CNNLayer.o \
+      obj/EnsembleRunner.o \
+      obj/PSO.o \
+      obj/HyperparamObjective.o \
+      obj/HyperparamOptimizer.o
 
-all: $(TARGET)
+.PHONY: all clean run dirs
+
+all: dirs $(TARGET)
+
+dirs:
+	@mkdir -p obj bin
 
 obj/main.o: src/main.cpp
-	$(CC) -c $< -o obj/main.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/JKMNet.o: src/JKMNet.cpp
-	$(CC) -c $< -o obj/JKMNet.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/MLP.o: src/MLP.cpp
-	$(CC) -c $< -o obj/MLP.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/Layer.o: src/Layer.cpp
-	$(CC) -c $< -o obj/Layer.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/Data.o: src/Data.cpp
-	$(CC) -c $< -o obj/Data.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/Metrics.o: src/Metrics.cpp
-	$(CC) -c $< -o obj/Metrics.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/CNNLayer.o: src/CNNLayer.cpp
-	$(CC) -c $< -o obj/CNNLayer.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/EnsembleRunner.o: src/EnsembleRunner.cpp
-	$(CC) -c $< -o obj/EnsembleRunner.o $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS)
+
+obj/PSO.o: src/PSO.cpp
+	$(CC) -c $< -o $@ $(CPPFLAGS)
+
+obj/HyperparamObjective.o: src/HyperparamObjective.cpp
+	$(CC) -c $< -o $@ $(CPPFLAGS)
+
+obj/HyperparamOptimizer.o: src/HyperparamOptimizer.cpp
+	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 $(TARGET): $(OBJ)
-	$(CC) -o $(TARGET) $(OBJ) $(CPPFLAGS) $(LDFLAGS)
+	$(CC) -o $@ $(OBJ) $(CPPFLAGS) $(LDFLAGS)
 
 run: $(TARGET)
 	./$(TARGET)
 
 clean:
-	rm -r -f -v obj/*
-	rm -f -v $(TARGET)
+	rm -rfv obj/* bin/JKMNet

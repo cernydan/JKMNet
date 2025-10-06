@@ -174,7 +174,7 @@ void EnsembleRunner::run() {
     std::cout << "[I/O] Saved CALIB METRICS to: '" << cfg_.metrics_cal << "'\n";
     std::cout << "[I/O] Saved VALID METRICS to: '" << cfg_.metrics_val << "'\n";
 
-    std::cout << "\n-------------------------------------------" << std::endl;
-    std::cout << "-- JKMNet FINISHED --" << std::endl;
-    std::cout << "-------------------------------------------" << std::endl;
+    std::cout << "\n===========================================\n";
+    std::cout << " Running Ensemble finished \n";
+    std::cout << "===========================================\n";
 }

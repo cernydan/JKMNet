@@ -57,7 +57,7 @@ std::vector<unsigned> MLP::getArchitecture() {
 /**
  *  Setter: Sets the architecture from a vector
  */
-void MLP::setArchitecture(std::vector<unsigned>& architecture) {
+void MLP::setArchitecture(const std::vector<unsigned>& architecture) {
     nNeurons = architecture;
     numLayers = nNeurons.size();
     // if user hasn’t supplied activations yet, give them a default (e.g. ReLU)

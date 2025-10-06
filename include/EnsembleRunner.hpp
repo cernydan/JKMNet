@@ -1,3 +1,6 @@
+#ifndef ENSEMBLE_RUN_HPP
+#define ENSEMBLE_RUN_HPP
+
 #include "JKMNet.hpp"
 #include "MLP.hpp"
 #include "Data.hpp"
@@ -16,3 +19,5 @@ private:
     Data data_;
     MLP mlp_;
 };
+
+#endif // ENSEMBLE_RUN_HPP
