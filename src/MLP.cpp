@@ -513,16 +513,23 @@ bool MLP::appendWeightsVectorCsv(const std::string &path, bool isFirstRun) const
     return true;
 }
 
-bool MLP::loadWeightsCsv(const std::string &path) {
-    if (path.empty()) {
-        std::cerr << "[MLP::loadWeightsCsv] Path is empty\n";
+/**
+ * Load weights from CSV text (per-layer blocks)
+ */
+bool MLP::loadWeightsCsv(const std::string &wPath, const std::string &confPath) {
+    if (wPath.empty()) {
+        std::cerr << "[MLP::loadWeightsCsv] wPath is empty\n";
+        return false;
+    }
+    if (confPath.empty()) {
+        std::cerr << "[MLP::loadWeightsCsv] confPath is empty\n";
         return false;
     }
 
-    std::ifstream ifs(path);
+    std::ifstream ifs(wPath);
     if (!ifs.is_open()) {
         int e = errno;
-        std::cerr << "[MLP::loadWeightsCsv] Cannot open file: " << path
+        std::cerr << "[MLP::loadWeightsCsv] Cannot open file: " << wPath
                   << " errno=" << e << " (" << std::strerror(e) << ")\n";
         return false;
     }
@@ -583,6 +590,20 @@ bool MLP::loadWeightsCsv(const std::string &path) {
 
     layers_.clear();
     layers_.resize(infos.size());
+
+    auto kv = parseIniToMap(confPath);
+    std::string sact, loadAct;
+    {
+        std::string key = "activation";
+        for (char &c : key)
+            c = static_cast<char>(std::tolower((unsigned char)c));
+
+        auto it = kv.find(key);
+        if (it != kv.end())
+            sact = it->second;
+    }
+    if (!sact.empty()) loadAct = trimStr(sact);
+
     for (const auto &li : infos) {
         if (li.idx >= layers_.size()) {
             std::cerr << "[MLP::loadWeightsCsv] Layer index " << li.idx
@@ -594,20 +615,29 @@ bool MLP::loadWeightsCsv(const std::string &path) {
             /*numInputs=*/ li.cols,
             /*numNeurons=*/ li.rows,
             /*wInitType=*/ weight_init_type::RANDOM,
-            /*func=*/ activ_func_type::RELU,       // prenastavit pred pouzitim nebo taky nacist ze souboru
+            /*func=*/ strToActivation(loadAct),
             /*seed=*/ 0
         );
         layers_[li.idx].setWeights(li.W);
+        nNeurons.push_back(li.rows);
     }
+    numLayers = nNeurons.size();
 
     return true;
 }
 
-bool MLP::loadWeightsBinary(const std::string &path) {
+/**
+ * Load weights in compact binary
+ */
+bool MLP::loadWeightsBinary(const std::string &wPath, const std::string &confPath) {
     try {
-        std::ifstream ifs(path, std::ios::binary);
+        std::ifstream ifs(wPath, std::ios::binary);
         if (!ifs.is_open()) {
-            std::cerr << "[MLP::loadWeightsBinary] Cannot open: " << path << "\n";
+            std::cerr << "[MLP::loadWeightsBinary] Cannot open: " << wPath << "\n";
+            return false;
+        }
+        if (confPath.empty()) {
+            std::cerr << "[MLP::loadWeightsCsv] confPath is empty\n";
             return false;
         }
 
@@ -620,6 +650,19 @@ bool MLP::loadWeightsBinary(const std::string &path) {
 
         layers_.clear();
         layers_.resize(L);
+
+        auto kv = parseIniToMap(confPath);
+        std::string sact, loadAct;
+        {
+            std::string key = "activation";
+            for (char &c : key)
+                c = static_cast<char>(std::tolower((unsigned char)c));
+
+            auto it = kv.find(key);
+            if (it != kv.end())
+                sact = it->second;
+        }
+        if (!sact.empty()) loadAct = trimStr(sact);
 
         for (size_t i = 0; i < L; ++i) {
             uint64_t rows = 0, cols = 0;
@@ -648,7 +691,7 @@ bool MLP::loadWeightsBinary(const std::string &path) {
                 /*numInputs=*/ static_cast<size_t>(cols),
                 /*numNeurons=*/ static_cast<size_t>(rows),
                 /*wInitType=*/ weight_init_type::RANDOM,
-                /*func=*/ activ_func_type::RELU,       // prenastavit pred pouzitim nebo taky nacist ze souboru
+                /*func=*/ strToActivation(loadAct), 
                 /*seed=*/ 0
             );
             layers_[i].setWeights(W);
@@ -659,6 +702,107 @@ bool MLP::loadWeightsBinary(const std::string &path) {
         std::cerr << "[MLP::loadWeightsBinary] Exception: " << ex.what() << "\n";
         return false;
     }
+}
+
+/**
+ * Load weights vector from CSV text
+ */
+bool MLP::loadWeightsVectorCsv(const std::string &wPath, const std::string &confPath) {
+    if (wPath.empty()) {
+        std::cerr << "[MLP::loadWeightsVectorCsv] wPath is empty\n";
+        return false;
+    }
+    if (confPath.empty()) {
+        std::cerr << "[MLP::loadWeightsVectorCsv] confPath is empty\n";
+        return false;
+    }
+
+    std::ifstream ifs(wPath);
+    if (!ifs.is_open()) {
+        int e = errno;
+        std::cerr << "[MLP::loadWeightsVectorCsv] Cannot open file: " << wPath
+                  << " errno=" << e << " (" << std::strerror(e) << ")\n";
+        return false;
+    }
+
+    auto kv = parseIniToMap(confPath);
+    auto get = [&](const std::string &k)->std::string {
+        std::string kl = k;
+        for (char &c : kl) c = static_cast<char>(std::tolower((unsigned char)c));
+        auto it = kv.find(kl);
+        if (it == kv.end()) return std::string{};
+        return it->second;
+    };
+
+    std::vector<unsigned> loadArch;
+    std::string loadAct;
+    std::string sarch = get("architecture");
+    if (!sarch.empty()) loadArch = parseUnsignedList(sarch);
+
+    std::string sact = get("activation");
+    if (!sact.empty()) loadAct = trimStr(sact);
+
+    nNeurons = loadArch;
+    numLayers = nNeurons.size();
+    layers_.clear();
+    layers_.resize(numLayers);
+
+    std::vector<double> values;
+    std::string line;
+    while (std::getline(ifs, line)) {
+        if (line.empty()) continue;
+        values.push_back(std::stod(line));
+    }
+    ifs.close();
+
+    weightsVectorMlp.resize(values.size());
+    for (size_t i = 0; i < values.size(); ++i) {
+        weightsVectorMlp(i) = values[i];
+    }
+
+    int pos = weightsVectorMlp.size();
+
+    for (int i = numLayers - 1; i > 0; --i) {
+        int rows = nNeurons[i];
+        int cols = nNeurons[i - 1] + 1;
+        int size = rows * cols;
+
+        pos -= size;
+        if (pos < 0) throw std::runtime_error("Vector too short for given architecture");
+
+        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+            W(weightsVectorMlp.data() + pos, rows, cols);
+
+        layers_[i].initLayer(
+            /*numInputs=*/ static_cast<size_t>(cols),
+            /*numNeurons=*/ static_cast<size_t>(rows),
+            /*wInitType=*/ weight_init_type::RANDOM,
+            /*func=*/ strToActivation(loadAct), 
+            /*seed=*/ 0
+        );
+        layers_[i].setWeights(W);
+    }
+
+    int remaining = pos;
+    if (remaining % nNeurons[0] != 0)
+        throw std::runtime_error("Cannot deduce input size from vector");
+
+    int cols0 = remaining / nNeurons[0];
+    int rows0 = nNeurons[0];
+
+    Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+        W0(weightsVectorMlp.data(), rows0, cols0);
+
+    layers_[0].initLayer(
+        /*numInputs=*/ static_cast<size_t>(cols0),
+        /*numNeurons=*/ static_cast<size_t>(rows0),
+        /*wInitType=*/ weight_init_type::RANDOM,
+        /*func=*/ strToActivation(loadAct),
+        /*seed=*/ 0
+    );
+    layers_[0].setWeights(W0);
+
+    return true;
 }
 
 /**
