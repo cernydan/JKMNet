@@ -5,6 +5,7 @@
 #include "eigen-3.4/Eigen/Dense"
 
 #include "Layer.hpp" 
+#include "ConfigIni.hpp"
 
 using namespace std;
 
@@ -68,9 +69,9 @@ class MLP {
         bool saveWeightsVectorBinary(const std::string &path) const;  //!< Save vector of weights in compact binary
         bool appendWeightsVectorCsv(const std::string &path, bool isFirstRun) const;  //!< Save vector of weights inside one file for ensemble run
 
-        bool loadWeightsCsv(const std::string &path);   //!< Save weights from CSV text (per-layer blocks)
-        bool loadWeightsBinary(const std::string &path);  //!< Load weights in compact binary
-
+        bool loadWeightsCsv(const std::string &wPath, const std::string &confPath);   //!< Load weights from CSV text (per-layer blocks)
+        bool loadWeightsBinary(const std::string &wPath, const std::string &confPath);  //!< Load weights in compact binary
+        bool loadWeightsVectorCsv(const std::string &wPath, const std::string &confPath);   //!< Load weights vector from CSV text
         Eigen::VectorXd& getOutput();   //!< Getter for output
         bool validateInputSize();  //!< Validate the size of the inputs compared to nNeurons[0]
 
