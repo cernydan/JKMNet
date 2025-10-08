@@ -565,3 +565,16 @@ void JKMNet::KFold(
         std::cout<<"Fold "<<fold<<" validation mean MSE = "<<foldsMse[fold]<<"\n";
     }
 }
+
+void JKMNet::set_Nmlps(unsigned nmlp){
+    Nmlps = nmlp;
+}
+
+
+unsigned JKMNet::get_Nmlps(){
+    return Nmlps;
+}
+
+void JKMNet::init_mlps(MLP &mlp){
+    //for()
+}

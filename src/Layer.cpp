@@ -10,12 +10,16 @@ using namespace std;
  */
 Layer::Layer(): weights(),
         inputs(),
-        //activations(),
+        activations(),
         //bias(),
         output(),
         activ_func(),
-        weightGrad() {
-
+        weightGrad(),
+        weightsVector(),
+        deltas(),
+        VtForAdam(),
+        MtForAdam() {
+        
 }
 
 /**
@@ -30,19 +34,27 @@ Layer::~Layer(){
  */
 Layer::Layer(const Layer& other): weights(),
         inputs(),
-        //activations(),
-        //bias(), 
+        activations(),
+        //bias(),
         output(),
         activ_func(),
-        weightGrad() {
+        weightGrad(),
+        weightsVector(),
+        deltas(),
+        VtForAdam(),
+        MtForAdam()  {
 
     weights = other.weights;
     inputs = other.inputs;
-    //activations= other.activations;
+    activations= other.activations;
     //bias = other.bias; 
     output = other.output;
     activ_func = other.activ_func;
     weightGrad = other.weightGrad;
+    weightsVector = other.weightsVector;
+    deltas = other.deltas;
+    VtForAdam = other.VtForAdam;
+    MtForAdam = other.MtForAdam;
 
 }
 
@@ -52,18 +64,56 @@ Layer::Layer(const Layer& other): weights(),
 Layer& Layer::operator=(const Layer& other){
     if (this == &other) return *this;
   else {
-    weights = other.weights;
+   weights = other.weights;
     inputs = other.inputs;
-    //activations= other.activations;
+    activations= other.activations;
     //bias = other.bias; 
     output = other.output;
     activ_func = other.activ_func;
     weightGrad = other.weightGrad;
+    weightsVector = other.weightsVector;
+    deltas = other.deltas;
+    VtForAdam = other.VtForAdam;
+    MtForAdam = other.MtForAdam;
     
   }
   return *this;
 
 }
+ //!< The move copy constructor
+Layer::Layer(Layer&& other) noexcept
+    : weights(std::move(other.weights)),
+      weightsVector(std::move(other.weightsVector)),
+      inputs(std::move(other.inputs)),
+      output(std::move(other.output)),
+      activations(std::move(other.activations)),
+      deltas(std::move(other.deltas)),
+      activ_func(other.activ_func),
+      weightGrad(std::move(other.weightGrad)),
+      MtForAdam(std::move(other.MtForAdam)),
+      VtForAdam(std::move(other.VtForAdam)) {
+
+}
+   
+//!< The move assignment operator
+Layer& Layer::operator=(Layer&& other) noexcept {
+     if (this == &other) return *this;
+  else {
+        weights        = std::move(other.weights);
+        weightsVector  = std::move(other.weightsVector);
+        inputs         = std::move(other.inputs);
+        output         = std::move(other.output);
+        activations    = std::move(other.activations);
+        deltas         = std::move(other.deltas);
+        activ_func     = other.activ_func; // enum, just copy
+        weightGrad     = std::move(other.weightGrad);
+        MtForAdam      = std::move(other.MtForAdam);
+        VtForAdam      = std::move(other.VtForAdam);
+    
+  }
+  return *this;
+} 
+
 
 /**
  * Mapping activ_func_type from enum to string

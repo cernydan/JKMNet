@@ -12,15 +12,17 @@ using namespace std;
 class MLP {
 
     public:
-        //MLP();  //!< The constructor
-        //~MLP();  //!< The destructor     
-        //MLP(const MLP& other);  //!< The copy constructor
-        //MLP& operator=(const MLP& other);  //!< The assignment operator
+        MLP();  //!< The constructor
+        ~MLP();  //!< The destructor     
+        MLP(const MLP& other);  //!< The copy constructor
+        MLP& operator=(const MLP& other);  //!< The assignment operator
+        MLP(MLP&& other) noexcept;        //!< The move copy constructor
+        MLP& operator=(MLP&& other) noexcept;  //!< The move assignment operator
 
-        MLP() = default;  //!< The constructor
-        ~MLP() = default;  //!< The destructor 
-        MLP(const MLP&) = default;  //!< The copy constructor
-        MLP& operator=(const MLP&) = default;   //!< The assignment operator
+        //MLP() = default;  //!< The constructor
+       //~MLP() = default;  //!< The destructor 
+        //MLP(const MLP&) = default;  //!< The copy constructor
+       //MLP& operator=(const MLP&) = default;   //!< The assignment operator
 
         //!< Architecture (neurons per layer)
         std::vector<unsigned> getArchitecture();  //!< Getter for the architecture
@@ -113,6 +115,8 @@ class MLP {
         int lastIterations_ = 0;
         double lastError_ = 0.0;
         double lastRuntimeSec_ = 0.0;
+        Eigen::MatrixXd calibCrit;
+        Eigen::MatrixXd validCrit;
 };
 
 #endif // MLP_H

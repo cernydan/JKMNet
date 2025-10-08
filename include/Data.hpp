@@ -27,6 +27,10 @@ struct Scaler {
 class Data {
     public:
         Data() = default;  //!< The constructor
+        ~Data() = default;  //!< The destructor 
+        Data(const Data&) = default;  //!< The copy constructor
+        Data& operator=(const Data&) = default;   //!< The assignment operator
+
 
         size_t loadFilteredCSV(const std::string& path,
             const std::unordered_set<std::string>& idFilter,

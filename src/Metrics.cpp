@@ -402,3 +402,16 @@ std::string Metrics::addRunIdToFilename(const std::string &path, const std::stri
     std::string ext  = p.extension().string();
     return (p.parent_path() / (stem + "_" + run_id + ext)).string();
 }
+
+Eigen::VectorXd Metrics::calcMetricsAll() {
+    // Eigen::VectorXd allCriteria = Eigen::VectorXd(5);
+
+
+    // allCriteria(0) = mse(yt, yp);
+    // allCriteria(1) = rmse(yt, yp);
+    // allCriteria(2) = pi(yt, yp);
+    // allCriteria(3) = ns(yt, yp);
+    // allCriteria(4) = kge(yt, yp);
+    
+    // return allCriteria;
+}

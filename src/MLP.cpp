@@ -11,41 +11,126 @@
 using namespace std;
 using namespace std::chrono;
 
-// /**
-//  * The constructor
-//  */
-// MLP::MLP(): nNeurons(){
-//     numLayers = 0;
-// }
+/**
+ * The constructor
+ */
+MLP::MLP()
+    : nNeurons(),
+      numLayers(0),
+      Inps(),
+      activFuncs(),
+      wInitTypes(),
+      layers_(),
+      output(),
+      outputMat(),
+      weightsVectorMlp(),
+      lastIterations_(0),
+      lastError_(0.0),
+      lastRuntimeSec_(0.0),
+      calibCrit(),
+      validCrit()
+       {
+   
+}
 
-// /**
-//  * The destructor
-//  */
-// MLP::~MLP(){
 
-// }
+/**
+ * The destructor
+ */
+MLP::~MLP(){
 
-// /**
-//  * The copy constructor
-//  */
-// MLP::MLP(const MLP& other): nNeurons(){
-//     nNeurons = other.nNeurons;
-//     numLayers = other.numLayers;
+}
 
-// }
+/**
+ * The copy constructor
+ */
+MLP::MLP(const MLP& other)
+    : nNeurons(other.nNeurons),
+      numLayers(other.numLayers),
+      Inps(other.Inps),
+      activFuncs(other.activFuncs),
+      wInitTypes(other.wInitTypes),
+      layers_(other.layers_),
+      output(other.output),
+      outputMat(other.outputMat),
+      weightsVectorMlp(other.weightsVectorMlp),
+      lastIterations_(other.lastIterations_),
+      lastError_(other.lastError_),
+      lastRuntimeSec_(other.lastRuntimeSec_),
+      calibCrit(other.calibCrit),
+      validCrit(other.validCrit) {
+    // deep copies handled automatically by Eigen and std::vector
+}
 
-// /**
-//  * The assignment operator
-//  */
-// MLP& MLP::operator=(const MLP& other){
-//     if (this == &other) return *this;
-//   else {
-//     nNeurons = other.nNeurons;
-//     numLayers = other.numLayers;
-//   }
-//   return *this;
 
-// }
+/**
+ * The assignment operator
+ */
+MLP& MLP::operator=(const MLP& other){
+    if (this == &other) return *this;
+  else {
+    nNeurons        = other.nNeurons;
+        numLayers       = other.numLayers;
+        Inps            = other.Inps;
+        activFuncs      = other.activFuncs;
+        wInitTypes      = other.wInitTypes;
+        layers_         = other.layers_;
+        output          = other.output;
+        outputMat       = other.outputMat;
+        weightsVectorMlp = other.weightsVectorMlp;
+        lastIterations_  = other.lastIterations_;
+        lastError_       = other.lastError_;
+        lastRuntimeSec_  = other.lastRuntimeSec_;
+        calibCrit = other.calibCrit;
+        validCrit = other.validCrit;
+  }
+  return *this;
+
+}
+
+/**
+ *  Move constructor
+ */
+MLP::MLP(MLP&& other) noexcept
+    : nNeurons(std::move(other.nNeurons)),
+      numLayers(other.numLayers),
+      Inps(std::move(other.Inps)),
+      activFuncs(std::move(other.activFuncs)),
+      wInitTypes(std::move(other.wInitTypes)),
+      layers_(std::move(other.layers_)),
+      output(std::move(other.output)),
+      outputMat(std::move(other.outputMat)),
+      weightsVectorMlp(std::move(other.weightsVectorMlp)),
+      lastIterations_(other.lastIterations_),
+      lastError_(other.lastError_),
+      lastRuntimeSec_(other.lastRuntimeSec_),
+      calibCrit(std::move(other.calibCrit)),
+      validCrit(std::move(other.validCrit)) {
+    
+}
+
+/**
+ *  Move assignment operator
+ */
+MLP& MLP::operator=(MLP&& other) noexcept {
+    if (this != &other) {
+        nNeurons       = std::move(other.nNeurons);
+        numLayers      = other.numLayers;
+        Inps           = std::move(other.Inps);
+        activFuncs     = std::move(other.activFuncs);
+        wInitTypes     = std::move(other.wInitTypes);
+        layers_        = std::move(other.layers_);
+        output         = std::move(other.output);
+        outputMat      = std::move(other.outputMat);
+        weightsVectorMlp = std::move(other.weightsVectorMlp);
+        lastIterations_  = other.lastIterations_;
+        lastError_       = other.lastError_;
+        lastRuntimeSec_  = other.lastRuntimeSec_;
+        calibCrit = std::move(other.calibCrit);
+        validCrit = std::move(other.validCrit);
+    }
+    return *this;
+}
 
 /**
  *  Getter: Returns the current architecture (vector of neurons in each layer)

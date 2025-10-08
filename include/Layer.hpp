@@ -54,8 +54,8 @@ public:
     ~Layer();                             //!< The destructor
     Layer(const Layer &other);            //!< The copy constructor
     Layer &operator=(const Layer &other); //!< The assignment operator
-                                          //!< The move copy constructor
-                                          //!< The move assignment operator
+    Layer(Layer&& other) noexcept;        //!< The move copy constructor
+    Layer& operator=(Layer&& other) noexcept;  //!< The move assignment operator
 
     //!< Initialize a fully-connected layer 
     void initLayer(unsigned numFeatures, 
