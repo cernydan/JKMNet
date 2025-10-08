@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
     }
 
     RunConfig cfg = parseConfigIni("settings/config_model.ini");
-    cfg = optimizeHyperparams(cfg);
+    // cfg = optimizeHyperparams(cfg);
 
     Data::cleanAllOutputs(cfg.out_dir);
 

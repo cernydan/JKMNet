@@ -260,7 +260,9 @@ bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
                 << ",RMSE_h" << (c+1)
                 << ",PI_h" << (c+1)
                 << ",NS_h" << (c+1)
-                << ",KGE_h" << (c+1);
+                << ",KGE_h" << (c+1)
+                << ",pbias" << (c+1)
+                << ",rsr" << (c+1);
         }
         ofs << "\n";
     }
@@ -276,12 +278,16 @@ bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
         double pi = Metrics::pi(yt, yp);
         double ns = Metrics::ns(yt, yp);
         double kge = Metrics::kge(yt, yp);
+        double pbias = Metrics::pbias(yt, yp);
+        double rsr = Metrics::rsr(yt, yp);
 
         ofs << "," << mse
             << "," << rmse
             << "," << pi
             << "," << ns
-            << "," << kge;
+            << "," << kge
+            << "," << pbias
+            << "," << rsr;
     }
     ofs << "\n";
 
