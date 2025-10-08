@@ -261,8 +261,8 @@ bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
                 << ",PI_h" << (c+1)
                 << ",NS_h" << (c+1)
                 << ",KGE_h" << (c+1)
-                << ",pbias" << (c+1)
-                << ",rsr" << (c+1);
+                << ",pbias_h" << (c+1)
+                << ",rsr_h" << (c+1);
         }
         ofs << "\n";
     }
@@ -409,7 +409,10 @@ std::string Metrics::addRunIdToFilename(const std::string &path, const std::stri
     return (p.parent_path() / (stem + "_" + run_id + ext)).string();
 }
 
-Eigen::VectorXd Metrics::calcMetricsAll() {
+/**
+ * Calculate all metrics
+ */
+//Eigen::VectorXd Metrics::calcMetricsAll() {
     // Eigen::VectorXd allCriteria = Eigen::VectorXd(5);
 
 
@@ -420,4 +423,4 @@ Eigen::VectorXd Metrics::calcMetricsAll() {
     // allCriteria(4) = kge(yt, yp);
     
     // return allCriteria;
-}
+//}

@@ -122,17 +122,16 @@ class JKMNet {
             int runsPerFold
         );
 
+        void setNmlps(unsigned nmlp);  //>! Setter for number of MLPs
+        unsigned getNmlps();  //>! Getter for number of MLPs
 
-        void set_Nmlps(unsigned nmlp);  // Setter
-        unsigned get_Nmlps();  //
-
-        void init_mlps(MLP &mlp); //
+        void init_mlps(MLP &mlp); //>! Initialization of MLPs vector
 
     protected:
 
     private:
-        std::vector<MLP> mlps_;
-        unsigned Nmlps;
+        std::vector<MLP> mlps_;  //>! The vector of MLPs
+        unsigned Nmlps;  //>! Total number of MLPs
 
 };
 

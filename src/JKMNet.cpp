@@ -566,15 +566,23 @@ void JKMNet::KFold(
     }
 }
 
-void JKMNet::set_Nmlps(unsigned nmlp){
+/**
+ * Setter for number of MLPs
+ */
+void JKMNet::setNmlps(unsigned nmlp){
     Nmlps = nmlp;
 }
 
-
-unsigned JKMNet::get_Nmlps(){
+/**
+ * Getter for number of MLPs
+ */
+unsigned JKMNet::getNmlps(){
     return Nmlps;
 }
 
+/**
+ * Initialization of MLPs vector
+ */
 void JKMNet::init_mlps(MLP &mlp){
     //for()
 }

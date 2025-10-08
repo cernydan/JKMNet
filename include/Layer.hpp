@@ -111,10 +111,7 @@ private:
     Eigen::VectorXd activations;  //!< The activation vector of the layer
     // Eigen::VectorXd bias;  //!< The bias vector
     Eigen::VectorXd deltas; //!< The deltas vector of the layer
-
-
     activ_func_type activ_func = activ_func_type::RELU;  //!< The type of activation function, where default is RELU
-
     Eigen::MatrixXd weightGrad;  //!< The backpropagation gradient matrix for the layer (∂E/∂W)
     Eigen::MatrixXd MtForAdam;  //!< Mt parameter for every weight in ADAM algorithm
     Eigen::MatrixXd VtForAdam;  //!< Vt parameter for every weight in ADAM algorithm

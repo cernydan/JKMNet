@@ -115,8 +115,8 @@ class MLP {
         int lastIterations_ = 0;
         double lastError_ = 0.0;
         double lastRuntimeSec_ = 0.0;
-        Eigen::MatrixXd calibCrit;
-        Eigen::MatrixXd validCrit;
-};
+        Eigen::MatrixXd calibCrit;  //>! Matrix of all calibration criteria
+        Eigen::MatrixXd validCrit;  //>! Matrix of all validation criteria
+}; 
 
 #endif // MLP_H

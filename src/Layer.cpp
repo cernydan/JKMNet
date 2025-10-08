@@ -8,18 +8,17 @@ using namespace std;
 /**
  * The constructor
  */
-Layer::Layer(): weights(),
-        inputs(),
-        activations(),
-        //bias(),
-        output(),
-        activ_func(),
-        weightGrad(),
-        weightsVector(),
-        deltas(),
-        VtForAdam(),
-        MtForAdam() {
-        
+Layer::Layer()
+    : weights(),
+      weightsVector(),
+      inputs(),
+      output(),
+      activations(),
+      deltas(),
+      activ_func(activ_func_type::RELU),
+      weightGrad(),
+      MtForAdam(),
+      VtForAdam() {
 }
 
 /**
@@ -33,21 +32,19 @@ Layer::~Layer(){
  * The copy constructor
  */
 Layer::Layer(const Layer& other): weights(),
-        inputs(),
-        activations(),
-        //bias(),
-        output(),
-        activ_func(),
-        weightGrad(),
-        weightsVector(),
-        deltas(),
-        VtForAdam(),
-        MtForAdam()  {
+      weightsVector(),
+      inputs(),
+      output(),
+      activations(),
+      deltas(),
+      activ_func(activ_func_type::RELU),
+      weightGrad(),
+      MtForAdam(),
+      VtForAdam()  {
 
     weights = other.weights;
     inputs = other.inputs;
     activations= other.activations;
-    //bias = other.bias; 
     output = other.output;
     activ_func = other.activ_func;
     weightGrad = other.weightGrad;
@@ -64,17 +61,16 @@ Layer::Layer(const Layer& other): weights(),
 Layer& Layer::operator=(const Layer& other){
     if (this == &other) return *this;
   else {
-   weights = other.weights;
-    inputs = other.inputs;
-    activations= other.activations;
-    //bias = other.bias; 
-    output = other.output;
-    activ_func = other.activ_func;
-    weightGrad = other.weightGrad;
-    weightsVector = other.weightsVector;
-    deltas = other.deltas;
-    VtForAdam = other.VtForAdam;
-    MtForAdam = other.MtForAdam;
+        weights        = other.weights;
+        weightsVector  = other.weightsVector;
+        inputs         = other.inputs;
+        output         = other.output;
+        activations    = other.activations;
+        deltas         = other.deltas;
+        activ_func     = other.activ_func;
+        weightGrad     = other.weightGrad;
+        MtForAdam      = other.MtForAdam;
+        VtForAdam      = other.VtForAdam;
     
   }
   return *this;
@@ -105,7 +101,7 @@ Layer& Layer::operator=(Layer&& other) noexcept {
         output         = std::move(other.output);
         activations    = std::move(other.activations);
         deltas         = std::move(other.deltas);
-        activ_func     = other.activ_func; // enum, just copy
+        activ_func     = other.activ_func;
         weightGrad     = std::move(other.weightGrad);
         MtForAdam      = std::move(other.MtForAdam);
         VtForAdam      = std::move(other.VtForAdam);

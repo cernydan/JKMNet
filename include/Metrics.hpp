@@ -54,7 +54,7 @@ class Metrics {
         
         static std::string addRunIdToFilename(const std::string &path, const std::string &run_id);  //!< Helper function for adding run ID into filename
 
-        Eigen::VectorXd calcMetricsAll(); //<! Calculate all
+        //Eigen::VectorXd calcMetricsAll(); //<! Calculate all metrics
 
     protected:
 

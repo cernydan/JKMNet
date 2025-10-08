@@ -17,6 +17,8 @@
 #include <iostream>
 
 int main(int argc, char** argv) {
+
+    // Read and/or set the number of threads for parallelization
     unsigned nthreads = 1;
     if (argc > 1) {
         try {
@@ -27,9 +29,15 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Read configuration file
     RunConfig cfg = parseConfigIni("settings/config_model.ini");
-    // cfg = optimizeHyperparams(cfg);
 
+    // Run PSO optimization
+    if (cfg.pso_optimize) {
+        cfg = optimizeHyperparams(cfg);
+    }
+
+    // Clean all files in the output folder
     Data::cleanAllOutputs(cfg.out_dir);
 
     std::cout << "\n===========================================\n";
