@@ -110,6 +110,47 @@ double Metrics::kge(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred
     return 1.0 - std::sqrt(std::pow(r - 1.0, 2) + std::pow(alpha - 1.0, 2) + std::pow(beta - 1.0, 2));
 }
 
+double Metrics::pbias(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
+    if (y_true.size() != y_pred.size()) {
+        throw std::invalid_argument("Metrics::pbias: vector sizes differ");
+    }
+
+    // PBIAS = 100 * sum(pred - true) / sum(true)
+    const double num = (y_pred - y_true).sum();
+    const double den = y_true.sum();
+
+    if (std::fabs(den) < 1e-12) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return 100.0 * (num / den);
+}
+
+double Metrics::rsr(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
+    if (y_true.size() != y_pred.size()) {
+        throw std::invalid_argument("Metrics::rsr: vector sizes differ");
+    }
+
+    // RSR = RMSE / sd(y_true)
+    const double rmse_val = Metrics::rmse(y_true, y_pred);
+
+    const int n = static_cast<int>(y_true.size());
+    if (n < 2) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    const double mean_true = y_true.mean();
+    double ssd = 0.0; // sum of squared deviations
+    for (int i = 0; i < n; ++i) {
+        const double d = y_true(i) - mean_true;
+        ssd += d * d;
+    }
+    const double sd_true = std::sqrt(ssd / (n - 1));
+
+    if (sd_true < 1e-12) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return rmse_val / sd_true;
+}
 
 /**
  * Append a labeled row of metrics into CSV file

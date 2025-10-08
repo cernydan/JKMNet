@@ -21,6 +21,12 @@ class Metrics {
 
         //!< KGE – Kling–Gupta Efficiency
         static double kge(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred); //!< KGE between two vectors
+
+        //!< PBIAS - Percent Bias
+        static double pbias(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred);
+
+        //!< RSR - RMSE to SD Ratio, (RMSE/ sd(obs))
+        static double rsr(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred);
         
         static bool appendMetricsCsv(const std::string &path, 
             const std::vector<std::pair<std::string,
