@@ -1,10 +1,11 @@
 // ********* 6. 10. 2025 *********
 // TODO: Add parallelization of the model using openML
-// TODO: [PSO] Save PSO best hyperparams into config_model.ini for MLP ensemble run
+// TODO: [PSO] Save PSO best hyperparams into 'config_model.ini' for MLP ensemble run
 // TODO: [PSO] Add all activation functions into PSO optim
 // TODO: [PSO] Add more hyperparams into PSO optim, i.e., architecture, weight_init, trainer, ...
-// TODO: [PSO] Change randomization in PSO using seed from config (?)
-// TODO: [PSO] Incease params of PSO, i.e., swarm size, max iteration (in HyperparamOptimizer.cpp)
+// TODO: [PSO] Read settings of the optimization from file, e.g., 'settings/settings_pso.ini'
+// TODO: [PSO] Change randomization in PSO using seed from 'config_model.ini' (?)
+// TODO: [PSO] Increase params of PSO, i.e., swarm size, max iteration, ... (in HyperparamOptimizer.cpp)
 
 
 #include "ConfigIni.hpp"
