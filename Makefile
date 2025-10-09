@@ -15,7 +15,6 @@ OBJ = obj/main.o \
       obj/Data.o \
       obj/Metrics.o \
       obj/CNNLayer.o \
-      obj/EnsembleRunner.o \
       obj/PSO.o \
       obj/HyperparamObjective.o \
       obj/HyperparamOptimizer.o
@@ -46,9 +45,6 @@ obj/Metrics.o: src/Metrics.cpp
 	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/CNNLayer.o: src/CNNLayer.cpp
-	$(CC) -c $< -o $@ $(CPPFLAGS)
-
-obj/EnsembleRunner.o: src/EnsembleRunner.cpp
 	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/PSO.o: src/PSO.cpp

@@ -10,7 +10,7 @@
 
 #include "ConfigIni.hpp"
 #include "Data.hpp"
-#include "EnsembleRunner.hpp"
+#include "JKMNet.hpp"
 #include "PSO.hpp"
 #include "HyperparamObjective.hpp"
 #include "HyperparamOptimizer.hpp"
@@ -43,8 +43,9 @@ int main(int argc, char** argv) {
     std::cout << "\n===========================================\n";
     std::cout << " Running Ensemble with Optimized Parameters\n";
     std::cout << "===========================================\n";
-    EnsembleRunner runner(cfg, nthreads);
-    runner.run();
+    MLP forNow;
+    JKMNet net_(cfg, nthreads);
+    net_.ensembleRun(forNow);
 
     return 0;
 }

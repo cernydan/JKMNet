@@ -78,16 +78,18 @@ double evaluateMLPwithParams(const Eigen::VectorXd &params, const RunConfig &cfg
         Eigen::VectorXd x0 = Eigen::VectorXd::Zero(inp);
         mlp.initMLP(x0, cfg.seed);
 
-        TrainingResult tr;
         if (cfg.trainer == "online") {
-            tr = net.trainAdamOnline(mlp, X_train, Y_train,
-                                     cfg.max_iterations, cfg.max_error,
-                                     lr, cfg.shuffle, cfg.seed);
+            mlp.onlineAdam(
+                cfg.max_iterations, cfg.max_error,
+                cfg.learning_rate,  X_train, Y_train
+            );
         } else {
-            tr = net.trainAdamBatch(mlp, X_train, Y_train,
-                                    cfg.batch_size, cfg.max_iterations,
-                                    cfg.max_error, lr,
-                                    cfg.shuffle, cfg.seed);
+            mlp.batchAdam(
+                cfg.max_iterations, cfg.max_error,
+                cfg.batch_size, cfg.learning_rate,
+                X_train, Y_train
+            );
+                        
         }
 
         // ------------------------------------------------------------

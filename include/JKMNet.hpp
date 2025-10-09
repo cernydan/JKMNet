@@ -15,6 +15,7 @@ class JKMNet {
 
     public:
         JKMNet();  //!< The constructor
+        JKMNet(const RunConfig& cfg, unsigned nthreads);
         ~JKMNet();  //!< The destructor 
         // virtual ~JKMNet();
         JKMNet(const JKMNet& other);  //!< The copy constructor
@@ -73,11 +74,16 @@ class JKMNet {
 
         void init_mlps(MLP &mlp); //>! Initialization of MLPs vector
 
+        void ensembleRun(MLP &mlp_);
+
     protected:
 
     private:
         std::vector<MLP> mlps_;  //>! The vector of MLPs
         unsigned Nmlps;  //>! Total number of MLPs
+        RunConfig cfg_;
+        unsigned nthreads_;
+        Data data_;
 
 };
 
