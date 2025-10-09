@@ -9,11 +9,7 @@
 #include <stdio.h>
 #include <iostream>
 
-struct TrainingResult {
-    double finalLoss = std::numeric_limits<double>::quiet_NaN();
-    int iterations = 0;
-    bool converged = false;
-};
+
 
 class JKMNet {
 
@@ -54,56 +50,6 @@ class JKMNet {
             bool shuffle = true,
             unsigned rngSeed = 42
         );
-
-        //!< Train an MLP with online Adam without splitting (already done before training)
-        TrainingResult trainAdamOnline(
-            MLP &mlp,
-            const Eigen::MatrixXd &X,
-            const Eigen::MatrixXd &Y,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed
-        );
-
-        //!< Train an MLP with batch Adam without splitting (already done before training)
-        TrainingResult trainAdamBatch(
-            MLP &mlp,
-            const Eigen::MatrixXd &X,
-            const Eigen::MatrixXd &Y,
-            int batchSize,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed
-        );
-
-        Eigen::MatrixXd trainAdamOnlineEpochVal(
-            MLP &mlp,
-            const Eigen::MatrixXd &CalInp,
-            const Eigen::MatrixXd &CalOut,
-            const Eigen::MatrixXd &ValInp,
-            const Eigen::MatrixXd &ValOut,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed);
-
-        Eigen::MatrixXd trainAdamBatchEpochVal(
-            MLP &mlp,
-            const Eigen::MatrixXd &CalInp,
-            const Eigen::MatrixXd &CalOut,
-            const Eigen::MatrixXd &ValInp,
-            const Eigen::MatrixXd &ValOut,
-            int batchSize,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed);
 
         //!< K-fold validation (online Adam) 
         void KFold(
