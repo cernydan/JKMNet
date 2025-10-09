@@ -51,16 +51,15 @@ double evaluateMLPwithParams(const Eigen::VectorXd &params, const RunConfig &cfg
                           cfg.exclude_last_col_from_transform);
         data.applyTransform();
 
-        data.makeCalibMatsSplit(cfg.input_numbers, static_cast<int>(cfg.mlp_architecture.back()));
-        auto [trainMat, validMat, _, __] = data.splitCalibMatWithIdx(cfg.train_fraction,
-                                                                     cfg.split_shuffle,
-                                                                     cfg.seed);
-
-        int inp = static_cast<int>(trainMat.cols()) - static_cast<int>(cfg.mlp_architecture.back());
         int out = static_cast<int>(cfg.mlp_architecture.back());
 
-        auto [X_train, Y_train] = data.splitInputsOutputs(trainMat, inp, out);
-        auto [X_valid, Y_valid] = data.splitInputsOutputs(validMat, inp, out);
+        auto [X_train, Y_train, X_valid, Y_valid] = data.makeMats(cfg.input_numbers,
+                                                                  static_cast<int>(cfg.mlp_architecture.back()),
+                                                                  cfg.train_fraction,
+                                                                  cfg.shuffle,
+                                                                  cfg.seed);
+
+        int inp = static_cast<int>(X_train.cols());
 
         // ------------------------------------------------------------
         // Build and train MLP
