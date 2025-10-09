@@ -6,8 +6,16 @@
 
 #include "Layer.hpp" 
 #include "ConfigIni.hpp"
+#include "Metrics.hpp"
 
 using namespace std;
+
+struct TrainingResult {
+    double finalLoss = std::numeric_limits<double>::quiet_NaN();
+    int iterations = 0;
+    bool converged = false;
+    int time = 0;
+};
 
 class MLP {
 
@@ -83,22 +91,31 @@ class MLP {
         bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8, int rngSeed = 0) const; //!< Repeatability check for 'runMLP'
         void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate); //!< Forward pass and update weights with backpropagation (one input)
 
-        void onlineBP(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calMat);    //!< Online backpropagation - 1 calibration matrix
-        void onlineBP(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat);    //!< Online backpropagation - separete inp out matrices
+        void onlineBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);    //!< Online backpropagation - separete inp out matrices
+        void onlineAdam(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Online backpropagation using Adam algorithm - separete inp out matrices
+        void batchAdam(int maxIterations, double maxError, int batchSize, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Batch backpropagation using Adam algorithm - separete inp out matrices
 
-        void onlineAdam(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calMat);  //!< Online backpropagation using Adam algorithm - 1 calibration matrix
-        void onlineAdam(int maxIter, double maxErr, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat);  //!< Online backpropagation using Adam algorithm - separete inp out matrices
+        Eigen::MatrixXd onlineAdamEpochVal(
+            const Eigen::MatrixXd &Xtrain,
+            const Eigen::MatrixXd &Ytrain,
+            const Eigen::MatrixXd &Xval,
+            const Eigen::MatrixXd &Yval,
+            int maxIterations,
+            double learningRate);
 
-        void batchAdam(int maxIter, double maxErr, int batchSize, double learningRate, const Eigen::MatrixXd& calMat);  //!< Batch backpropagation using Adam algorithm - 1 calibration matrix
-        void batchAdam(int maxIter, double maxErr, int batchSize, double learningRate, const Eigen::MatrixXd& calInpMat, const Eigen::MatrixXd& calOutMat);  //!< Batch backpropagation using Adam algorithm - separete inp out matrices
+        Eigen::MatrixXd batchAdamEpochVal(
+            const Eigen::MatrixXd &Xtrain,
+            const Eigen::MatrixXd &Ytrain,
+            const Eigen::MatrixXd &Xval,
+            const Eigen::MatrixXd &Yval,
+            int batchSize,
+            int maxIterations,
+            double learningRate);
 
         void calcOneOutput(const Eigen::VectorXd& inputVec);  //!< Forward pass for one input
         void calculateOutputs(const Eigen::MatrixXd& inputMat); //!< Calculate outputs for given matrix of inputs
         Eigen::MatrixXd getOutputs() const;  //!< Getter for output matrix
-
-        int getLastIterations() const { return lastIterations_; }
-        double getLastError() const { return lastError_; }
-        double getLastRuntimeSec() const { return lastRuntimeSec_; }
+        TrainingResult getResult() const {return result;}
 
     protected:
 
@@ -112,11 +129,9 @@ class MLP {
         Eigen::VectorXd output;  //!< The output vector of mlp
         Eigen::MatrixXd outputMat; //!< The output matrix of mlp
         Eigen::VectorXd weightsVectorMlp;  //!< The weights vector of all layers
-        int lastIterations_ = 0;
-        double lastError_ = 0.0;
-        double lastRuntimeSec_ = 0.0;
         Eigen::MatrixXd calibCrit;  //>! Matrix of all calibration criteria
         Eigen::MatrixXd validCrit;  //>! Matrix of all validation criteria
+        TrainingResult result; 
 }; 
 
 #endif // MLP_H

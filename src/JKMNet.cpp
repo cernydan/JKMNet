@@ -12,6 +12,9 @@ JKMNet::JKMNet(){
 
 }
 
+JKMNet::JKMNet(const RunConfig& cfg, unsigned nthreads)
+    : cfg_(cfg), nthreads_(nthreads) {}
+
 /**
  * The destructor
  */
@@ -207,294 +210,6 @@ TrainingResult JKMNet::trainAdamBatchSplit(
 }
 
 /**
- * Train an MLP with online Adam without splitting (already done before training)
- */
-TrainingResult JKMNet::trainAdamOnline(
-    MLP &mlp,
-    const Eigen::MatrixXd &X,
-    const Eigen::MatrixXd &Y,
-    int maxIterations,
-    double maxError,
-    double learningRate,
-    bool shuffle,
-    unsigned rngSeed)
-{
-    TrainingResult result;
-
-    if (X.rows() == 0 || Y.rows() == 0)
-        throw std::invalid_argument("Empty training data passed to trainAdamOnline");
-    if (X.rows() != Y.rows())
-        throw std::invalid_argument("X and Y row counts must match in trainAdamOnline");
-    if (maxIterations <= 0)
-        throw std::invalid_argument("maxIterations must be > 0");
-
-    Eigen::MatrixXd Xtrain = X;
-    Eigen::MatrixXd Ytrain = Y;
-
-    // Shuffle rows if requested
-    if (shuffle) {
-        std::vector<int> perm(Xtrain.rows());
-        std::iota(perm.begin(), perm.end(), 0);
-        std::mt19937 gen(rngSeed);
-        std::shuffle(perm.begin(), perm.end(), gen);
-
-        auto shuffleMatrix = [](const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
-            Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
-            for (std::size_t i = 0; i < perm.size(); ++i) {
-                shuffled.row(static_cast<int>(i)) = mat.row(perm[i]);
-            }
-            return shuffled;
-        };
-
-        Xtrain = shuffleMatrix(Xtrain, perm);
-        Ytrain = shuffleMatrix(Ytrain, perm);
-    }
-
-    // Initialize MLP with zero input of correct size
-    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    // mlp.initMLP(zeroIn, rngSeed);
-
-    // Run online Adam
-    try {
-        mlp.onlineAdam(maxIterations, maxError, learningRate, Xtrain, Ytrain);
-    } catch (const std::exception &ex) {
-        std::cerr << "[trainAdamOnline] training failed: " << ex.what() << "\n";
-        throw;
-    }
-
-    // Compute final training loss
-    Eigen::MatrixXd preds(Xtrain.rows(), Ytrain.cols());
-    for (int r = 0; r < Xtrain.rows(); ++r) {
-        preds.row(r) = mlp.runMLP(Xtrain.row(r).transpose()).transpose();
-    }
-    double mse = (preds - Ytrain).array().square().mean();
-
-    result.finalLoss = mse;
-    result.iterations = maxIterations;
-    result.converged = (mse <= maxError);
-
-    return result;
-}
-
-/**
- * Train an MLP with batch Adam without splitting (already done before training)
- */
-TrainingResult JKMNet::trainAdamBatch(
-    MLP &mlp,
-    const Eigen::MatrixXd &X,
-    const Eigen::MatrixXd &Y,
-    int batchSize,
-    int maxIterations,
-    double maxError,
-    double learningRate,
-    bool shuffle,
-    unsigned rngSeed) 
-{
-    TrainingResult result;
-
-    if (X.rows() == 0 || Y.rows() == 0)
-        throw std::invalid_argument("Empty training data passed to trainAdamBatch");
-    if (X.rows() != Y.rows())
-        throw std::invalid_argument("X and Y row counts must match in trainAdamBatch");
-    if (maxIterations <= 0 || batchSize <= 0)
-        throw std::invalid_argument("maxIterations and batchSize must be > 0");
-
-    Eigen::MatrixXd Xtrain = X;
-    Eigen::MatrixXd Ytrain = Y;
-
-    // Shuffle rows if requested
-    if (shuffle) {
-        std::vector<int> perm(Xtrain.rows());
-        std::iota(perm.begin(), perm.end(), 0);
-        std::mt19937 gen(rngSeed);
-        std::shuffle(perm.begin(), perm.end(), gen);
-
-        Xtrain = shuffleMatrix(Xtrain, perm);
-        Ytrain = shuffleMatrix(Ytrain, perm);
-    }
-
-    // Initialize MLP with zero input of correct size
-    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    // mlp.initMLP(zeroIn, rngSeed);
-
-    // Run batch Adam
-    try {
-        mlp.batchAdam(maxIterations, maxError, batchSize, learningRate, Xtrain, Ytrain);
-    } catch (const std::exception &ex) {
-        std::cerr << "[trainAdamBatch] training failed: " << ex.what() << "\n";
-        throw;
-    }
-
-    // Compute final training loss
-    Eigen::MatrixXd preds(Xtrain.rows(), Ytrain.cols());
-    for (int r = 0; r < Xtrain.rows(); ++r) {
-        preds.row(r) = mlp.runMLP(Xtrain.row(r).transpose()).transpose();
-    }
-    double mse = (preds - Ytrain).array().square().mean();
-
-    result.finalLoss = mse;
-    result.iterations = maxIterations;
-    result.converged = (mse <= maxError);
-
-    return result;
-}
-
-Eigen::MatrixXd JKMNet::trainAdamOnlineEpochVal(
-    MLP &mlp,
-    const Eigen::MatrixXd &CalInp,
-    const Eigen::MatrixXd &CalOut,
-    const Eigen::MatrixXd &ValInp,
-    const Eigen::MatrixXd &ValOut,
-    int maxIterations,
-    double maxError,
-    double learningRate,
-    bool shuffle,
-    unsigned rngSeed)
-{
-
-    if (CalInp.rows() == 0 || CalOut.rows() == 0 || ValInp.rows() == 0 || ValOut.rows() == 0)
-        throw std::invalid_argument("Empty data passed to trainAdamOnlineEpochVal");
-    if (CalInp.rows() != CalOut.rows())
-        throw std::invalid_argument("CalInp and CalOut row counts must match in trainAdamOnlineEpochVal");
-    if (ValInp.rows() != ValOut.rows())
-        throw std::invalid_argument("ValInp and ValOut row counts must match in trainAdamOnlineEpochVal");
-    if (maxIterations <= 0)
-        throw std::invalid_argument("maxIterations must be > 0");
-
-    Eigen::MatrixXd Xtrain = CalInp;
-    Eigen::MatrixXd Ytrain = CalOut;
-    Eigen::MatrixXd Xval = ValInp;
-    Eigen::MatrixXd Yval = ValOut;
-
-
-    // Shuffle rows if requested
-    if (shuffle) {
-        std::vector<int> perm(Xtrain.rows());
-        std::iota(perm.begin(), perm.end(), 0);
-        std::mt19937 gen(rngSeed);
-        std::shuffle(perm.begin(), perm.end(), gen);
-
-        auto shuffleMatrix = [](const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
-            Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
-            for (std::size_t i = 0; i < perm.size(); ++i) {
-                shuffled.row(static_cast<int>(i)) = mat.row(perm[i]);
-            }
-            return shuffled;
-        };
-
-        Xtrain = shuffleMatrix(Xtrain, perm);
-        Ytrain = shuffleMatrix(Ytrain, perm);
-    }
-
-    // Initialize MLP with zero input of correct size
-    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    // mlp.initMLP(zeroIn, rngSeed);
-
-    Eigen::MatrixXd predsCal;
-    Eigen::MatrixXd predsVal;
-    Eigen::MatrixXd resultErrors = Eigen::MatrixXd(maxIterations,2);
-
-    for(int epoch = 0; epoch < maxIterations; epoch++){
-        // Run online Adam
-        try {
-            mlp.onlineAdam(1, maxError, learningRate, Xtrain, Ytrain);
-        } catch (const std::exception &ex) {
-            std::cerr << "[trainAdamOnline] training failed: " << ex.what() << "\n";
-            throw;
-        }
-
-        // Compute final training loss
-        mlp.calculateOutputs(Xtrain);
-        predsCal = mlp.getOutputs();
-
-        mlp.calculateOutputs(Xval);
-        predsVal = mlp.getOutputs();
-
-        resultErrors(epoch,0) = Metrics::mse(Ytrain,predsCal);
-        resultErrors(epoch,1) = Metrics::mse(Yval,predsVal);
-    }
-    return resultErrors;
-}
-
-Eigen::MatrixXd JKMNet::trainAdamBatchEpochVal(
-    MLP &mlp,
-    const Eigen::MatrixXd &CalInp,
-    const Eigen::MatrixXd &CalOut,
-    const Eigen::MatrixXd &ValInp,
-    const Eigen::MatrixXd &ValOut,
-    int batchSize,
-    int maxIterations,
-    double maxError,
-    double learningRate,
-    bool shuffle,
-    unsigned rngSeed)
-{
-
-    if (CalInp.rows() == 0 || CalOut.rows() == 0 || ValInp.rows() == 0 || ValOut.rows() == 0)
-        throw std::invalid_argument("Empty data passed to trainAdamOnlineEpochVal");
-    if (CalInp.rows() != CalOut.rows())
-        throw std::invalid_argument("CalInp and CalOut row counts must match in trainAdamOnlineEpochVal");
-    if (ValInp.rows() != ValOut.rows())
-        throw std::invalid_argument("ValInp and ValOut row counts must match in trainAdamOnlineEpochVal");
-    if (maxIterations <= 0)
-        throw std::invalid_argument("maxIterations must be > 0");
-
-    Eigen::MatrixXd Xtrain = CalInp;
-    Eigen::MatrixXd Ytrain = CalOut;
-    Eigen::MatrixXd Xval = ValInp;
-    Eigen::MatrixXd Yval = ValOut;
-
-
-    // Shuffle rows if requested
-    if (shuffle) {
-        std::vector<int> perm(Xtrain.rows());
-        std::iota(perm.begin(), perm.end(), 0);
-        std::mt19937 gen(rngSeed);
-        std::shuffle(perm.begin(), perm.end(), gen);
-
-        auto shuffleMatrix = [](const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
-            Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
-            for (std::size_t i = 0; i < perm.size(); ++i) {
-                shuffled.row(static_cast<int>(i)) = mat.row(perm[i]);
-            }
-            return shuffled;
-        };
-
-        Xtrain = shuffleMatrix(Xtrain, perm);
-        Ytrain = shuffleMatrix(Ytrain, perm);
-    }
-
-    // Initialize MLP with zero input of correct size
-    // Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(Xtrain.cols());
-    // mlp.initMLP(zeroIn, rngSeed);
-
-    Eigen::MatrixXd predsCal;
-    Eigen::MatrixXd predsVal;
-    Eigen::MatrixXd resultErrors = Eigen::MatrixXd(maxIterations,2);
-
-    for(int epoch = 0; epoch < maxIterations; epoch++){
-        // Run online Adam
-        try {
-            mlp.batchAdam(1, maxError, batchSize, learningRate, Xtrain, Ytrain);
-        } catch (const std::exception &ex) {
-            std::cerr << "[trainAdamOnline] training failed: " << ex.what() << "\n";
-            throw;
-        }
-
-        // Compute final training loss
-        mlp.calculateOutputs(Xtrain);
-        predsCal = mlp.getOutputs();
-
-        mlp.calculateOutputs(Xval);
-        predsVal = mlp.getOutputs();
-
-        resultErrors(epoch,0) = Metrics::mse(Ytrain,predsCal);
-        resultErrors(epoch,1) = Metrics::mse(Yval,predsVal);
-    }
-    return resultErrors;
-}
-
-/**
  * K-fold validation (online Adam) 
  */
 void JKMNet::KFold(
@@ -585,4 +300,167 @@ unsigned JKMNet::getNmlps(){
  */
 void JKMNet::init_mlps(MLP &mlp){
     //for()
+}
+
+void JKMNet::ensembleRun(MLP &mlp_){
+        std::cout << "The number of threads is " << nthreads_ << std::endl;
+
+    // ------------------------------------------------------
+    // Load & preprocess data
+    // ------------------------------------------------------
+    std::unordered_set<std::string> idFilter;
+    if (!cfg_.id.empty()) {
+        std::vector<std::string> ids = parseStringList(cfg_.id);
+        idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
+    }
+
+    std::cout << "-> Loading data..." << std::endl;
+    data_.loadFilteredCSV(cfg_.data_file, idFilter, cfg_.columns, cfg_.timestamp, cfg_.id_col);
+    std::cout << "-> Data loaded." << std::endl;
+
+    std::cout << "-> Transforming data..." << std::endl;
+    data_.setTransform(strToTransformType(cfg_.transform),
+                       cfg_.transform_alpha,
+                       cfg_.exclude_last_col_from_transform);
+    data_.applyTransform();
+    std::cout << "-> Data transformed." << std::endl;
+
+    data_.makeCalibMatsSplit(cfg_.input_numbers, (int)cfg_.mlp_architecture.back());
+
+    auto [trainMat, validMat, trainIdx, validIdx] = data_.splitCalibMatWithIdx(cfg_.train_fraction, cfg_.split_shuffle, cfg_.seed);
+
+    int inpSize = (int)trainMat.cols() - (int)cfg_.mlp_architecture.back();
+    int outSize = (int)cfg_.mlp_architecture.back();
+
+    auto [X_train, Y_train] = data_.splitInputsOutputs(trainMat, inpSize, outSize);
+    auto [X_valid, Y_valid] = data_.splitInputsOutputs(validMat, inpSize, outSize);
+
+    std::cout << "-> Data split into training and validation sets." << std::endl;
+
+    std::vector<std::string> colNames;
+    for (int c = 0; c < Y_train.cols(); ++c) {
+        colNames.push_back("h" + std::to_string(c+1));
+    }
+
+    // Save real data
+    Eigen::MatrixXd Y_true_calib_save = data_.getCalibOutsMat();
+    Eigen::MatrixXd Y_true_valid_save = Y_valid;
+    try {
+        Y_true_calib_save = data_.inverseTransformOutputs(Y_true_calib_save);
+        Y_true_valid_save = data_.inverseTransformOutputs(Y_true_valid_save);
+    } catch (const std::exception &ex) {
+        std::cerr << "[Warning] inverseTransformOutputs failed (save GT): " << ex.what() << "\n";
+    }
+    data_.saveMatrixCsv(cfg_.real_calib, Y_true_calib_save, colNames);
+    data_.saveMatrixCsv(cfg_.real_valid, Y_true_valid_save, colNames);
+    std::cout << "-> Real calibration and validation data saved." << std::endl;
+
+    // ------------------------------------------------------
+    // Ensemble loop
+    // ------------------------------------------------------
+    for (int run = 0; run < cfg_.ensemble_runs; ++run) {
+        std::string run_id = std::to_string(run+1);
+        std::cout << "\n-------------------------------------------\n";
+        std::cout << "Run " << run_id << " starting..." << std::endl;
+
+        // Configure MLP
+        mlp_.setArchitecture(cfg_.mlp_architecture);
+        mlp_.setActivations(std::vector<activ_func_type>(cfg_.mlp_architecture.size(), strToActivation(cfg_.activation)));
+        mlp_.setWInitType(std::vector<weight_init_type>(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init)));
+
+        Eigen::VectorXd x0 = Eigen::VectorXd::Zero(std::accumulate(cfg_.input_numbers.begin(), cfg_.input_numbers.end(), 0));
+        mlp_.initMLP(x0, cfg_.seed);
+
+        // Save init weights
+        mlp_.saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv_init, run_id));
+        mlp_.weightsToVectorMlp();
+        mlp_.saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv_init, run_id));
+        mlp_.appendWeightsVectorCsv(cfg_.weights_vec_csv_init, run == 0);
+        std::cout << "-> Initial weights saved." << std::endl;
+
+        // Train
+        std::cout << "-> Training starting..." << std::endl;
+        Eigen::MatrixXd resultErrors;
+        
+        if (cfg_.trainer == "online") {
+            mlp_.onlineAdam(
+                cfg_.max_iterations, cfg_.max_error,
+                cfg_.learning_rate,  X_train, Y_train
+            );
+        } else if (cfg_.trainer == "batch") {
+            mlp_.batchAdam(
+                cfg_.max_iterations, cfg_.max_error,
+                cfg_.batch_size, cfg_.learning_rate,
+                X_train, Y_train
+            );
+        } else if (cfg_.trainer == "online_epoch") {
+            resultErrors = mlp_.onlineAdamEpochVal(
+                X_train, Y_train, X_valid, Y_valid,
+                cfg_.max_iterations, cfg_.learning_rate
+            );
+            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
+        } else if (cfg_.trainer == "batch_epoch") {
+            resultErrors = mlp_.batchAdamEpochVal(
+                X_train, Y_train, X_valid, Y_valid,
+                cfg_.batch_size, cfg_.max_iterations,
+                cfg_.learning_rate
+            );
+            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
+        } else {
+            throw std::invalid_argument("Unknown trainer type: " + cfg_.trainer);
+        }
+        std::cout << "-> Training finished." << std::endl;
+
+        // Evaluate calibration
+        std::cout << "-> Evaluating calibration set..." << std::endl;
+        mlp_.calculateOutputs(data_.getCalibInpsMat());
+        Eigen::MatrixXd Y_pred_calib = mlp_.getOutputs();
+        Eigen::MatrixXd Y_true_calib = data_.getCalibOutsMat();
+        try {
+            Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
+            Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
+        } catch (...) {}
+        Metrics::appendRunInfoCsv(cfg_.run_info,
+            mlp_.getResult().iterations, mlp_.getResult().finalLoss,
+            mlp_.getResult().converged, mlp_.getResult().time,
+            cfg_.id + "_run" + run_id);
+        Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg_.metrics_cal, cfg_.id + "_run" + run_id);
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), Y_pred_calib, colNames);
+        std::cout << "-> Calibration metrics and predictions saved." << std::endl;
+
+        // Save final weights
+        mlp_.saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv, run_id));
+        mlp_.weightsToVectorMlp();
+        mlp_.saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv, run_id));
+        mlp_.appendWeightsVectorCsv(cfg_.weights_vec_csv, run == 0);
+        std::cout << "-> Final weights saved." << std::endl;
+
+        // Evaluate validation
+        std::cout << "-> Evaluating validation set..." << std::endl;
+        mlp_.calculateOutputs(X_valid);
+        Eigen::MatrixXd Y_pred_valid = mlp_.getOutputs();
+        Eigen::MatrixXd Y_true_valid = Y_valid;
+        try {
+            Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
+            Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid);
+        } catch (...) {}
+        Metrics::computeAndAppendFinalMetrics(Y_true_valid, Y_pred_valid, cfg_.metrics_val, cfg_.id + "_run" + run_id);
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_valid, run_id), Y_pred_valid, colNames);
+        std::cout << "-> Validation metrics and predictions saved." << std::endl;
+
+        std::cout << "Run " << run_id << " finished." << std::endl;
+        std::cout << "-------------------------------------------" << std::endl;
+    }
+
+    std::cout << "\n[I/O] Saved REAL CALIB data to: '" << cfg_.real_calib << "', and PRED CALIB data to '" << cfg_.pred_calib << "'\n";
+    std::cout << "[I/O] Saved REAL VALID data to: '" << cfg_.real_valid << "', and PRED VALID data to '" << cfg_.pred_valid << "'\n";
+    std::cout << "[I/O] Saved INIT weights vector to: '" << cfg_.weights_vec_csv_init << "'\n";
+    std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg_.weights_vec_csv << "'\n";
+    std::cout << "[I/O] Saved RUN INFO to: '" << cfg_.run_info << "'\n";
+    std::cout << "[I/O] Saved CALIB METRICS to: '" << cfg_.metrics_cal << "'\n";
+    std::cout << "[I/O] Saved VALID METRICS to: '" << cfg_.metrics_val << "'\n";
+
+    std::cout << "\n===========================================\n";
+    std::cout << " Running Ensemble finished \n";
+    std::cout << "===========================================\n";
 }

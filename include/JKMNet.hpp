@@ -9,16 +9,13 @@
 #include <stdio.h>
 #include <iostream>
 
-struct TrainingResult {
-    double finalLoss = std::numeric_limits<double>::quiet_NaN();
-    int iterations = 0;
-    bool converged = false;
-};
+
 
 class JKMNet {
 
     public:
         JKMNet();  //!< The constructor
+        JKMNet(const RunConfig& cfg, unsigned nthreads);
         ~JKMNet();  //!< The destructor 
         // virtual ~JKMNet();
         JKMNet(const JKMNet& other);  //!< The copy constructor
@@ -55,56 +52,6 @@ class JKMNet {
             unsigned rngSeed = 42
         );
 
-        //!< Train an MLP with online Adam without splitting (already done before training)
-        TrainingResult trainAdamOnline(
-            MLP &mlp,
-            const Eigen::MatrixXd &X,
-            const Eigen::MatrixXd &Y,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed
-        );
-
-        //!< Train an MLP with batch Adam without splitting (already done before training)
-        TrainingResult trainAdamBatch(
-            MLP &mlp,
-            const Eigen::MatrixXd &X,
-            const Eigen::MatrixXd &Y,
-            int batchSize,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed
-        );
-
-        Eigen::MatrixXd trainAdamOnlineEpochVal(
-            MLP &mlp,
-            const Eigen::MatrixXd &CalInp,
-            const Eigen::MatrixXd &CalOut,
-            const Eigen::MatrixXd &ValInp,
-            const Eigen::MatrixXd &ValOut,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed);
-
-        Eigen::MatrixXd trainAdamBatchEpochVal(
-            MLP &mlp,
-            const Eigen::MatrixXd &CalInp,
-            const Eigen::MatrixXd &CalOut,
-            const Eigen::MatrixXd &ValInp,
-            const Eigen::MatrixXd &ValOut,
-            int batchSize,
-            int maxIterations,
-            double maxError,
-            double learningRate,
-            bool shuffle,
-            unsigned rngSeed);
-
         //!< K-fold validation (online Adam) 
         void KFold(
             Data &data,
@@ -127,11 +74,16 @@ class JKMNet {
 
         void init_mlps(MLP &mlp); //>! Initialization of MLPs vector
 
+        void ensembleRun(MLP &mlp_);
+
     protected:
 
     private:
         std::vector<MLP> mlps_;  //>! The vector of MLPs
         unsigned Nmlps;  //>! Total number of MLPs
+        RunConfig cfg_;
+        unsigned nthreads_;
+        Data data_;
 
 };
 
