@@ -1333,3 +1333,100 @@ Data::makeKFoldMats(
 
     return { trainInps, trainOuts, validInps, validOuts };
 }
+
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>
+Data::makeMats(std::vector<int> inpNumsOfVars,
+                          int outRows,
+                          double trainFraction,
+                          bool shuffleCalib,
+                          unsigned seed) const
+{
+    if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
+        throw std::invalid_argument("inpNumsOfVars values and outRows must be positive");
+
+    if (trainFraction <= 0.0 || trainFraction >= 1.0)
+        throw std::invalid_argument("trainFraction must be in (0,1)");
+
+    const auto maxR = *std::max_element(inpNumsOfVars.begin(), inpNumsOfVars.end());
+    if (maxR == 0)
+        throw std::runtime_error("At least one value in inpNumsOfVars must be > 0");
+
+    const size_t DC = m_data.cols();
+    if (DC < 1) throw std::runtime_error("Data has no columns");
+    if (inpNumsOfVars.size() != DC)
+        throw std::invalid_argument("inpNumsOfVars size does not match data columns");
+
+    const int CRcand = static_cast<int>(m_data.rows()) - static_cast<int>(maxR) - outRows + 1;
+    if (CRcand <= 0)
+        throw std::runtime_error("Not enough rows to build patterns with given inpNumsOfVars/outRows");
+
+    const int inpC = static_cast<int>(std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0));
+
+    std::vector<std::vector<double>> rowsIn;
+    std::vector<std::vector<double>> rowsOut;
+    rowsIn.reserve(static_cast<size_t>(CRcand));
+    rowsOut.reserve(static_cast<size_t>(CRcand));
+
+    for (int i = 0; i < CRcand; ++i) {
+        bool ok = true;
+        std::vector<double> inrow;
+        inrow.reserve(inpC);
+
+        for (size_t j = 0; j < DC; ++j) {
+            for (int l = 0; l < inpNumsOfVars[j]; ++l) {
+                int rindex = i + static_cast<int>(maxR) - inpNumsOfVars[j] + l;
+                double v = m_data(rindex, static_cast<Eigen::Index>(j));
+                if (!std::isfinite(v)) { ok = false; break; }
+                inrow.push_back(v);
+            }
+            if (!ok) break;
+        }
+        if (!ok) continue;
+
+        std::vector<double> outrow;
+        outrow.reserve(outRows);
+        for (int j = 0; j < outRows; ++j) {
+            int rindex = i + static_cast<int>(maxR) + j;
+            double v = m_data(rindex, static_cast<Eigen::Index>(DC - 1));
+            if (!std::isfinite(v)) { ok = false; break; }
+            outrow.push_back(v);
+        }
+        if (!ok) continue;
+
+        rowsIn.push_back(std::move(inrow));
+        rowsOut.push_back(std::move(outrow));
+    }
+
+    const int total = static_cast<int>(rowsIn.size());
+    if (total == 0)
+        throw std::runtime_error("No valid patterns after filtering NaNs");
+
+    int nTrain = static_cast<int>(std::floor(trainFraction * total));
+    nTrain = std::max(1, std::min<int>(nTrain, total - 1));
+    std::vector<int> idx(total);
+    std::iota(idx.begin(), idx.end(), 0);
+
+    if (shuffleCalib && nTrain > 1) {
+        std::mt19937 gen(seed == 0 ? std::random_device{}() : seed);
+        std::shuffle(idx.begin(), idx.begin() + nTrain, gen);
+    }
+
+    Eigen::MatrixXd trainIn(nTrain, inpC);
+    Eigen::MatrixXd trainOut(nTrain, outRows);
+    Eigen::MatrixXd validIn(total - nTrain, inpC);
+    Eigen::MatrixXd validOut(total - nTrain, outRows);
+
+    for (int i = 0; i < nTrain; ++i) {
+        int ri = idx[i];
+        for (int c = 0; c < inpC; ++c) trainIn(i, c) = rowsIn[ri][c];
+        for (int c = 0; c < outRows; ++c) trainOut(i, c) = rowsOut[ri][c];
+    }
+    for (int i = nTrain; i < total; ++i) {
+        int ri = idx[i];
+        int vi = i - nTrain;
+        for (int c = 0; c < inpC; ++c) validIn(vi, c) = rowsIn[ri][c];
+        for (int c = 0; c < outRows; ++c) validOut(vi, c) = rowsOut[ri][c];
+    }
+
+    return { trainIn, trainOut, validIn, validOut };
+}

@@ -31,7 +31,6 @@ class Data {
         Data(const Data&) = default;  //!< The copy constructor
         Data& operator=(const Data&) = default;   //!< The assignment operator
 
-
         size_t loadFilteredCSV(const std::string& path,
             const std::unordered_set<std::string>& idFilter,
             const std::vector<std::string>& keepColumns,  // names of numeric columns to extract (e.g. "T1","T2","T3","moisture")
@@ -105,6 +104,13 @@ class Data {
             bool shuffle,
             bool largerPieceCalib,
             unsigned seed);
+
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>
+        makeMats(std::vector<int> inpNumsOfVars,
+                          int outRows,
+                          double trainFraction,
+                          bool shuffleCalib,
+                          unsigned seed) const;
 
     protected:
 

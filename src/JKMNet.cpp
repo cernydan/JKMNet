@@ -325,15 +325,11 @@ void JKMNet::ensembleRun(MLP &mlp_){
     data_.applyTransform();
     std::cout << "-> Data transformed." << std::endl;
 
-    data_.makeCalibMatsSplit(cfg_.input_numbers, (int)cfg_.mlp_architecture.back());
-
-    auto [trainMat, validMat, trainIdx, validIdx] = data_.splitCalibMatWithIdx(cfg_.train_fraction, cfg_.split_shuffle, cfg_.seed);
-
-    int inpSize = (int)trainMat.cols() - (int)cfg_.mlp_architecture.back();
-    int outSize = (int)cfg_.mlp_architecture.back();
-
-    auto [X_train, Y_train] = data_.splitInputsOutputs(trainMat, inpSize, outSize);
-    auto [X_valid, Y_valid] = data_.splitInputsOutputs(validMat, inpSize, outSize);
+    auto [X_train, Y_train, X_valid, Y_valid] = data_.makeMats(cfg_.input_numbers,
+                                                              static_cast<int>(cfg_.mlp_architecture.back()),
+                                                              cfg_.train_fraction,
+                                                              cfg_.shuffle,
+                                                              cfg_.seed);
 
     std::cout << "-> Data split into training and validation sets." << std::endl;
 
@@ -343,7 +339,7 @@ void JKMNet::ensembleRun(MLP &mlp_){
     }
 
     // Save real data
-    Eigen::MatrixXd Y_true_calib_save = data_.getCalibOutsMat();
+    Eigen::MatrixXd Y_true_calib_save = Y_train;
     Eigen::MatrixXd Y_true_valid_save = Y_valid;
     try {
         Y_true_calib_save = data_.inverseTransformOutputs(Y_true_calib_save);
@@ -413,9 +409,9 @@ void JKMNet::ensembleRun(MLP &mlp_){
 
         // Evaluate calibration
         std::cout << "-> Evaluating calibration set..." << std::endl;
-        mlp_.calculateOutputs(data_.getCalibInpsMat());
+        mlp_.calculateOutputs(X_train);
         Eigen::MatrixXd Y_pred_calib = mlp_.getOutputs();
-        Eigen::MatrixXd Y_true_calib = data_.getCalibOutsMat();
+        Eigen::MatrixXd Y_true_calib = Y_train;
         try {
             Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
             Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
