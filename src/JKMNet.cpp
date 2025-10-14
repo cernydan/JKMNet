@@ -2,6 +2,7 @@
 
 #include <random>
 #include <iostream>
+#include "eigen-3.4/Eigen/Dense"
 
 using namespace std;
 
@@ -44,13 +45,13 @@ JKMNet& JKMNet::operator=(const JKMNet& other){
 /**
  * Helper function for schuffle
  */
-static Eigen::MatrixXd shuffleMatrix(const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
-    Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
-    for (std::size_t i = 0; i < perm.size(); ++i) {
-        shuffled.row(static_cast<int>(i)) = mat.row(perm[i]);
-    }
-    return shuffled;
-}
+// static Eigen::MatrixXd shuffleMatrix(const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
+//     Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
+//     for (std::size_t i = 0; i < perm.size(); ++i) {
+//         shuffled.row(static_cast<int>(i)) = mat.row(perm[i]);
+//     }
+//     return shuffled;
+// }
 
 /**
  * Train an MLP with online Adam using calibrated matrices built from Data

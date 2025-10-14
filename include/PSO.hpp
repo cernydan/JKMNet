@@ -20,8 +20,10 @@ public:
     std::string decodeBestParams() const;  //!< Decode PSO vector into human-readable hyperparameters
 
 private:
-    int swarmSize_, dim_, maxIter_;
-    double w_, c1_, c2_, xmin_, xmax_;
+    int swarmSize_, dim_;
+    double w_, c1_, c2_; 
+    int maxIter_;
+    double xmin_, xmax_;
     std::vector<Eigen::VectorXd> pos_, vel_, pBest_;
     std::vector<double> pBestVal_;
     Eigen::VectorXd globalBestPos_;
