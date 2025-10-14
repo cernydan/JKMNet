@@ -379,6 +379,28 @@ void JKMNet::ensembleRun(MLP &mlp_){
         mlp_.appendWeightsVectorCsv(cfg_.weights_vec_csv_init, run == 0);
         std::cout << "-> Initial weights saved." << std::endl;
 
+        // ----------------------------------------
+        // Debugging architecture and shape
+        std::cout << "Architecture: ";
+        for (auto v : mlp_.getArchitecture()) std::cout << v << " ";
+        std::cout << "\n";
+
+        std::cout << "X_train shape: " << X_train.rows() << " x " << X_train.cols() << "\n";
+        std::cout << "Y_train shape: " << Y_train.rows() << " x " << Y_train.cols() << "\n";
+
+        std::cout << "First layer input (weights.cols - 1): "
+                << mlp_.getWeights(0).cols()-1 << "\n";
+        std::cout << "Last layer output (neurons): "
+                << mlp_.getNumNeuronsInLayers(mlp_.getNumLayers()-1) << "\n";
+
+        if (mlp_.getWeights(0).cols()-1 != X_train.cols()) {
+            std::cerr << "[ERROR] Input size mismatch between data and MLP architecture!\n";
+        }
+        if (mlp_.getNumNeuronsInLayers(mlp_.getNumLayers()-1) != Y_train.cols()) {
+            std::cerr << "[ERROR] Output size mismatch between data and MLP architecture!\n";
+        }
+        // ----------------------------------------
+
         // Train
         std::cout << "-> Training starting..." << std::endl;
         Eigen::MatrixXd resultErrors;
