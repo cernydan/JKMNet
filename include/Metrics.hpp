@@ -2,6 +2,15 @@
 #define METRICS_HPP
 
 #include "eigen-3.4/Eigen/Dense"
+#include <map>
+#include <vector>
+#include <string>
+#include <mutex>
+
+struct MetricBuffer {
+    std::map<std::string, std::vector<std::pair<std::string, double>>> data;
+    std::mutex mtx;
+};
 
 class Metrics {
     public:
@@ -34,6 +43,12 @@ class Metrics {
             const std::string &id = "",
             bool verbose = true);  //!< Append a labeled row of metrics into CSV file
 
+        static bool appendMetricsCsvSplit(const std::string &basePath,
+            const std::vector<std::pair<std::string,double>> &metrics,
+            const std::string &id = "",
+            const std::string &timeStr = "",
+            bool verbose = true);  //!< Append a labeled row of metrics into CSV file - each metric in a separate file 
+
         static bool computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true, 
             const Eigen::MatrixXd &Y_pred,
             const std::string &outCsv, 
@@ -53,6 +68,15 @@ class Metrics {
                           bool verbose = true);  //!< Save MSEs from training and validation into CSV file   
         
         static std::string addRunIdToFilename(const std::string &path, const std::string &run_id);  //!< Helper function for adding run ID into filename
+        
+        static void bufferMetrics(MetricBuffer &buffer,
+                                  const std::vector<std::pair<std::string,double>> &metrics,
+                                  const std::string &id = "",
+                                  const std::string &timeStr = "");  //!< Buffer a set of metrics into a thread-safe in-memory structure for later export
+
+        static bool flushMetricsBufferToCsv(const MetricBuffer &buffer,
+                                            const std::string &basePath,
+                                            bool verbose = true);  //!< Flush the contents of a MetricBuffer to one or more CSV files
 
         //Eigen::VectorXd calcMetricsAll(); //<! Calculate all metrics
 

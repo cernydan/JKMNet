@@ -1,4 +1,5 @@
 #include "JKMNet.hpp"
+#include "Metrics.hpp"
 
 #include <random>
 #include <iostream>
@@ -352,6 +353,9 @@ void JKMNet::ensembleRun(MLP &mlp_){
     data_.saveMatrixCsv(cfg_.real_valid, Y_true_valid_save, colNames);
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
+    MetricBuffer buffer_calib;
+    MetricBuffer buffer_valid;
+
     // ------------------------------------------------------
     // Ensemble loop
     // ------------------------------------------------------
@@ -417,12 +421,38 @@ void JKMNet::ensembleRun(MLP &mlp_){
             Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
             Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
         } catch (...) {}
+
         Metrics::appendRunInfoCsv(cfg_.run_info,
             mlp_.getResult().iterations, mlp_.getResult().finalLoss,
             mlp_.getResult().converged, mlp_.getResult().time,
             cfg_.id + "_run" + run_id);
-        Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg_.metrics_cal, cfg_.id + "_run" + run_id);
+
+        // Write combined metrics row into one CSV
+        // Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg_.metrics_cal, cfg_.id + "_run" + run_id);
+
+        // Store metrics in buffer instead of file
+        std::vector<std::pair<std::string,double>> metrics_calib;
+        for (int c = 0; c < Y_true_calib.cols(); ++c) {
+            double mse  = Metrics::mse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double rmse = Metrics::rmse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double pi  = Metrics::pi(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double ns = Metrics::ns(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double kge  = Metrics::kge(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double pbias = Metrics::pbias(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double rsr = Metrics::rsr(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+
+            metrics_calib.push_back({"MSE_h" + std::to_string(c+1), mse});
+            metrics_calib.push_back({"RMSE_h" + std::to_string(c+1), rmse});
+            metrics_calib.push_back({"PI_h" + std::to_string(c+1), pi});
+            metrics_calib.push_back({"NS_h" + std::to_string(c+1), ns});
+            metrics_calib.push_back({"KGE_h" + std::to_string(c+1), kge});
+            metrics_calib.push_back({"PBIAS_h" + std::to_string(c+1), pbias});
+            metrics_calib.push_back({"RSR_h" + std::to_string(c+1), rsr});
+        }
+        Metrics::bufferMetrics(buffer_calib, metrics_calib, cfg_.id + "_run" + run_id);
+
         data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), Y_pred_calib, colNames);
+
         std::cout << "-> Calibration metrics and predictions saved." << std::endl;
 
         // Save final weights
@@ -441,13 +471,41 @@ void JKMNet::ensembleRun(MLP &mlp_){
             Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
             Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid);
         } catch (...) {}
-        Metrics::computeAndAppendFinalMetrics(Y_true_valid, Y_pred_valid, cfg_.metrics_val, cfg_.id + "_run" + run_id);
+
+        // Write combined metrics row into one CSV
+        // Metrics::computeAndAppendFinalMetrics(Y_true_valid, Y_pred_valid,cfg_.metrics_val, cfg_.id + "_run" + run_id);
+
+        // Buffer per-metric values for split CSVs (flush after loop)
+        std::vector<std::pair<std::string,double>> metrics_valid;
+        for (int c = 0; c < Y_true_valid.cols(); ++c) {
+            double mse  = Metrics::mse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double rmse = Metrics::rmse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double pi  = Metrics::pi(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double ns = Metrics::ns(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double kge  = Metrics::kge(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double pbias = Metrics::pbias(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double rsr  = Metrics::rsr(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+
+            metrics_valid.push_back({"MSE_h" + std::to_string(c+1), mse});
+            metrics_valid.push_back({"RMSE_h" + std::to_string(c+1), rmse});
+            metrics_valid.push_back({"PI_h" + std::to_string(c+1), pi});
+            metrics_valid.push_back({"NS_h" + std::to_string(c+1), ns});
+            metrics_valid.push_back({"KGE_h" + std::to_string(c+1), kge});
+            metrics_valid.push_back({"PBIAS_h" + std::to_string(c+1), pbias});
+            metrics_valid.push_back({"RSR_h" + std::to_string(c+1), rsr});
+        }
+        Metrics::bufferMetrics(buffer_valid, metrics_valid, cfg_.id + "_run" + run_id);
+
         data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_valid, run_id), Y_pred_valid, colNames);
         std::cout << "-> Validation metrics and predictions saved." << std::endl;
 
         std::cout << "Run " << run_id << " finished." << std::endl;
         std::cout << "-------------------------------------------" << std::endl;
     }
+
+     // Flush metrics buffers to files at the end
+    Metrics::flushMetricsBufferToCsv(buffer_calib, cfg_.metrics_cal);
+    Metrics::flushMetricsBufferToCsv(buffer_valid, cfg_.metrics_val);
 
     std::cout << "\n[I/O] Saved REAL CALIB data to: '" << cfg_.real_calib << "', and PRED CALIB data to '" << cfg_.pred_calib << "'\n";
     std::cout << "[I/O] Saved REAL VALID data to: '" << cfg_.real_valid << "', and PRED VALID data to '" << cfg_.pred_valid << "'\n";

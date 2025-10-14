@@ -10,6 +10,8 @@
 #include <limits>
 #include <time.h>
 #include <filesystem>
+#include <map>
+#include <algorithm>
 
 /**
  * Mean squared error between two vectors
@@ -207,6 +209,71 @@ bool Metrics::appendMetricsCsv(const std::string &path,
         // std::cout << "[Metrics] Appended metrics row to " << path << " for id=" << id << "\n";
     }
     return ok;
+}
+
+/**
+ * Append a labeled row of metrics into CSV file - each metric in a separate file 
+ */
+bool Metrics::appendMetricsCsvSplit(const std::string &basePath,
+                                    const std::vector<std::pair<std::string,double>> &metrics,
+                                    const std::string &id,
+                                    const std::string &timeStr,
+                                    bool verbose)
+{
+    if (metrics.empty()) {
+        if (verbose) std::cerr << "[Metrics::appendMetricsCsvSplit] No metrics provided\n";
+        return false;
+    }
+
+    // Group by metric type (e.g. MSE, RMSE)
+    std::map<std::string, std::vector<std::pair<std::string,double>>> grouped;
+    for (const auto &kv : metrics) {
+        std::string metricName = kv.first.substr(0, kv.first.find("_"));
+        grouped[metricName].push_back(kv);
+    }
+
+    // For each metric type
+    for (auto &group : grouped) {
+        const std::string &metricType = group.first;
+        auto &metricPairs = group.second;
+
+        // Sort columns for stable header order
+        std::sort(metricPairs.begin(), metricPairs.end(),
+                  [](auto &a, auto &b){ return a.first < b.first; });
+
+        std::string outFile = basePath + "_" + metricType + ".csv";
+
+        bool fileExists = std::filesystem::exists(outFile);
+        std::ofstream ofs(outFile, std::ios::app);
+        if (!ofs.is_open()) {
+            std::cerr << "[Metrics::appendMetricsCsvSplit] Cannot open file: " << outFile << "\n";
+            continue;
+        }
+
+        ofs << std::setprecision(12);
+
+        // Write header if new file
+        if (!fileExists) {
+            ofs << "time,id";
+            for (auto &p : metricPairs) ofs << "," << p.first;
+            ofs << "\n";
+        }
+
+        // Write row
+        std::string ts = timeStr.empty() ? "NA" : timeStr;
+        ofs << ts << "," << id;
+        for (auto &p : metricPairs) ofs << "," << p.second;
+        ofs << "\n";
+
+        ofs.close();
+
+        if (verbose) {
+            //std::cout << "[Metrics::appendMetricsCsvSplit] Appended metrics for "
+            //          << metricType << " into " << outFile << "\n";
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -408,6 +475,82 @@ std::string Metrics::addRunIdToFilename(const std::string &path, const std::stri
     std::string ext  = p.extension().string();
     return (p.parent_path() / (stem + "_" + run_id + ext)).string();
 }
+
+/**
+ * Buffer a set of metrics into a thread-safe in-memory structure for later export
+ */
+void Metrics::bufferMetrics(MetricBuffer &buffer,
+                            const std::vector<std::pair<std::string,double>> &metrics,
+                            const std::string &id,
+                            const std::string &timeStr)
+{
+    std::lock_guard<std::mutex> lock(buffer.mtx);
+
+    for (const auto &kv : metrics) {
+        // kv.first = "MSE_h1", kv.second = 0.54
+        std::string line = timeStr + "," + id + "," + std::to_string(kv.second);
+        buffer.data[kv.first].push_back({id, kv.second});
+    }
+}
+/**
+ * Flush the contents of a MetricBuffer to one or more CSV files
+ */
+bool Metrics::flushMetricsBufferToCsv(const MetricBuffer &buffer,
+                                      const std::string &basePath,
+                                      bool verbose)
+{
+    if (buffer.data.empty()) {
+        if (verbose) std::cerr << "[Metrics::flushMetricsBufferToCsv] Buffer is empty.\n";
+        return false;
+    }
+
+    // Group by metric type (e.g., MSE, RMSE)
+    std::map<std::string, std::vector<std::string>> metricNames;
+    for (const auto &kv : buffer.data) {
+        std::string metricType = kv.first.substr(0, kv.first.find("_"));
+        metricNames[metricType].push_back(kv.first);
+    }
+
+    for (auto &g : metricNames) {
+        const std::string &metricType = g.first;
+        auto &metricKeys = g.second;
+
+        // Sort for stable column order
+        std::sort(metricKeys.begin(), metricKeys.end());
+
+        std::string outFile = basePath + "_" + metricType + ".csv";
+        std::ofstream ofs(outFile);
+        if (!ofs.is_open()) {
+            std::cerr << "[Metrics::flushMetricsBufferToCsv] Cannot open file: " << outFile << "\n";
+            continue;
+        }
+
+        ofs << std::setprecision(12);
+        ofs << "id";
+        for (const auto &name : metricKeys) {
+            ofs << "," << name;
+        }
+        ofs << "\n";
+
+        // Determine number of rows (based on first metric)
+        size_t nRows = buffer.data.at(metricKeys[0]).size();
+        for (size_t r = 0; r < nRows; ++r) {
+            ofs << buffer.data.at(metricKeys[0])[r].first; // ID
+            for (const auto &name : metricKeys) {
+                ofs << "," << buffer.data.at(name)[r].second;
+            }
+            ofs << "\n";
+        }
+
+        ofs.close();
+        if (verbose) {
+            std::cout << "[Metrics] Wrote " << nRows << " rows to " << outFile << "\n";
+        }
+    }
+
+    return true;
+}
+
 
 /**
  * Calculate all metrics
