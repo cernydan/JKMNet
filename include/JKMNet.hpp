@@ -72,9 +72,10 @@ class JKMNet {
         void setNmlps(unsigned nmlp);  //>! Setter for number of MLPs
         unsigned getNmlps();  //>! Getter for number of MLPs
 
-        void init_mlps(MLP &mlp); //>! Initialization of MLPs vector
+        void init_mlps(); //>! Initialization of MLPs vector
 
         void ensembleRun(MLP &mlp_);
+        void ensembleRunMlpVector();
 
     protected:
 

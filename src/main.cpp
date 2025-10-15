@@ -43,9 +43,8 @@ int main(int argc, char** argv) {
     std::cout << "\n===========================================\n";
     std::cout << " Running Ensemble\n";
     std::cout << "===========================================\n";
-    MLP forNow;
     JKMNet net_(cfg, nthreads);
-    net_.ensembleRun(forNow);
+    net_.ensembleRunMlpVector();
 
     return 0;
 }
