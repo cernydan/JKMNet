@@ -78,6 +78,13 @@ class Metrics {
                                             const std::string &basePath,
                                             bool verbose = true);  //!< Flush the contents of a MetricBuffer to one or more CSV files
 
+        static std::string makeMetricFilename(const std::string &basePath,int run,const std::string &metricName);   //!< 
+                                      
+        static void saveMetricRow(const std::string &path,
+            const std::vector<std::string> &colNames,
+            const std::vector<double> &values,
+            bool writeHeader = false);  //!< 
+
         //Eigen::VectorXd calcMetricsAll(); //<! Calculate all metrics
 
     protected:

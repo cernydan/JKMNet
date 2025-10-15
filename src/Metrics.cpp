@@ -551,6 +551,59 @@ bool Metrics::flushMetricsBufferToCsv(const MetricBuffer &buffer,
     return true;
 }
 
+/**
+ * 
+ */
+std::string Metrics::makeMetricFilename(const std::string &basePath,
+                                        int run,
+                                        const std::string &metricName)
+{
+    namespace fs = std::filesystem;
+    fs::path p(basePath);
+    fs::path dir = p.parent_path();
+    std::string stem = p.stem().string();       // e.g. "metrics"
+    std::string ext  = p.extension().string();  // e.g. ".csv"
+
+    std::ostringstream oss;
+    oss << stem << "_run" << run << "_" << metricName << ext;
+
+    fs::path newPath = dir / oss.str();
+    return newPath.string();
+}
+
+/**
+ * 
+ */
+void Metrics::saveMetricRow(const std::string &path,
+                            const std::vector<std::string> &colNames,
+                            const std::vector<double> &values,
+                            bool writeHeader)
+{
+    namespace fs = std::filesystem;
+    fs::path p(path);
+    if (p.has_parent_path()) fs::create_directories(p.parent_path());
+
+    std::ofstream ofs(path, std::ios::out | std::ios::app);
+    if (!ofs.is_open()) {
+        std::cerr << "[Metrics] Failed to open: " << path << "\n";
+        return;
+    }
+
+    ofs << std::setprecision(10);
+    if (writeHeader) {
+        for (size_t i = 0; i < colNames.size(); ++i) {
+            ofs << colNames[i];
+            if (i + 1 < colNames.size()) ofs << ",";
+        }
+        ofs << "\n";
+    }
+
+    for (size_t i = 0; i < values.size(); ++i) {
+        ofs << values[i];
+        if (i + 1 < values.size()) ofs << ",";
+    }
+    ofs << "\n";
+}
 
 /**
  * Calculate all metrics

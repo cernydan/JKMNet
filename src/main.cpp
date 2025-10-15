@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     Data::cleanAllOutputs(cfg.out_dir);
 
     std::cout << "\n===========================================\n";
-    std::cout << " Running Ensemble with Optimized Parameters\n";
+    std::cout << " Running Ensemble\n";
     std::cout << "===========================================\n";
     MLP forNow;
     JKMNet net_(cfg, nthreads);
