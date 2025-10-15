@@ -15,7 +15,8 @@ JKMNet::JKMNet(){
 }
 
 JKMNet::JKMNet(const RunConfig& cfg, unsigned nthreads)
-    : cfg_(cfg), nthreads_(nthreads) {}
+    : cfg_(cfg), nthreads_(nthreads) {
+    }
 
 /**
  * The destructor
@@ -300,12 +301,21 @@ unsigned JKMNet::getNmlps(){
 /**
  * Initialization of MLPs vector
  */
-void JKMNet::init_mlps(MLP &mlp){
-    //for()
+void JKMNet::init_mlps(){
+    mlps_.clear();
+    MLP setMlp;
+    setMlp.setArchitecture(cfg_.mlp_architecture);
+    setMlp.setActivations(std::vector<activ_func_type>(cfg_.mlp_architecture.size(), strToActivation(cfg_.activation)));
+    setMlp.setWInitType(std::vector<weight_init_type>(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init)));
+    Eigen::VectorXd x0 = Eigen::VectorXd::Zero(std::accumulate(cfg_.input_numbers.begin(), cfg_.input_numbers.end(), 0));
+    for(unsigned i = 0; i < Nmlps; i++){
+        setMlp.initMLP(x0, cfg_.seed);
+        mlps_.push_back(setMlp);
+    }
 }
 
 void JKMNet::ensembleRun(MLP &mlp_){
-        std::cout << "The number of threads is " << nthreads_ << std::endl;
+    std::cout << "The number of threads is " << nthreads_ << std::endl;
 
     // ------------------------------------------------------
     // Load & preprocess data
@@ -488,6 +498,241 @@ void JKMNet::ensembleRun(MLP &mlp_){
         std::cout << "-> Evaluating validation set..." << std::endl;
         mlp_.calculateOutputs(X_valid);
         Eigen::MatrixXd Y_pred_valid = mlp_.getOutputs();
+        Eigen::MatrixXd Y_true_valid = Y_valid;
+        try {
+            Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
+            Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid);
+        } catch (...) {}
+
+        // Write combined metrics row into one CSV
+        // Metrics::computeAndAppendFinalMetrics(Y_true_valid, Y_pred_valid,cfg_.metrics_val, cfg_.id + "_run" + run_id);
+
+        // Buffer per-metric values for split CSVs (flush after loop)
+        std::vector<std::pair<std::string,double>> metrics_valid;
+        for (int c = 0; c < Y_true_valid.cols(); ++c) {
+            double mse  = Metrics::mse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double rmse = Metrics::rmse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double pi  = Metrics::pi(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double ns = Metrics::ns(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double kge  = Metrics::kge(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double pbias = Metrics::pbias(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+            double rsr  = Metrics::rsr(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
+
+            metrics_valid.push_back({"MSE_h" + std::to_string(c+1), mse});
+            metrics_valid.push_back({"RMSE_h" + std::to_string(c+1), rmse});
+            metrics_valid.push_back({"PI_h" + std::to_string(c+1), pi});
+            metrics_valid.push_back({"NS_h" + std::to_string(c+1), ns});
+            metrics_valid.push_back({"KGE_h" + std::to_string(c+1), kge});
+            metrics_valid.push_back({"PBIAS_h" + std::to_string(c+1), pbias});
+            metrics_valid.push_back({"RSR_h" + std::to_string(c+1), rsr});
+        }
+        Metrics::bufferMetrics(buffer_valid, metrics_valid, cfg_.id + "_run" + run_id);
+
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_valid, run_id), Y_pred_valid, colNames);
+        std::cout << "-> Validation metrics and predictions saved." << std::endl;
+
+        std::cout << "Run " << run_id << " finished." << std::endl;
+        std::cout << "-------------------------------------------" << std::endl;
+    }
+
+     // Flush metrics buffers to files at the end
+    Metrics::flushMetricsBufferToCsv(buffer_calib, cfg_.metrics_cal);
+    Metrics::flushMetricsBufferToCsv(buffer_valid, cfg_.metrics_val);
+
+    std::cout << "\n[I/O] Saved REAL CALIB data to: '" << cfg_.real_calib << "', and PRED CALIB data to '" << cfg_.pred_calib << "'\n";
+    std::cout << "[I/O] Saved REAL VALID data to: '" << cfg_.real_valid << "', and PRED VALID data to '" << cfg_.pred_valid << "'\n";
+    std::cout << "[I/O] Saved INIT weights vector to: '" << cfg_.weights_vec_csv_init << "'\n";
+    std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg_.weights_vec_csv << "'\n";
+    std::cout << "[I/O] Saved RUN INFO to: '" << cfg_.run_info << "'\n";
+    std::cout << "[I/O] Saved CALIB METRICS to: '" << cfg_.metrics_cal << "'\n";
+    std::cout << "[I/O] Saved VALID METRICS to: '" << cfg_.metrics_val << "'\n";
+
+    std::cout << "\n===========================================\n";
+    std::cout << " Running Ensemble finished \n";
+    std::cout << "===========================================\n";
+}
+
+void JKMNet::ensembleRunMlpVector(){
+    std::cout << "The number of threads is " << nthreads_ << std::endl;
+
+    // ------------------------------------------------------
+    // Load & preprocess data
+    // ------------------------------------------------------
+    std::unordered_set<std::string> idFilter;
+    if (!cfg_.id.empty()) {
+        std::vector<std::string> ids = parseStringList(cfg_.id);
+        idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
+    }
+
+    std::cout << "-> Loading data..." << std::endl;
+    data_.loadFilteredCSV(cfg_.data_file, idFilter, cfg_.columns, cfg_.timestamp, cfg_.id_col);
+    std::cout << "-> Data loaded." << std::endl;
+
+    std::cout << "-> Transforming data..." << std::endl;
+    data_.setTransform(strToTransformType(cfg_.transform),
+                       cfg_.transform_alpha,
+                       cfg_.exclude_last_col_from_transform);
+    data_.applyTransform();
+    std::cout << "-> Data transformed." << std::endl;
+
+    auto [X_train, Y_train, X_valid, Y_valid] = data_.makeMats(cfg_.input_numbers,
+                                                              static_cast<int>(cfg_.mlp_architecture.back()),
+                                                              cfg_.train_fraction,
+                                                              cfg_.shuffle,
+                                                              cfg_.seed);
+
+    std::cout << "-> Data split into training and validation sets." << std::endl;
+
+    std::vector<std::string> colNames;
+    for (int c = 0; c < Y_train.cols(); ++c) {
+        colNames.push_back("h" + std::to_string(c+1));
+    }
+
+    // Save real data
+    Eigen::MatrixXd Y_true_calib_save = Y_train;
+    Eigen::MatrixXd Y_true_valid_save = Y_valid;
+    try {
+        Y_true_calib_save = data_.inverseTransformOutputs(Y_true_calib_save);
+        Y_true_valid_save = data_.inverseTransformOutputs(Y_true_valid_save);
+    } catch (const std::exception &ex) {
+        std::cerr << "[Warning] inverseTransformOutputs failed (save GT): " << ex.what() << "\n";
+    }
+    data_.saveMatrixCsv(cfg_.real_calib, Y_true_calib_save, colNames);
+    data_.saveMatrixCsv(cfg_.real_valid, Y_true_valid_save, colNames);
+    std::cout << "-> Real calibration and validation data saved." << std::endl;
+
+    MetricBuffer buffer_calib;
+    MetricBuffer buffer_valid;
+
+    // Configure MLP
+    setNmlps(cfg_.ensemble_runs);
+    init_mlps();
+
+    // ------------------------------------------------------
+    // Ensemble loop
+    // ------------------------------------------------------
+    //#pragma omp parallel for
+    for (unsigned run = 0; run < mlps_.size() ; ++run) {
+        std::string run_id = std::to_string(run+1);
+        std::cout << "\n-------------------------------------------\n";
+        std::cout << "Run " << run_id << " starting..." << std::endl;
+
+        // Save init weights
+        mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv_init, run_id));
+        mlps_[run].weightsToVectorMlp();
+        mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv_init, run_id));
+        mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv_init, run == 0);
+        std::cout << "-> Initial weights saved." << std::endl;
+
+        // ----------------------------------------
+        // Debugging architecture and shape
+        std::cout << "Architecture: ";
+        for (auto v : mlps_[run].getArchitecture()) std::cout << v << " ";
+        std::cout << "\n";
+
+        std::cout << "X_train shape: " << X_train.rows() << " x " << X_train.cols() << "\n";
+        std::cout << "Y_train shape: " << Y_train.rows() << " x " << Y_train.cols() << "\n";
+
+        std::cout << "First layer input (weights.cols - 1): "
+                << mlps_[run].getWeights(0).cols()-1 << "\n";
+        std::cout << "Last layer output (neurons): "
+                << mlps_[run].getNumNeuronsInLayers(mlps_[run].getNumLayers()-1) << "\n";
+
+        if (mlps_[run].getWeights(0).cols()-1 != X_train.cols()) {
+            std::cerr << "[ERROR] Input size mismatch between data and MLP architecture!\n";
+        }
+        if (mlps_[run].getNumNeuronsInLayers(mlps_[run].getNumLayers()-1) != Y_train.cols()) {
+            std::cerr << "[ERROR] Output size mismatch between data and MLP architecture!\n";
+        }
+        // ----------------------------------------
+
+        // Train
+        std::cout << "-> Training starting..." << std::endl;
+        Eigen::MatrixXd resultErrors;
+        
+        if (cfg_.trainer == "online") {
+            mlps_[run].onlineAdam(
+                cfg_.max_iterations, cfg_.max_error,
+                cfg_.learning_rate,  X_train, Y_train
+            );
+        } else if (cfg_.trainer == "batch") {
+            mlps_[run].batchAdam(
+                cfg_.max_iterations, cfg_.max_error,
+                cfg_.batch_size, cfg_.learning_rate,
+                X_train, Y_train
+            );
+        } else if (cfg_.trainer == "online_epoch") {
+            resultErrors = mlps_[run].onlineAdamEpochVal(
+                X_train, Y_train, X_valid, Y_valid,
+                cfg_.max_iterations, cfg_.learning_rate
+            );
+            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
+        } else if (cfg_.trainer == "batch_epoch") {
+            resultErrors = mlps_[run].batchAdamEpochVal(
+                X_train, Y_train, X_valid, Y_valid,
+                cfg_.batch_size, cfg_.max_iterations,
+                cfg_.learning_rate
+            );
+            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
+        } else {
+            throw std::invalid_argument("Unknown trainer type: " + cfg_.trainer);
+        }
+        std::cout << "-> Training finished." << std::endl;
+
+        // Evaluate calibration
+        std::cout << "-> Evaluating calibration set..." << std::endl;
+        mlps_[run].calculateOutputs(X_train);
+        Eigen::MatrixXd Y_pred_calib = mlps_[run].getOutputs();
+        Eigen::MatrixXd Y_true_calib = Y_train;
+        try {
+            Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
+            Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
+        } catch (...) {}
+
+        Metrics::appendRunInfoCsv(cfg_.run_info,
+            mlps_[run].getResult().iterations, mlps_[run].getResult().finalLoss,
+            mlps_[run].getResult().converged, mlps_[run].getResult().time,
+            cfg_.id + "_run" + run_id);
+
+        // Write combined metrics row into one CSV
+        // Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg_.metrics_cal, cfg_.id + "_run" + run_id);
+
+        // Store metrics in buffer instead of file
+        std::vector<std::pair<std::string,double>> metrics_calib;
+        for (int c = 0; c < Y_true_calib.cols(); ++c) {
+            double mse  = Metrics::mse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double rmse = Metrics::rmse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double pi  = Metrics::pi(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double ns = Metrics::ns(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double kge  = Metrics::kge(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double pbias = Metrics::pbias(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+            double rsr = Metrics::rsr(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
+
+            metrics_calib.push_back({"MSE_h" + std::to_string(c+1), mse});
+            metrics_calib.push_back({"RMSE_h" + std::to_string(c+1), rmse});
+            metrics_calib.push_back({"PI_h" + std::to_string(c+1), pi});
+            metrics_calib.push_back({"NS_h" + std::to_string(c+1), ns});
+            metrics_calib.push_back({"KGE_h" + std::to_string(c+1), kge});
+            metrics_calib.push_back({"PBIAS_h" + std::to_string(c+1), pbias});
+            metrics_calib.push_back({"RSR_h" + std::to_string(c+1), rsr});
+        }
+        Metrics::bufferMetrics(buffer_calib, metrics_calib, cfg_.id + "_run" + run_id);
+
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), Y_pred_calib, colNames);
+
+        std::cout << "-> Calibration metrics and predictions saved." << std::endl;
+
+        // Save final weights
+        mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv, run_id));
+        mlps_[run].weightsToVectorMlp();
+        mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv, run_id));
+        mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv, run == 0);
+        std::cout << "-> Final weights saved." << std::endl;
+
+        // Evaluate validation
+        std::cout << "-> Evaluating validation set..." << std::endl;
+        mlps_[run].calculateOutputs(X_valid);
+        Eigen::MatrixXd Y_pred_valid = mlps_[run].getOutputs();
         Eigen::MatrixXd Y_true_valid = Y_valid;
         try {
             Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
