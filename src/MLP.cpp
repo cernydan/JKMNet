@@ -1332,7 +1332,7 @@ Eigen::MatrixXd MLP::onlineAdamEpochVal(
     auto duration = duration_cast<seconds>(stop - start);
 
     result.converged = false;
-    result.finalLoss = resultErrors(maxIterations,0);
+    result.finalLoss = resultErrors(maxIterations - 1 , 0);
     result.iterations = maxIterations;
     result.time = duration.count();
 
@@ -1390,7 +1390,7 @@ Eigen::MatrixXd MLP::batchAdamEpochVal(
     auto duration = duration_cast<seconds>(stop - start);
 
     result.converged = false;
-    result.finalLoss = resultErrors(maxIterations,0);
+    result.finalLoss = resultErrors(maxIterations - 1 , 0);
     result.iterations = maxIterations;
     result.time = duration.count();
 
