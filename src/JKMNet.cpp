@@ -306,17 +306,17 @@ unsigned JKMNet::getNmlps(){
  */
 void JKMNet::init_mlps(){
     mlps_.clear();
+    mlps_ = std::vector<MLP>(Nmlps);
     MLP setMlp;
     setMlp.setArchitecture(cfg_.mlp_architecture);
     setMlp.setActivations(std::vector<activ_func_type>(cfg_.mlp_architecture.size(), strToActivation(cfg_.activation)));
     setMlp.setWInitType(std::vector<weight_init_type>(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init)));
     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(std::accumulate(cfg_.input_numbers.begin(), cfg_.input_numbers.end(), 0));
     
-    // parallel, but NO push_back
-    //mlps_[i] = settter pro jednu clen vectoru mlps
+    #pragma omp parallel for num_threads(nthreads_)
     for(unsigned i = 0; i < Nmlps; i++){
-        setMlp.initMLP(x0, cfg_.seed);
-        mlps_.push_back(setMlp);
+        mlps_[i] = setMlp;
+        mlps_[i].initMLP(x0, cfg_.seed);
     }
 }
 
