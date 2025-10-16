@@ -682,37 +682,49 @@ void JKMNet::ensembleRunMlpVector(){
 
         // Train
         clog << "-> Training starting...\n";
+
         Eigen::MatrixXd resultErrors;
+        TrainerType trainerType = strToTrainerType(cfg_.trainer);
         
-        // TODO: volba pro ukladani pred hodnot pro kazdou/10./... epochu 
-        // TODO: switch
-        if (cfg_.trainer == "online") {
-            mlps_[run].onlineAdam(
-                cfg_.max_iterations, cfg_.max_error,
-                cfg_.learning_rate,  X_train, Y_train
-            );
-        } else if (cfg_.trainer == "batch") {
-            mlps_[run].batchAdam(
-                cfg_.max_iterations, cfg_.max_error,
-                cfg_.batch_size, cfg_.learning_rate,
-                X_train, Y_train
-            );
-        } else if (cfg_.trainer == "online_epoch") {
-            resultErrors = mlps_[run].onlineAdamEpochVal(
-                X_train, Y_train, X_valid, Y_valid,
-                cfg_.max_iterations, cfg_.learning_rate
-            );
-            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
-        } else if (cfg_.trainer == "batch_epoch") {
-            resultErrors = mlps_[run].batchAdamEpochVal(
-                X_train, Y_train, X_valid, Y_valid,
-                cfg_.batch_size, cfg_.max_iterations,
-                cfg_.learning_rate
-            );
-            Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
-        } else {
-            throw std::invalid_argument("Unknown trainer type: " + cfg_.trainer);
+        // Switch for trainer type
+        switch (trainerType) {
+            case TrainerType::ONLINE:
+                mlps_[run].onlineAdam(
+                    cfg_.max_iterations, cfg_.max_error,
+                    cfg_.learning_rate,  X_train, Y_train
+                );
+                break;
+
+            case TrainerType::BATCH:
+                mlps_[run].batchAdam(
+                    cfg_.max_iterations, cfg_.max_error,
+                    cfg_.batch_size, cfg_.learning_rate,
+                    X_train, Y_train
+                );
+                break;
+
+            case TrainerType::ONLINE_EPOCH:
+                resultErrors = mlps_[run].onlineAdamEpochVal(
+                    X_train, Y_train, X_valid, Y_valid,
+                    cfg_.max_iterations, cfg_.learning_rate
+                );
+                Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
+                break;
+
+            case TrainerType::BATCH_EPOCH:
+                resultErrors = mlps_[run].batchAdamEpochVal(
+                    X_train, Y_train, X_valid, Y_valid,
+                    cfg_.batch_size, cfg_.max_iterations,
+                    cfg_.learning_rate
+                );
+                Metrics::saveErrorsCsv(Metrics::addRunIdToFilename(cfg_.errors_csv, run_id), resultErrors);
+                break;
+
+            default:
+                throw std::invalid_argument("Unknown trainer type");
         }
+
+
         clog << "-> Training finished.\n";
 
         // Evaluate calibration

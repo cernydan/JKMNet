@@ -150,6 +150,21 @@ inline transform_type strToTransformType(const std::string &s) {
     throw std::runtime_error("Unknown transform: " + s);
 }
 
+enum class TrainerType {
+    ONLINE,
+    BATCH,
+    ONLINE_EPOCH,
+    BATCH_EPOCH
+};
+
+inline TrainerType strToTrainerType(const std::string& s) {
+    if (s == "online")       return TrainerType::ONLINE;
+    if (s == "batch")        return TrainerType::BATCH;
+    if (s == "online_epoch") return TrainerType::ONLINE_EPOCH;
+    if (s == "batch_epoch")  return TrainerType::BATCH_EPOCH;
+    throw std::invalid_argument("Unknown trainer type: " + s);
+}
+
 /**
  * Parse the ini to map
  */

@@ -1,6 +1,6 @@
 // ********* 16. 10. 2025 *********
 // **DONE**: Change 'std::cout' into 'clog'
-// TODO: Change 'if (cfg_.trainer == "online"){}' into 'switch(){}'
+// **DONE**: Change 'if (cfg_.trainer == "online"){}' into 'switch(){}'
 // TODO: Make 'JKMNet::init_mlps()' parallel, but has to be without 'push_back()'
 // TODO: Add calculation of all metrics during training (and validation), not only MSE
 // TODO: Choice in config for saving metrics for all epochs, last epoch, every x-th epoch, ...
