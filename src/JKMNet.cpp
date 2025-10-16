@@ -310,6 +310,9 @@ void JKMNet::init_mlps(){
     setMlp.setActivations(std::vector<activ_func_type>(cfg_.mlp_architecture.size(), strToActivation(cfg_.activation)));
     setMlp.setWInitType(std::vector<weight_init_type>(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init)));
     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(std::accumulate(cfg_.input_numbers.begin(), cfg_.input_numbers.end(), 0));
+    
+    // parallel, but NO push_back
+    //mlps_[i] = settter pro jednu clen vectoru mlps
     for(unsigned i = 0; i < Nmlps; i++){
         setMlp.initMLP(x0, cfg_.seed);
         mlps_.push_back(setMlp);
@@ -642,9 +645,6 @@ void JKMNet::ensembleRunMlpVector(){
     data_.saveMatrixCsv(cfg_.real_valid, Y_true_valid_save, colNames);
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
-    //MetricBuffer buffer_calib;
-    //MetricBuffer buffer_valid;
-
     // Configure MLP
     setNmlps(cfg_.ensemble_runs);
     init_mlps();
@@ -652,7 +652,7 @@ void JKMNet::ensembleRunMlpVector(){
     // ------------------------------------------------------
     // Ensemble loop
     // ------------------------------------------------------
-    //#pragma omp parallel for
+    //#pragma omp parallel for num_threads(nthreads_)
     for (unsigned run = 0; run < mlps_.size() ; ++run) {
         std::string run_id = std::to_string(run+1);  // string
         unsigned run_id_integer = run + 1; // integer
@@ -686,6 +686,8 @@ void JKMNet::ensembleRunMlpVector(){
         std::cout << "-> Training starting..." << std::endl;
         Eigen::MatrixXd resultErrors;
         
+        // TODO: volba pro ukladani pred hodnot pro kazdou/10./... epochu 
+        // TODO: switch
         if (cfg_.trainer == "online") {
             mlps_[run].onlineAdam(
                 cfg_.max_iterations, cfg_.max_error,
@@ -724,36 +726,6 @@ void JKMNet::ensembleRunMlpVector(){
             Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
             Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
         } catch (...) {}
-
-        // Append run info file
-        // Metrics::appendRunInfoCsv(cfg_.run_info,
-        //     mlps_[run].getResult().iterations, mlps_[run].getResult().finalLoss,
-        //     mlps_[run].getResult().converged, mlps_[run].getResult().time,
-        //     cfg_.id + "_run" + run_id);
-
-        // Write combined metrics row into one CSV
-        // Metrics::computeAndAppendFinalMetrics(Y_true_calib, Y_pred_calib, cfg_.metrics_cal, cfg_.id + "_run" + run_id);
-
-        // Store metrics in buffer instead of file
-        // std::vector<std::pair<std::string,double>> metrics_calib;
-        // for (int c = 0; c < Y_true_calib.cols(); ++c) {
-        //     double mse  = Metrics::mse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
-        //     double rmse = Metrics::rmse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
-        //     double pi  = Metrics::pi(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
-        //     double ns = Metrics::ns(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
-        //     double kge  = Metrics::kge(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
-        //     double pbias = Metrics::pbias(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
-        //     double rsr = Metrics::rsr(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval());
-
-        //     metrics_calib.push_back({"MSE_h" + std::to_string(c+1), mse});
-        //     metrics_calib.push_back({"RMSE_h" + std::to_string(c+1), rmse});
-        //     metrics_calib.push_back({"PI_h" + std::to_string(c+1), pi});
-        //     metrics_calib.push_back({"NS_h" + std::to_string(c+1), ns});
-        //     metrics_calib.push_back({"KGE_h" + std::to_string(c+1), kge});
-        //     metrics_calib.push_back({"PBIAS_h" + std::to_string(c+1), pbias});
-        //     metrics_calib.push_back({"RSR_h" + std::to_string(c+1), rsr});
-        // }
-        // Metrics::bufferMetrics(buffer_calib, metrics_calib, cfg_.id + "_run" + run_id);
 
         // One file for each metrics per each run
         std::vector<double> mseVals, rmseVals, piVals, nsVals, kgeVals, pbiasVals, rsrVals;
@@ -797,6 +769,7 @@ void JKMNet::ensembleRunMlpVector(){
         // mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv, run == 0);  // all final weights in one file
         std::cout << "-> Final weights saved." << std::endl;
 
+        // TODO: predikce, tedy samostatna metoda 
         // Evaluate validation
         std::cout << "-> Evaluating validation set..." << std::endl;
         mlps_[run].calculateOutputs(X_valid);
@@ -806,30 +779,6 @@ void JKMNet::ensembleRunMlpVector(){
             Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
             Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid);
         } catch (...) {}
-
-        // Write combined metrics row into one CSV
-        // Metrics::computeAndAppendFinalMetrics(Y_true_valid, Y_pred_valid,cfg_.metrics_val, cfg_.id + "_run" + run_id);
-
-        // Buffer per-metric values for split CSVs (flush after loop)
-        // std::vector<std::pair<std::string,double>> metrics_valid;
-        // for (int c = 0; c < Y_true_valid.cols(); ++c) {
-        //     double mse  = Metrics::mse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
-        //     double rmse = Metrics::rmse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
-        //     double pi  = Metrics::pi(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
-        //     double ns = Metrics::ns(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
-        //     double kge  = Metrics::kge(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
-        //     double pbias = Metrics::pbias(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
-        //     double rsr  = Metrics::rsr(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval());
-
-        //     metrics_valid.push_back({"MSE_h" + std::to_string(c+1), mse});
-        //     metrics_valid.push_back({"RMSE_h" + std::to_string(c+1), rmse});
-        //     metrics_valid.push_back({"PI_h" + std::to_string(c+1), pi});
-        //     metrics_valid.push_back({"NS_h" + std::to_string(c+1), ns});
-        //     metrics_valid.push_back({"KGE_h" + std::to_string(c+1), kge});
-        //     metrics_valid.push_back({"PBIAS_h" + std::to_string(c+1), pbias});
-        //     metrics_valid.push_back({"RSR_h" + std::to_string(c+1), rsr});
-        // }
-        // Metrics::bufferMetrics(buffer_valid, metrics_valid, cfg_.id + "_run" + run_id);
 
         // One file for each metrics per each run
         std::vector<double> mseValsV, rmseValsV, piValsV, nsValsV, kgeValsV, pbiasValsV, rsrValsV;
@@ -871,15 +820,10 @@ void JKMNet::ensembleRunMlpVector(){
         logFile.close();  // close log file
     }
 
-    // Flush metrics buffers to files at the end
-    //Metrics::flushMetricsBufferToCsv(buffer_calib, cfg_.metrics_cal);
-    //Metrics::flushMetricsBufferToCsv(buffer_valid, cfg_.metrics_val);
-
     std::cout << "\n[I/O] Saved REAL CALIB data to: '" << cfg_.real_calib << "', and PRED CALIB data to '" << cfg_.pred_calib << "'\n";
     std::cout << "[I/O] Saved REAL VALID data to: '" << cfg_.real_valid << "', and PRED VALID data to '" << cfg_.pred_valid << "'\n";
     std::cout << "[I/O] Saved INIT weights vector to: '" << cfg_.weights_vec_csv_init << "'\n";
     std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg_.weights_vec_csv << "'\n";
-    // std::cout << "[I/O] Saved RUN INFO to: '" << cfg_.run_info << "'\n";
     std::cout << "[I/O] Saved CALIB METRICS to: '" << cfg_.metrics_cal << "'\n";
     std::cout << "[I/O] Saved VALID METRICS to: '" << cfg_.metrics_val << "'\n";
 

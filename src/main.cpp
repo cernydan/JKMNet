@@ -1,5 +1,13 @@
-// ********* 6. 10. 2025 *********
-// TODO: Add parallelization of the model using openML
+// ********* 16. 10. 2025 *********
+// TODO: Change 'std::cout' into 'clog'
+// TODO: Change 'if (cfg_.trainer == "online"){}' into 'switch(){}'
+// TODO: Make 'JKMNet::init_mlps()' parallel, but has to be without 'push_back()'
+// TODO: Add calculation of all metrics during training (and validation), not only MSE
+// TODO: Choice in config for saving metrics for all epochs, last epoch, every x-th epoch, ...
+// TODO: Choice in config for saving predicted values for all epochs, last epoch, every x-th epoch, ... 
+// TODO: Create separate method for predictions (validation), i.e., read final weights from file and calculate outputs
+
+// ********* [PSO] *********
 // TODO: [PSO] Save PSO best hyperparams into 'config_model.ini' for MLP ensemble run
 // TODO: [PSO] Add all activation functions into PSO optim
 // TODO: [PSO] Add more hyperparams into PSO optim, i.e., architecture, weight_init, trainer, ...
