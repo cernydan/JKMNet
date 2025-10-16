@@ -4,6 +4,8 @@
 #include <random>
 #include <iostream>
 #include "eigen-3.4/Eigen/Dense"
+#include <filesystem>
+#include <fstream>
 
 using namespace std;
 
@@ -653,6 +655,20 @@ void JKMNet::ensembleRunMlpVector(){
     //#pragma omp parallel for
     for (unsigned run = 0; run < mlps_.size() ; ++run) {
         std::string run_id = std::to_string(run+1);
+
+        // Check, if exists folder 'outputs/logs'
+        if (!std::filesystem::exists(cfg_.log_dir)) {
+            std::filesystem::create_directories(cfg_.log_dir);
+        }
+        // Set the output file for the log messages
+        std::string filename = cfg_.log_dir + "log_run" + run_id + ".log";
+        std::ofstream logFile(filename);
+        std::clog.rdbuf(logFile.rdbuf());
+        // Write to the log file
+        clog << "Run " << run_id << " starting...\n";
+        // Close the log file
+        logFile.close();
+
         std::cout << "\n-------------------------------------------\n";
         std::cout << "Run " << run_id << " starting..." << std::endl;
 

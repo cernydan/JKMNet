@@ -93,6 +93,7 @@ struct RunConfig {
 
     // output paths (parsed from [paths] section)
     std::string out_dir = "";
+    std::string log_dir = "";
     std::string calib_mat = "";
     std::string weights_csv_init = "";
     std::string weights_bin_init = "";
@@ -110,6 +111,7 @@ struct RunConfig {
     std::string metrics_val = "";
     std::string run_info = "";
     std::string errors_csv;
+    std::string logs = "";
 };
 
 /**
@@ -306,6 +308,8 @@ inline RunConfig parseConfigIni(const std::string &path) {
     // paths (optional)
     std::string sout = get("out_dir");
     if (!sout.empty()) cfg.out_dir = trimStr(sout);
+    std::string slogdir = get("log_dir");
+    if (!slogdir.empty()) cfg.log_dir = trimStr(slogdir);
     std::string scalib = get("calib_mat");
     if (!scalib.empty()) cfg.calib_mat = trimStr(scalib);
     std::string sinitweil = get("weights_csv_init");
@@ -340,6 +344,8 @@ inline RunConfig parseConfigIni(const std::string &path) {
     if (!sruninfo.empty()) cfg.run_info = trimStr(sruninfo);
     std::string serrors = get("errors_csv");
     if (!serrors.empty()) cfg.errors_csv = trimStr(serrors);
+    std::string slogs = get("logs");
+    if (!slogs.empty()) cfg.logs = trimStr(slogs);
     
     // Basic validation
     if (cfg.mlp_architecture.empty()) throw std::runtime_error("config: architecture is required (e.g. architecture = 8,6,2)");
