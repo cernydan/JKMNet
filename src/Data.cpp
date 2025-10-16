@@ -375,9 +375,14 @@ void Data::logRunSettings(const RunConfig& cfg, unsigned run_id) const {
     // --- Paths ---
     std::clog << "Output dir: " << cfg.out_dir << "\n";
     std::clog << "Log dir: " << cfg.log_dir << "\n";
-    std::clog << "Weights CSV: " << cfg.weights_csv << "\n";
-    std::clog << "Metrics cal: " << cfg.metrics_cal << "\n";
-    std::clog << "Metrics val: " << cfg.metrics_val << "\n";
+    std::clog << "Real calib data: " << cfg.real_calib << "\n";
+    std::clog << "Predict calib data: " << cfg.pred_calib << "\n";
+    std::clog << "Real valid data: " << cfg.real_valid << "\n";
+    std::clog << "Predict valid data: " << cfg.pred_valid << "\n";
+    std::clog << "Weights init: " << cfg.weights_csv_init << "\n";
+    std::clog << "Weights final: " << cfg.weights_csv << "\n";
+    std::clog << "Metrics calib: " << cfg.metrics_cal << "\n";
+    std::clog << "Metrics valid: " << cfg.metrics_val << "\n";
 
     std::clog << "===========================================================\n";
 }

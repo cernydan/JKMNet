@@ -649,6 +649,7 @@ void JKMNet::ensembleRunMlpVector(){
     setNmlps(cfg_.ensemble_runs);
     init_mlps();
 
+    std::cout << "-> Ensemble run starting..." << std::endl;
     // ------------------------------------------------------
     // Ensemble loop
     // ------------------------------------------------------
@@ -672,18 +673,15 @@ void JKMNet::ensembleRunMlpVector(){
 
         clog << "Run " << run_id << " starting...\n";
 
-        std::cout << "\n-------------------------------------------\n";
-        std::cout << "Run " << run_id << " starting..." << std::endl;
-
         // Save init weights
         mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv_init, run_id));
         mlps_[run].weightsToVectorMlp();
         mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv_init, run_id));
         //mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv_init, run == 0);  // all init weights in one file
-        std::cout << "-> Initial weights saved." << std::endl;
+        clog << "-> Initial weights saved.\n";
 
         // Train
-        std::cout << "-> Training starting..." << std::endl;
+        clog << "-> Training starting...\n";
         Eigen::MatrixXd resultErrors;
         
         // TODO: volba pro ukladani pred hodnot pro kazdou/10./... epochu 
@@ -715,10 +713,10 @@ void JKMNet::ensembleRunMlpVector(){
         } else {
             throw std::invalid_argument("Unknown trainer type: " + cfg_.trainer);
         }
-        std::cout << "-> Training finished." << std::endl;
+        clog << "-> Training finished.\n";
 
         // Evaluate calibration
-        std::cout << "-> Evaluating calibration set..." << std::endl;
+        clog << "-> Evaluating calibration set...\n";
         mlps_[run].calculateOutputs(X_train);
         Eigen::MatrixXd Y_pred_calib = mlps_[run].getOutputs();
         Eigen::MatrixXd Y_true_calib = Y_train;
@@ -760,18 +758,18 @@ void JKMNet::ensembleRunMlpVector(){
 
         data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), Y_pred_calib, colNames);
 
-        std::cout << "-> Calibration metrics and predictions saved." << std::endl;
+        clog << "-> Calibration metrics and predictions saved.\n";
 
         // Save final weights
         mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv, run_id));
         mlps_[run].weightsToVectorMlp();
         mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv, run_id));
         // mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv, run == 0);  // all final weights in one file
-        std::cout << "-> Final weights saved." << std::endl;
+        clog << "-> Final weights saved.\n";
 
         // TODO: predikce, tedy samostatna metoda 
         // Evaluate validation
-        std::cout << "-> Evaluating validation set..." << std::endl;
+        clog << "-> Evaluating validation set...\n";
         mlps_[run].calculateOutputs(X_valid);
         Eigen::MatrixXd Y_pred_valid = mlps_[run].getOutputs();
         Eigen::MatrixXd Y_true_valid = Y_valid;
@@ -811,21 +809,16 @@ void JKMNet::ensembleRunMlpVector(){
 
         
         data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_valid, run_id), Y_pred_valid, colNames);
-        std::cout << "-> Validation metrics and predictions saved." << std::endl;
+        clog << "-> Validation metrics and predictions saved.\n";
 
-        std::cout << "Run " << run_id << " finished." << std::endl;
-        std::cout << "-------------------------------------------" << std::endl;
+        clog << "Run " << run_id << " finished.\n";
+        clog << "-------------------------------------------\n";
 
         std::clog.rdbuf(oldBuf);  // restore original buffer
         logFile.close();  // close log file
     }
 
-    std::cout << "\n[I/O] Saved REAL CALIB data to: '" << cfg_.real_calib << "', and PRED CALIB data to '" << cfg_.pred_calib << "'\n";
-    std::cout << "[I/O] Saved REAL VALID data to: '" << cfg_.real_valid << "', and PRED VALID data to '" << cfg_.pred_valid << "'\n";
-    std::cout << "[I/O] Saved INIT weights vector to: '" << cfg_.weights_vec_csv_init << "'\n";
-    std::cout << "[I/O] Saved FINAL weights vector to: '" << cfg_.weights_vec_csv << "'\n";
-    std::cout << "[I/O] Saved CALIB METRICS to: '" << cfg_.metrics_cal << "'\n";
-    std::cout << "[I/O] Saved VALID METRICS to: '" << cfg_.metrics_val << "'\n";
+    std::cout << "-> Ensemble run finished." << std::endl;
 
     std::cout << "\n===========================================\n";
     std::cout << " Running Ensemble finished \n";
