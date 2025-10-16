@@ -654,7 +654,8 @@ void JKMNet::ensembleRunMlpVector(){
     // ------------------------------------------------------
     //#pragma omp parallel for
     for (unsigned run = 0; run < mlps_.size() ; ++run) {
-        std::string run_id = std::to_string(run+1);
+        std::string run_id = std::to_string(run+1);  // string
+        unsigned run_id_integer = run + 1; // integer
 
         // Check, if exists folder 'outputs/logs'
         if (!std::filesystem::exists(cfg_.log_dir)) {
@@ -663,11 +664,13 @@ void JKMNet::ensembleRunMlpVector(){
         // Set the output file for the log messages
         std::string filename = cfg_.log_dir + "log_run" + run_id + ".log";
         std::ofstream logFile(filename);
+        auto* oldBuf = std::clog.rdbuf(logFile.rdbuf());  // save original buffer
         std::clog.rdbuf(logFile.rdbuf());
-        // Write to the log file
+        
+        // Log all settings 
+        data_.logRunSettings(cfg_, run_id_integer); 
+
         clog << "Run " << run_id << " starting...\n";
-        // Close the log file
-        logFile.close();
 
         std::cout << "\n-------------------------------------------\n";
         std::cout << "Run " << run_id << " starting..." << std::endl;
@@ -863,6 +866,9 @@ void JKMNet::ensembleRunMlpVector(){
 
         std::cout << "Run " << run_id << " finished." << std::endl;
         std::cout << "-------------------------------------------" << std::endl;
+
+        std::clog.rdbuf(oldBuf);  // restore original buffer
+        logFile.close();  // close log file
     }
 
     // Flush metrics buffers to files at the end

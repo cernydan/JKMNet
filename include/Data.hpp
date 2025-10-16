@@ -24,6 +24,8 @@ struct Scaler {
     bool fitted = false;
 };
 
+struct RunConfig;
+
 class Data {
     public:
         Data() = default;  //!< The constructor
@@ -40,6 +42,8 @@ class Data {
         
         static void cleanDirectory(const std::string &path);  //!< Clean all files in a directory 
         static void cleanAllOutputs(const std::string &outDir);  //!< Clean all files in a otputs directory 
+
+        void logRunSettings(const RunConfig& cfg, unsigned run_id) const;  //!< Write model settings into a log file
 
         bool saveMatrixCsv(const std::string &path,
             const Eigen::MatrixXd &M,
