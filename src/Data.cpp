@@ -328,63 +328,62 @@ void Data::cleanAllOutputs(const std::string &outDir) {
 /**
  * Write model settings into a log file
  */
-void Data::logRunSettings(const RunConfig& cfg, unsigned run_id) const {
-    std::clog << "================ Run " << run_id << " Settings ================\n";
+void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_id) const {
+    os << "================ Run " << run_id << " Settings ================\n";
 
     // --- Data ---
-    std::clog << "Data file: " << cfg.data_file << "\n";
-    std::clog << "ID filter: " << (cfg.id.empty() ? "(none)" : cfg.id) << "\n";
-    std::clog << "Columns: ";
-    for (const auto& c : cfg.columns) std::clog << c << " ";
-    std::clog << "\n";
+    os << "Data file: " << cfg.data_file << "\n";
+    os << "ID filter: " << (cfg.id.empty() ? "(none)" : cfg.id) << "\n";
+    os << "Columns: ";
+    for (const auto& c : cfg.columns) os << c << " ";
+    os << "\n";
 
     // --- Model ---
-    std::clog << "Architecture: ";
-    for (auto v : cfg.mlp_architecture) std::clog << v << " ";
-    std::clog << "\n";
-    std::clog << "Trainer: "        << cfg.trainer        << "\n";
-    std::clog << "Activation: "     << cfg.activation     << "\n";
-    std::clog << "Weight init: "    << cfg.weight_init    << "\n";
-    std::clog << "Input numbers: ";
-    for (auto v : cfg.input_numbers) std::clog << v << " ";
-    std::clog << "\n";
+    os << "Architecture: ";
+    for (auto v : cfg.mlp_architecture) os << v << " ";
+    os << "\n";
+    os << "Trainer: "        << cfg.trainer        << "\n";
+    os << "Activation: "     << cfg.activation     << "\n";
+    os << "Weight init: "    << cfg.weight_init    << "\n";
+    os << "Input numbers: ";
+    for (auto v : cfg.input_numbers) os << v << " ";
+    os << "\n";
 
     // --- Training ---
-    std::clog << "Learning rate: "  << cfg.learning_rate  << "\n";
-    std::clog << "Max iterations: " << cfg.max_iterations << "\n";
-    std::clog << "Max error: "      << cfg.max_error      << "\n";
-    std::clog << "Batch size: "     << cfg.batch_size     << "\n";
-    std::clog << "Ensemble runs: "  << cfg.ensemble_runs  << "\n";
-    std::clog << "Train fraction: " << cfg.train_fraction << "\n";
-    std::clog << "Shuffle: "        << (cfg.shuffle ? "true" : "false") << "\n";
-    std::clog << "Split shuffle: "  << (cfg.split_shuffle ? "true" : "false") << "\n";
-    std::clog << "Seed: "           << cfg.seed           << "\n";
+    os << "Learning rate: "  << cfg.learning_rate  << "\n";
+    os << "Max iterations: " << cfg.max_iterations << "\n";
+    os << "Max error: "      << cfg.max_error      << "\n";
+    os << "Batch size: "     << cfg.batch_size     << "\n";
+    os << "Ensemble runs: "  << cfg.ensemble_runs  << "\n";
+    os << "Train fraction: " << cfg.train_fraction << "\n";
+    os << "Shuffle: "        << (cfg.shuffle ? "true" : "false") << "\n";
+    os << "Split shuffle: "  << (cfg.split_shuffle ? "true" : "false") << "\n";
+    os << "Seed: "           << cfg.seed           << "\n";
 
     // --- Transform ---
-    std::clog << "Transform: " << cfg.transform << "\n";
-    std::clog << "Transform alpha: " << cfg.transform_alpha << "\n";
-    std::clog << "Exclude last col from transform: "
-              << (cfg.exclude_last_col_from_transform ? "true" : "false") << "\n";
-    std::clog << "Remove NA before calib: "
-              << (cfg.remove_na_before_calib ? "true" : "false") << "\n";
-
+    os << "Transform: " << cfg.transform << "\n";
+    os << "Transform alpha: " << cfg.transform_alpha << "\n";
+    os << "Exclude last col from transform: "
+       << (cfg.exclude_last_col_from_transform ? "true" : "false") << "\n";
+    os << "Remove NA before calib: "
+       << (cfg.remove_na_before_calib ? "true" : "false") << "\n";
 
     // --- Optimization ---
-    std::clog << "PSO optimize: " << (cfg.pso_optimize ? "true" : "false") << "\n";
+    os << "PSO optimize: " << (cfg.pso_optimize ? "true" : "false") << "\n";
 
     // --- Paths ---
-    std::clog << "Output dir: " << cfg.out_dir << "\n";
-    std::clog << "Log dir: " << cfg.log_dir << "\n";
-    std::clog << "Real calib data: " << cfg.real_calib << "\n";
-    std::clog << "Predict calib data: " << cfg.pred_calib << "\n";
-    std::clog << "Real valid data: " << cfg.real_valid << "\n";
-    std::clog << "Predict valid data: " << cfg.pred_valid << "\n";
-    std::clog << "Weights init: " << cfg.weights_csv_init << "\n";
-    std::clog << "Weights final: " << cfg.weights_csv << "\n";
-    std::clog << "Metrics calib: " << cfg.metrics_cal << "\n";
-    std::clog << "Metrics valid: " << cfg.metrics_val << "\n";
+    os << "Output dir: " << cfg.out_dir << "\n";
+    os << "Log dir: " << cfg.log_dir << "\n";
+    os << "Real calib data: " << cfg.real_calib << "\n";
+    os << "Predict calib data: " << cfg.pred_calib << "\n";
+    os << "Real valid data: " << cfg.real_valid << "\n";
+    os << "Predict valid data: " << cfg.pred_valid << "\n";
+    os << "Weights init: " << cfg.weights_csv_init << "\n";
+    os << "Weights final: " << cfg.weights_csv << "\n";
+    os << "Metrics calib: " << cfg.metrics_cal << "\n";
+    os << "Metrics valid: " << cfg.metrics_val << "\n";
 
-    std::clog << "===========================================================\n";
+    os << "===========================================================\n";
 }
 
 /**

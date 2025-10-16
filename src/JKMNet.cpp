@@ -6,6 +6,7 @@
 #include "eigen-3.4/Eigen/Dense"
 #include <filesystem>
 #include <fstream>
+#include <ostream> 
 
 using namespace std;
 
@@ -653,7 +654,7 @@ void JKMNet::ensembleRunMlpVector(){
     // ------------------------------------------------------
     // Ensemble loop
     // ------------------------------------------------------
-    //#pragma omp parallel for num_threads(nthreads_)
+    #pragma omp parallel for num_threads(nthreads_)
     for (unsigned run = 0; run < mlps_.size() ; ++run) {
         std::string run_id = std::to_string(run+1);  // string
         unsigned run_id_integer = run + 1; // integer
@@ -662,26 +663,24 @@ void JKMNet::ensembleRunMlpVector(){
         if (!std::filesystem::exists(cfg_.log_dir)) {
             std::filesystem::create_directories(cfg_.log_dir);
         }
-        // Set the output file for the log messages
+        // Set the output file for the log messages        
         std::string filename = cfg_.log_dir + "log_run" + run_id + ".log";
         std::ofstream logFile(filename);
-        auto* oldBuf = std::clog.rdbuf(logFile.rdbuf());  // save original buffer
-        std::clog.rdbuf(logFile.rdbuf());
-        
-        // Log all settings 
-        data_.logRunSettings(cfg_, run_id_integer); 
 
-        clog << "Run " << run_id << " starting...\n";
+        // Log all settings 
+        data_.logRunSettings(logFile, cfg_, run_id_integer);
+
+        logFile << "Run " << run_id << " starting...\n";
 
         // Save init weights
         mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv_init, run_id));
         mlps_[run].weightsToVectorMlp();
         mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv_init, run_id));
         //mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv_init, run == 0);  // all init weights in one file
-        clog << "-> Initial weights saved.\n";
+        logFile << "-> Initial weights saved.\n";
 
         // Train
-        clog << "-> Training starting...\n";
+        logFile << "-> Training starting...\n";
 
         Eigen::MatrixXd resultErrors;
         TrainerType trainerType = strToTrainerType(cfg_.trainer);
@@ -725,10 +724,10 @@ void JKMNet::ensembleRunMlpVector(){
         }
 
 
-        clog << "-> Training finished.\n";
+        logFile << "-> Training finished.\n";
 
         // Evaluate calibration
-        clog << "-> Evaluating calibration set...\n";
+        logFile << "-> Evaluating calibration set...\n";
         mlps_[run].calculateOutputs(X_train);
         Eigen::MatrixXd Y_pred_calib = mlps_[run].getOutputs();
         Eigen::MatrixXd Y_true_calib = Y_train;
@@ -770,18 +769,18 @@ void JKMNet::ensembleRunMlpVector(){
 
         data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), Y_pred_calib, colNames);
 
-        clog << "-> Calibration metrics and predictions saved.\n";
+        logFile << "-> Calibration metrics and predictions saved.\n";
 
         // Save final weights
         mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv, run_id));
         mlps_[run].weightsToVectorMlp();
         mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv, run_id));
         // mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv, run == 0);  // all final weights in one file
-        clog << "-> Final weights saved.\n";
+        logFile << "-> Final weights saved.\n";
 
         // TODO: predikce, tedy samostatna metoda 
         // Evaluate validation
-        clog << "-> Evaluating validation set...\n";
+        logFile << "-> Evaluating validation set...\n";
         mlps_[run].calculateOutputs(X_valid);
         Eigen::MatrixXd Y_pred_valid = mlps_[run].getOutputs();
         Eigen::MatrixXd Y_true_valid = Y_valid;
@@ -821,13 +820,11 @@ void JKMNet::ensembleRunMlpVector(){
 
         
         data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_valid, run_id), Y_pred_valid, colNames);
-        clog << "-> Validation metrics and predictions saved.\n";
+        logFile << "-> Validation metrics and predictions saved.\n";
 
-        clog << "Run " << run_id << " finished.\n";
-        clog << "-------------------------------------------\n";
+        logFile << "Run " << run_id << " finished.\n";
+        logFile << "-------------------------------------------\n";
 
-        std::clog.rdbuf(oldBuf);  // restore original buffer
-        logFile.close();  // close log file
     }
 
     std::cout << "-> Ensemble run finished." << std::endl;
