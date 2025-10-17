@@ -95,7 +95,7 @@ class MLP {
         void onlineAdam(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Online backpropagation using Adam algorithm - separete inp out matrices
         void batchAdam(int maxIterations, double maxError, int batchSize, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Batch backpropagation using Adam algorithm - separete inp out matrices
 
-        Eigen::MatrixXd onlineAdamEpochVal(
+        std::vector<Eigen::MatrixXd> onlineAdamEpochVal(
             const Eigen::MatrixXd &Xtrain,
             const Eigen::MatrixXd &Ytrain,
             const Eigen::MatrixXd &Xval,
@@ -103,7 +103,7 @@ class MLP {
             int maxIterations,
             double learningRate);
 
-        Eigen::MatrixXd batchAdamEpochVal(
+        std::vector<Eigen::MatrixXd> batchAdamEpochVal(
             const Eigen::MatrixXd &Xtrain,
             const Eigen::MatrixXd &Ytrain,
             const Eigen::MatrixXd &Xval,

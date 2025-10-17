@@ -1283,7 +1283,7 @@ void MLP::batchAdam(int maxIterations, double maxError, int batchSize, double le
     }
 }
 
-Eigen::MatrixXd MLP::onlineAdamEpochVal(
+std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
     const Eigen::MatrixXd &Xval,
@@ -1309,7 +1309,11 @@ Eigen::MatrixXd MLP::onlineAdamEpochVal(
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
 
-    Eigen::MatrixXd resultErrors = Eigen::MatrixXd(maxIterations,2);
+    std::vector<Eigen::MatrixXd> resultMetrics;
+    Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
+    for(int i = 0; i < 14; i++){
+        resultMetrics.push_back(prepMat);
+    }
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
@@ -1323,23 +1327,41 @@ Eigen::MatrixXd MLP::onlineAdamEpochVal(
 
         // Compute final training loss
         calculateOutputs(Xtrain);
-        resultErrors(epoch,0) = Metrics::mse(Ytrain,outputMat);
+        for (int c = 0; c < Ytrain.cols(); ++c) {
+            resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        }
 
         calculateOutputs(Xval);
-        resultErrors(epoch,1) = Metrics::mse(Yval,outputMat);
+        for (int c = 0; c < Ytrain.cols(); ++c) {
+            resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+        }
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
+    
+    calculateOutputs(Xtrain);
 
     result.converged = false;
-    result.finalLoss = resultErrors(maxIterations - 1 , 0);
+    result.finalLoss = Metrics::mse(Ytrain,outputMat);
     result.iterations = maxIterations;
     result.time = duration.count();
 
-    return resultErrors;
+    return resultMetrics;
 }
 
-Eigen::MatrixXd MLP::batchAdamEpochVal(
+std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
     const Eigen::MatrixXd &Xval,
@@ -1366,7 +1388,11 @@ Eigen::MatrixXd MLP::batchAdamEpochVal(
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
 
-    Eigen::MatrixXd resultErrors = Eigen::MatrixXd(maxIterations,2);
+    std::vector<Eigen::MatrixXd> resultMetrics;
+    Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
+    for(int i = 0; i < 14; i++){
+        resultMetrics.push_back(prepMat);
+    }
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
@@ -1380,21 +1406,39 @@ Eigen::MatrixXd MLP::batchAdamEpochVal(
 
         // Compute final training loss
         calculateOutputs(Xtrain);
-        resultErrors(epoch,0) = Metrics::mse(Ytrain,outputMat);
+        for (int c = 0; c < Ytrain.cols(); ++c) {
+            resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        }
 
         calculateOutputs(Xval);
-        resultErrors(epoch,1) = Metrics::mse(Yval,outputMat);
+        for (int c = 0; c < Ytrain.cols(); ++c) {
+            resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+            resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+        }
 
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
 
+    calculateOutputs(Xtrain);
+
     result.converged = false;
-    result.finalLoss = resultErrors(maxIterations - 1 , 0);
+    result.finalLoss = Metrics::mse(Ytrain,outputMat);
     result.iterations = maxIterations;
     result.time = duration.count();
 
-    return resultErrors;
+    return resultMetrics;
 }
 
 /**
