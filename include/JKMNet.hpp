@@ -74,7 +74,7 @@ class JKMNet {
 
         void init_mlps(); //>! Initialization of MLPs vector
 
-        void ensembleRun(MLP &mlp_);
+        //void ensembleRun(MLP &mlp_);
         void ensembleRunMlpVector();
 
     protected:

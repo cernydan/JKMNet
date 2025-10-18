@@ -467,6 +467,42 @@ bool Metrics::saveErrorsCsv(const std::string &path,
 }
 
 /**
+ * Save matrix of metric into CSV file 
+ */
+bool Metrics::saveMetricsCsv(const std::string &path,
+                            const Eigen::MatrixXd &errors,
+                            bool verbose) {
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) {
+        std::cerr << "[Metrics::saveMetricsCsv] Cannot open file: " << path << "\n";
+        return false;
+    }
+
+    ofs << "epoch";
+    for (Eigen::Index i = 0; i < errors.cols(); ++i) {
+        ofs << ",output_" << i+1;
+    }
+    ofs << "\n";
+    ofs << std::setprecision(12);
+
+    for (int i = 0; i < errors.rows(); ++i) {
+        ofs << (i + 1) << ",";        // epoch index (1-based)
+
+        for (Eigen::Index j = 0; j < errors.cols(); ++j) {
+            ofs << errors(i, j) << ",";
+        }
+        ofs << "\n";
+    }
+
+    ofs.close();
+    if (verbose) {
+        //std::cout << "[Metrics] Saved error curve to '" << path 
+        //          << "' with " << errors.rows() << " epochs\n";
+    }
+    return true;
+}
+
+/**
  * Helper function for adding run ID into filename
  */
 std::string Metrics::addRunIdToFilename(const std::string &path, const std::string &run_id) {

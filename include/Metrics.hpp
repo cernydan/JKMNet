@@ -65,7 +65,11 @@ class Metrics {
 
         static bool saveErrorsCsv(const std::string &path,
                           const Eigen::MatrixXd &errors,
-                          bool verbose = true);  //!< Save MSEs from training and validation into CSV file   
+                          bool verbose = true);  //!< Save MSEs from training and validation into CSV file
+        
+        static bool saveMetricsCsv(const std::string &path,
+                            const Eigen::MatrixXd &errors,
+                            bool verbose = true);   //!< Save matrix of metric into CSV file 
         
         static std::string addRunIdToFilename(const std::string &path, const std::string &run_id);  //!< Helper function for adding run ID into filename
         
