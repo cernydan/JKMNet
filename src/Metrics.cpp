@@ -478,9 +478,9 @@ bool Metrics::saveMetricsCsv(const std::string &path,
         return false;
     }
 
-    ofs << "epoch";
+    ofs << "epochs_part";
     for (Eigen::Index i = 0; i < errors.cols(); ++i) {
-        ofs << ",output_" << i+1;
+        ofs << ",h_" << i+1;
     }
     ofs << "\n";
     ofs << std::setprecision(12);
