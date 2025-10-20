@@ -101,7 +101,8 @@ class MLP {
             const Eigen::MatrixXd &Xval,
             const Eigen::MatrixXd &Yval,
             int maxIterations,
-            double learningRate);
+            double learningRate,
+            int metricsAfterXEpochs);
 
         std::vector<Eigen::MatrixXd> batchAdamEpochVal(
             const Eigen::MatrixXd &Xtrain,
@@ -110,7 +111,8 @@ class MLP {
             const Eigen::MatrixXd &Yval,
             int batchSize,
             int maxIterations,
-            double learningRate);
+            double learningRate,
+            int metricsAfterXEpochs);
 
         void calcOneOutput(const Eigen::VectorXd& inputVec);  //!< Forward pass for one input
         void calculateOutputs(const Eigen::MatrixXd& inputMat); //!< Calculate outputs for given matrix of inputs
