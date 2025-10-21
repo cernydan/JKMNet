@@ -4,11 +4,12 @@
 // **DONE**: Make 'JKMNet::init_mlps()' parallel, but has to be without 'push_back()'
 // **DONE**: Add calculation of all metrics during training (and validation), not only MSE
 // **DONE**: Choice in config for saving metrics for all epochs, last epoch, every x-th epoch, ...
-// **DONE**: Choice in config for saving predicted values for all epochs, last epoch, every x-th epoch, ... 
+// TODO: Choice in config for saving predicted values for all epochs, last epoch, every x-th epoch, ... 
 // **DONE**: Put 'metricsAfterXEpochs' value into 'config_model.ini'
 // **DONE**: Create separate method for predictions (validation), i.e., read final weights from file and calculate outputs
 // TODO: Update saving weights in predictions
 // **DONE**: Catch if predict is run without any weights saved yet
+// TODO: Activ func in predictation mode from config file
 
 // ********* [PSO] *********
 // TODO: [PSO] Save PSO best hyperparams into 'config_model.ini' for MLP ensemble run
@@ -46,7 +47,7 @@ int main(int argc, char** argv) {
             predictMode = true;
 
             // Optional second argument: path to weights
-            if (argc > 2) {   // RUN: ./bin/JKMNet predict data/outputs/weights/weights_final_1.csv
+            if (argc > 2) {   // RUN: ./bin/JKMNet predict data/outputs/weights/weights_final_1.csv  // TODO: ensemble for all
                 weightsPath = argv[2];
             }
 
