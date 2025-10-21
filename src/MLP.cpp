@@ -596,10 +596,6 @@ bool MLP::loadWeightsCsv(const std::string &wPath, const std::string &confPath) 
         std::cerr << "[MLP::loadWeightsCsv] wPath is empty\n";
         return false;
     }
-    if (confPath.empty()) {
-        std::cerr << "[MLP::loadWeightsCsv] confPath is empty\n";
-        return false;
-    }
 
     std::ifstream ifs(wPath);
     if (!ifs.is_open()) {
@@ -609,6 +605,7 @@ bool MLP::loadWeightsCsv(const std::string &wPath, const std::string &confPath) 
         return false;
     }
 
+    // Parse CSV structure
     std::string line;
     struct LayerInfo {
         size_t idx;
@@ -663,21 +660,26 @@ bool MLP::loadWeightsCsv(const std::string &wPath, const std::string &confPath) 
         return false;
     }
 
-    layers_.clear();
-    layers_.resize(infos.size());
-
-    auto kv = parseIniToMap(confPath);
-    std::string sact, loadAct;
-    {
+    // Determine activation function
+    std::string loadAct = "LINEAR"; // fallback
+    if (!confPath.empty()) {
+        auto kv = parseIniToMap(confPath);
+        std::string sact;
         std::string key = "activation";
         for (char &c : key)
             c = static_cast<char>(std::tolower((unsigned char)c));
 
         auto it = kv.find(key);
-        if (it != kv.end())
-            sact = it->second;
+        if (it != kv.end()) sact = it->second;
+        if (!sact.empty()) loadAct = trimStr(sact);
+    } else {
+        std::cerr << "[MLP::loadWeightsCsv] confPath is empty, using default activation LINEAR\n";
     }
-    if (!sact.empty()) loadAct = trimStr(sact);
+
+    // Build layers from weights
+    layers_.clear();
+    layers_.resize(infos.size());
+    nNeurons.clear();
 
     for (const auto &li : infos) {
         if (li.idx >= layers_.size()) {
@@ -687,17 +689,17 @@ bool MLP::loadWeightsCsv(const std::string &wPath, const std::string &confPath) 
         }
 
         layers_[li.idx].initLayer(
-            /*numInputs=*/ li.cols,
-            /*numNeurons=*/ li.rows,
-            /*wInitType=*/ weight_init_type::RANDOM,
-            /*func=*/ strToActivation(loadAct),
-            /*seed=*/ 0
+            li.cols,
+            li.rows,
+            weight_init_type::RANDOM,
+            strToActivation(loadAct),
+            0
         );
         layers_[li.idx].setWeights(li.W);
         nNeurons.push_back(li.rows);
     }
-    numLayers = nNeurons.size();
 
+    numLayers = nNeurons.size();
     return true;
 }
 

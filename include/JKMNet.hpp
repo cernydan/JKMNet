@@ -75,7 +75,9 @@ class JKMNet {
         void init_mlps(); //>! Initialization of MLPs vector
 
         //void ensembleRun(MLP &mlp_);
-        void ensembleRunMlpVector();
+        void ensembleRunMlpVector();  //>! Ensemble run - load settings, read data, train, test
+
+        void predictFromSavedWeights(const std::string &weightsPath);  //>! Predict outputs from saved weights
 
     protected:
 
