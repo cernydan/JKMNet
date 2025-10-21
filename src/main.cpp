@@ -2,9 +2,10 @@
 // **DONE**: Change 'std::cout' into 'clog'
 // **DONE**: Change 'if (cfg_.trainer == "online"){}' into 'switch(){}'
 // **DONE**: Make 'JKMNet::init_mlps()' parallel, but has to be without 'push_back()'
-// TODO: Add calculation of all metrics during training (and validation), not only MSE
-// TODO: Choice in config for saving metrics for all epochs, last epoch, every x-th epoch, ...
-// TODO: Choice in config for saving predicted values for all epochs, last epoch, every x-th epoch, ... 
+// **DONE**: Add calculation of all metrics during training (and validation), not only MSE
+// **DONE**: Choice in config for saving metrics for all epochs, last epoch, every x-th epoch, ...
+// **DONE**: Choice in config for saving predicted values for all epochs, last epoch, every x-th epoch, ... 
+// **DONE**: Put 'metricsAfterXEpochs' value into 'config_model.ini'
 // TODO: Create separate method for predictions (validation), i.e., read final weights from file and calculate outputs
 
 // ********* [PSO] *********

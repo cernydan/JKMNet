@@ -721,7 +721,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_EPOCH:
                 resultMetrics = mlps_[run].onlineAdamEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
-                    cfg_.max_iterations, cfg_.learning_rate, 99
+                    cfg_.max_iterations, cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
                 Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
@@ -743,7 +743,7 @@ void JKMNet::ensembleRunMlpVector(){
                 resultMetrics = mlps_[run].batchAdamEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
                     cfg_.batch_size, cfg_.max_iterations,
-                    cfg_.learning_rate, 99
+                    cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
                 Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);

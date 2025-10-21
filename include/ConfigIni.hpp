@@ -67,6 +67,7 @@ struct RunConfig {
 
     int ensemble_runs = 25;
     int max_iterations = 500;
+    int max_metrics_step = 99;
     double max_error = 0.002;
     double learning_rate = 0.001;
     bool shuffle = true;
@@ -282,6 +283,9 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     std::string smaxit = get("max_iterations");
     if (!smaxit.empty()) cfg.max_iterations = std::stoi(smaxit);
+
+    std::string smaxmetricstep = get("max_metrics_step");
+    if (!smaxmetricstep.empty()) cfg.max_metrics_step = std::stoi(smaxmetricstep);
 
     std::string smaxerr = get("max_error");
     if (!smaxerr.empty()) cfg.max_error = std::stod(smaxerr);

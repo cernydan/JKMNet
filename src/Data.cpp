@@ -352,6 +352,7 @@ void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_i
     // --- Training ---
     os << "Learning rate: "  << cfg.learning_rate  << "\n";
     os << "Max iterations: " << cfg.max_iterations << "\n";
+    os << "Max metrics step: " << cfg.max_metrics_step << "\n";
     os << "Max error: "      << cfg.max_error      << "\n";
     os << "Batch size: "     << cfg.batch_size     << "\n";
     os << "Ensemble runs: "  << cfg.ensemble_runs  << "\n";
