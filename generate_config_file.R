@@ -11,7 +11,7 @@ library(doParallel)
 make_defaults <- function() {
   list(
     data = list(
-      data_file = "../data/data_all_daily.csv",
+      data_file = "../../data/data_all_daily.csv",
       id        = "94206029",
       id_col    = "ID",
       columns   = c("T1","T2","T3","moisture"),
@@ -25,7 +25,7 @@ make_defaults <- function() {
       weight_init   = "RANDOM"
     ),
     training = list(
-      ensemble_runs = 10,
+      ensemble_runs = 20,
       max_iterations = 500L,
       max_metrics_step = 10,
       max_error      = 0.002,
@@ -143,16 +143,23 @@ ensure_dir <- function(p) if (!dir.exists(p)) dir.create(p, recursive = TRUE)
 # PATH TO DATA FILE
 # ---------------------------
 
-# data_path <- "software/JKMNet/data/inputs/data_all_hourly.csv"  # MetaVO
+# data_path <- "data/data_all_daily.csv"  # MetaVO
+data_path <- "data/data_all_daily.csv"  # MJ local
 
-data_path <- "C://Users/kuzelkova/Desktop/JKMNet_run/data/data_all_daily.csv" # MK local
 data_file <- fread(data_path)
 setDT(data_file)
 
-# select IDs
-ids <- unique(data_file$ID)
-ids <- sample(ids, size = 1, replace = FALSE)   # randomly select ids
-
+# select IDs - only IDs with more then 100 data points
+# minimum number of records required
+min_n <- 100
+max_ids <- 2 # total valid approx. 285
+# count number of records for each ID
+id_counts <- data_file[, .N, by = ID]
+# filter only IDs with at least min_n rows
+valid_ids <- id_counts[N >= min_n, ID]
+# randomly select one or more IDs from the filtered list
+ids <- sample(valid_ids, size = max_ids, replace = FALSE)  # randomly select ids
+print(ids)
 
 # ---------------------------
 # ITERATION trough parameter grid  
@@ -274,7 +281,10 @@ generate_config_case <- function(
     id,
     epoch,
     data_source,
-    bin_path = "software/JKMNet/bin/JKMNet",
+    
+    #bin_path = "/storage/projects-du-praha/czu-fzp-hcv/software/JKMNet/bin/JKMNet",  # MetaVO final
+    bin_path = "bin/JKMNet",  # MJ local
+    
     copy_data_into_inputs = FALSE,
     overwrite_inputs = TRUE,
     filter_input_by_id = TRUE,
@@ -354,27 +364,28 @@ generate_config_case <- function(
   ensure_dir(case_dir)
   
   settings_dir <- file.path(case_dir, "settings"); ensure_dir(settings_dir)
-  #inputs_dir   <- file.path(case_dir, "inputs");   ensure_dir(inputs_dir)
   outputs_dir  <- file.path(case_dir, "outputs");  ensure_dir(outputs_dir)
- 
+  weights_dir <- file.path(outputs_dir, "weights"); ensure_dir(weights_dir)
+  metrics_dir <- file.path(outputs_dir, "metrics"); ensure_dir(metrics_dir)
+  logs_dir <- file.path(outputs_dir, "logs"); ensure_dir(logs_dir)
   
   # rewrite outputs paths
   cfg$paths$out_dir <- "outputs"
   cfg$paths$calib_mat <- file.path("outputs", "calib_mat.csv")
-  cfg$paths$weights_csv_init <- file.path("outputs", "weights_init.csv")
-  cfg$paths$weights_bin_init <- file.path("outputs", "weights_init.bin")
-  cfg$paths$weights_vec_csv_init <- file.path("outputs", "weights_init_vector.csv")
-  cfg$paths$weights_vec_bin_init <- file.path("outputs", "weights_init_vector.bin")
-  cfg$paths$weights_csv <- file.path("outputs", "weights_final.csv")
-  cfg$paths$weights_bin <- file.path("outputs", "weights_final.bin")
-  cfg$paths$weights_vec_csv <- file.path("outputs", "weights_final_vector.csv")
-  cfg$paths$weights_vec_bin <- file.path("outputs", "weights_final_vector.bin")
+  cfg$paths$weights_csv_init <- file.path("outputs", "weights", "weights_init.csv")
+  cfg$paths$weights_bin_init <- file.path("outputs", "weights", "weights_init.bin")
+  cfg$paths$weights_vec_csv_init <- file.path("outputs", "weights", "weights_init_vector.csv")
+  cfg$paths$weights_vec_bin_init <- file.path("outputs", "weights", "weights_init_vector.bin")
+  cfg$paths$weights_csv <- file.path("outputs", "weights", "weights_final.csv")
+  cfg$paths$weights_bin <- file.path("outputs", "weights", "weights_final.bin")
+  cfg$paths$weights_vec_csv <- file.path("outputs", "weights", "weights_final_vector.csv")
+  cfg$paths$weights_vec_bin <- file.path("outputs", "weights", "weights_final_vector.bin")
   cfg$paths$real_calib <- file.path("outputs", "calib_real.csv")
   cfg$paths$pred_calib <- file.path("outputs", "calib_pred.csv")
   cfg$paths$real_valid <- file.path("outputs", "valid_real.csv")
   cfg$paths$pred_valid <- file.path("outputs", "valid_pred.csv")
-  cfg$paths$metrics_cal <- file.path("outputs", "calib_metrics.csv")
-  cfg$paths$metrics_val <- file.path("outputs", "valid_metrics.csv")
+  cfg$paths$metrics_cal <- file.path("outputs", "metrics", "calib_metrics.csv")
+  cfg$paths$metrics_val <- file.path("outputs", "metrics", "valid_metrics.csv")
   cfg$paths$run_info    <- file.path("outputs", "run_info.csv")
   cfg$paths$errors_csv  <- file.path("outputs", "errors.csv")
   
@@ -405,12 +416,14 @@ foreach(i = 1:nrow(param_grid), .packages = c("data.table")) %dopar% {
   row <- param_grid[i]
   
   generate_config_case(
-    root_dir = "C:/Users/kuzelkova/Desktop/JKMNet_run",
+    root_dir = "JKMNet_run",  # MJ local, MetaVO
+
     id = row$id,
     epoch = row$epochs,
     data_source = data_path, # set path to data file or create folder data with data files in root dir
-    bin_path = "C:/Users/kuzelkova/Desktop/Marta/bin/JKMNet", # set path to binary
-    # bin_path = "bin/JKMNet",
+    
+    #bin_path = "/storage/projects-du-praha/czu-fzp-hcv/software/JKMNet/bin/JKMNet",  # MetaVO final
+    bin_path = "bin/JKMNet",  # MJ local
     
     trainer = row$trainer,
     activation = row$activation,
