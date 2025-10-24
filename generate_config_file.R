@@ -142,9 +142,8 @@ ensure_dir <- function(p) if (!dir.exists(p)) dir.create(p, recursive = TRUE)
 # ---------------------------
 # PATH TO DATA FILE
 # ---------------------------
-
-# data_path <- "data/data_all_daily.csv"  # MetaVO
-data_path <- "data/data_all_daily.csv"  # MJ local
+data_path <- "data_all_daily.csv"  # MetaVO
+# data_path <- "data/data_all_daily.csv"  # MJ local
 
 data_file <- fread(data_path)
 setDT(data_file)
@@ -282,8 +281,8 @@ generate_config_case <- function(
     epoch,
     data_source,
     
-    #bin_path = "/storage/projects-du-praha/czu-fzp-hcv/software/JKMNet/bin/JKMNet",  # MetaVO final
-    bin_path = "bin/JKMNet",  # MJ local
+    bin_path = "/storage/projects-du-praha/czu-fzp-hcv/software/JKMNet/bin/JKMNet",  # MetaVO
+    # bin_path = "bin/JKMNet",  # MJ local 
     
     copy_data_into_inputs = FALSE,
     overwrite_inputs = TRUE,
@@ -416,14 +415,14 @@ foreach(i = 1:nrow(param_grid), .packages = c("data.table")) %dopar% {
   row <- param_grid[i]
   
   generate_config_case(
-    root_dir = "JKMNet_run",  # MJ local, MetaVO
+    root_dir = "JKMNet_run",  # MJ local + MetaVO
 
     id = row$id,
     epoch = row$epochs,
     data_source = data_path, # set path to data file or create folder data with data files in root dir
     
-    #bin_path = "/storage/projects-du-praha/czu-fzp-hcv/software/JKMNet/bin/JKMNet",  # MetaVO final
-    bin_path = "bin/JKMNet",  # MJ local
+    bin_path = "/storage/projects-du-praha/czu-fzp-hcv/software/JKMNet/bin/JKMNet",  # MetaVO
+    # bin_path = "bin/JKMNet",  # MJ local
     
     trainer = row$trainer,
     activation = row$activation,
