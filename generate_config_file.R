@@ -36,7 +36,7 @@ make_defaults <- function() {
       train_fraction = 0.8,
       split_shuffle  = FALSE,
       transform      = "MINMAX",
-      transform_alpha = 0.015,
+      transform_alpha = 0.1,
       exclude_last_col_from_transform = FALSE,
       remove_na_before_calib          = FALSE
     ),
@@ -174,7 +174,7 @@ param_grid <- CJ(
     c(0, 0, 0, 2),
     c(0, 0, 0, 14)),
   transform = c("MINMAX", "NONLINEAR", "ZSCORE"),
-  alpha = c(0.01, 0.015, 0.02),
+  alpha = c(0.9, 0.5, 0.1),
   architecture = list(
     # c(5, 1),
     # c(5, 2),
