@@ -59,21 +59,29 @@ public:
     Eigen::MatrixXd convolution1D(const Eigen::MatrixXd& inputs, const Eigen::MatrixXd& filters);
     Eigen::MatrixXd maxPool(const Eigen::MatrixXd& inputs, int size);
     Eigen::MatrixXd averagePool(const Eigen::MatrixXd& inputs, int size);
-    Eigen::MatrixXd biasAndActivation();
-    void calculateOutput1D(std::string activFunc);   //!< Calculate activations and output of the layer
+    Eigen::MatrixXd flipRowsAndPad(const Eigen::MatrixXd& mat, int pad);
+    Eigen::MatrixXd sumColumnBlocks(const Eigen::MatrixXd& mat, int blockSize);
+    void calculateOutput1D();   //!< Calculate activations and output of the layer
     Eigen::MatrixXd getOutput1D(); 
-    Eigen::MatrixXd getActivations1D(); 
+    Eigen::MatrixXd getActivations1D();
+    Eigen::VectorXd getBias1D();
+    void calculateGradients();
+    void setDeltaFromNextLayer(const Eigen::VectorXd& nextDelta);
 
 protected:
 private:
     Sizes sizes;    //!< Convolution matrices dimensions
-    Eigen::MatrixXd filters1D;  //!< Filter matrix of the layer (row = filter)
+    Eigen::MatrixXd filters1D;  //!< Filter matrix of the layer (col = filter)
     Eigen::MatrixXd currentInput1D;  //!< Input matrix (m_data form)
     Eigen::VectorXd bias1D;     //!< Vector of bias values for each filter
     Eigen::MatrixXd activation1D;   //!< Calculated layer activations matrix
     Eigen::MatrixXd output1D;   //!< Calculated layer output matrix
     activ_func_type activ_func = activ_func_type::RELU;  //!< The type of activation function, where default is RELU
     pool_type pool;
+    Eigen::VectorXd deltaFromNextLayer;
+    Eigen::MatrixXd filtersGradient;
+    Eigen::MatrixXd inputGradient;
+
 };
 
 #endif // CNNLAYER_HPP
