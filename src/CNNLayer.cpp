@@ -43,7 +43,7 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
         case weight_init_type::RANDOM: { 
             std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<> dist(minVal, maxVal);
-            filters1D = Eigen::MatrixXd::Random(sizes.numFilt, sizes.filtSize);         
+            filters1D = Eigen::MatrixXd::Random(sizes.filtSize, sizes.numFilt);         
             filters1D = filters1D.unaryExpr([&](double) { return dist(gen); });
             break;
         }
@@ -53,8 +53,8 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
             std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
 
             // use size_t for all sizes and indices
-            const std::size_t rows = static_cast<std::size_t>(sizes.filtSize);
-            const std::size_t cols = static_cast<std::size_t>(sizes.numFilt);
+            const std::size_t rows = static_cast<std::size_t>(sizes.numFilt);
+            const std::size_t cols = static_cast<std::size_t>(sizes.filtSize);
             const std::size_t totalWeights = rows * cols;
             const double span = maxVal - minVal;
 
@@ -92,13 +92,13 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
             std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
-            filters1D.resize(sizes.numFilt, sizes.filtSize);  // output matrix
+            filters1D.resize(sizes.filtSize, sizes.numFilt);  // output matrix
 
-            for (int col = 0; col < sizes.filtSize; ++col) {
-                std::vector<float> column(sizes.numFilt);
+            for (int col = 0; col < sizes.numFilt; ++col) {
+                std::vector<float> column(sizes.filtSize);
 
                 // sampling to one column
-                for (int i = 0; i < sizes.numFilt; ++i) {
+                for (int i = 0; i < sizes.filtSize; ++i) {
                     float sample = minVal + (i + dist(gen)) * range_interval;
                     column[i] = sample;
                 }
@@ -107,7 +107,7 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
                 std::shuffle(column.begin(), column.end(), gen);
 
                 // fill the column of weight matrix
-                for (int row = 0; row < sizes.numFilt; ++row) {
+                for (int row = 0; row < sizes.filtSize; ++row) {
                     filters1D(row, col) = column[row];
                 }
             }
@@ -118,7 +118,7 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
         case weight_init_type::HE: {
             std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (sizes.numVars * sizes.filtSize)));
-            filters1D = Eigen::MatrixXd(sizes.numFilt,sizes.filtSize);
+            filters1D = Eigen::MatrixXd(sizes.filtSize, sizes.numFilt);
             filters1D = filters1D.unaryExpr([&](double) { return dist(gen); });
             break;
         }
@@ -128,7 +128,7 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
             // Select random initialization
             std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::uniform_real_distribution<> dist(minVal, maxVal);
-            filters1D = Eigen::MatrixXd(sizes.numFilt,sizes.filtSize);
+            filters1D = Eigen::MatrixXd(sizes.filtSize, sizes.numFilt);
             filters1D = filters1D.unaryExpr([&](double) { return dist(gen); });
             break;
     }
@@ -166,9 +166,16 @@ Eigen::MatrixXd CNNLayer::convolution1D(const Eigen::MatrixXd& inputs, const Eig
     const int inCols = inputs.cols(), filCols = filters.cols(), filRows = filters.rows(), 
                        outRows = inputs.rows() - filRows + 1;
     Eigen::MatrixXd outM = Eigen::MatrixXd(outRows, inCols * filCols);
-    for(int i = 0; i < filRows ; i++){
-        for(int j = 0; j < outRows; j++){
-            outM.block(j , i * inCols, 1 , inCols) = filters.row(i) * inputs.block(j , 0 , filCols,inCols);
+    double konvo;
+    for(int i = 0; i < filCols; i++){
+        for(int j = 0; j < inCols; j++){
+            for(int k = 0; k < outRows; k++){
+                konvo = 0.0;
+                for(int l = 0; l < filRows; l++){
+                    konvo += filters(l,i) * inputs(k + l,j);
+                }
+                outM(k , i * inCols + j) = konvo;
+            }
         }
     }
     return outM;
@@ -212,94 +219,110 @@ Eigen::MatrixXd CNNLayer::averagePool(const Eigen::MatrixXd& inputs, int size){
     return outM;
 }
 
-Eigen::MatrixXd CNNLayer::biasAndActivation(){
-    Eigen::MatrixXd outM;
+Eigen::MatrixXd CNNLayer::flipRowsAndPad(const Eigen::MatrixXd& mat, int pad){
+    Eigen::MatrixXd flipped = mat.colwise().reverse();
+    Eigen::MatrixXd newMat = Eigen::MatrixXd::Zero(flipped.rows() + 2 * pad, flipped.cols());
+    newMat.block(pad, 0, flipped.rows(), flipped.cols()) = flipped;
 
-    for(Eigen::Index i = 0; i < filters1D.rows(); i++){
+    return newMat;
+}
+
+Eigen::MatrixXd CNNLayer::sumColumnBlocks(const Eigen::MatrixXd& mat, int blockSize)
+{
+    int rows = mat.rows();
+    int groups = mat.cols() / blockSize;
+    Eigen::MatrixXd newMat = Eigen::MatrixXd(rows, groups);
+
+    for (int i = 0; i < groups; ++i) {
+        newMat.col(i) = mat.block(0, i * blockSize, rows, blockSize).rowwise().sum();
+    }
+    return newMat;
+}
+
+ /**
+ *  Calculate activations and output of the layer
+ */ 
+void CNNLayer::calculateOutput1D(){
+    activation1D = convolution1D(currentInput1D,filters1D);
+
+    for(Eigen::Index i = 0; i < filters1D.cols(); i++){
         for(Eigen::Index j = 0; j < currentInput1D.cols(); j++){
-            activation1D.col(i * filters1D.rows() + j).array() += bias1D(i);
+            activation1D.col(i * currentInput1D.cols() + j).array() += bias1D(i);
         }
     }
 
     switch (activ_func) {
         case activ_func_type::RELU:  // f(x) = max(0, x)
-            outM = activation1D.array().max(0.0);
+            output1D = activation1D.array().max(0.0);
             break;
         
         case activ_func_type::SIGMOID:  // f(x) = 1 / (1 + exp(-x))
-            outM = activation1D.array().unaryExpr([](double x) { return 1.0 / (1.0 + std::exp(-x)); });
+            output1D = activation1D.array().unaryExpr([](double x) { return 1.0 / (1.0 + std::exp(-x)); });
             break;
 
         case activ_func_type::LINEAR:  // f(x) = x
-            outM = activation1D; 
+            output1D = activation1D; 
             break;
 
         case activ_func_type::TANH:  // f(x) = (2 / (1 + exp(-2x))) - 1
-            outM = activation1D.array().unaryExpr([](double x) { return (2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0; });
+            output1D = activation1D.array().unaryExpr([](double x) { return (2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0; });
             break;
         
         case activ_func_type::GAUSSIAN:  // f(x) = exp(-x^2)
-            outM = activation1D.array().unaryExpr([](double x) { return std::exp(-x * x); });
+            output1D = activation1D.array().unaryExpr([](double x) { return std::exp(-x * x); });
             break;
 
         case activ_func_type::IABS:  // f(x) = x / (1 + |x|)
-            outM = activation1D.array().unaryExpr([](double x) { return x / (1.0 + std::abs(x)); });
+            output1D = activation1D.array().unaryExpr([](double x) { return x / (1.0 + std::abs(x)); });
             break;  
 
         case activ_func_type::LOGLOG:  // f(x) = exp(-exp(-x))
-            outM = activation1D.array().unaryExpr([](double x) { return std::exp(-1 * std::exp(-x)); });
+            output1D = activation1D.array().unaryExpr([](double x) { return std::exp(-1 * std::exp(-x)); });
             break; 
         
         case activ_func_type::CLOGLOG:  // f(x) = 1 - exp(-exp(x))
-            outM = activation1D.array().unaryExpr([](double x) { return 1 - std::exp(- std::exp(x)); });
+            output1D = activation1D.array().unaryExpr([](double x) { return 1 - std::exp(- std::exp(x)); });
             break;
 
         case activ_func_type::CLOGLOGM:  // f(x) = -log(1 - exp(-x)) + 1
-            outM = activation1D.array().unaryExpr([](double x) { return 1 - 2 * std::exp(-0.7 * std::exp(x)); });
+            output1D = activation1D.array().unaryExpr([](double x) { return 1 - 2 * std::exp(-0.7 * std::exp(x)); });
             break;
 
         case activ_func_type::ROOTSIG:  // f(x) = x / ((1 + sqrt(1 + x^2)) * sqrt(1 + x^2))
-            outM = activation1D.array().unaryExpr([](double x) { return x / (1 + std::sqrt(1.0 + std::exp(-x * x))); });
+            output1D = activation1D.array().unaryExpr([](double x) { return x / (1 + std::sqrt(1.0 + std::exp(-x * x))); });
             break;
 
         case activ_func_type::LOGSIG:  // f(x) = sigmoid(x)^2
-            outM = activation1D.array().unaryExpr([](double x) { return pow((1 / (1 + std::exp(-x))), 2); });
+            output1D = activation1D.array().unaryExpr([](double x) { return pow((1 / (1 + std::exp(-x))), 2); });
             break;
 
         case activ_func_type::SECH:  // f(x) = 2 / (exp(x) + exp(-x))
-            outM = activation1D.array().unaryExpr([](double x) { return 2 / (std::exp(x) + std::exp(-x)); });
+            output1D = activation1D.array().unaryExpr([](double x) { return 2 / (std::exp(x) + std::exp(-x)); });
             break;
 
         case activ_func_type::WAVE:  // f(x) = (1 − 𝑎2) exp(−𝑎2)
-            outM = activation1D.array().unaryExpr([](double x) { return (1 - x * x) * exp(-x * x); });
+            output1D = activation1D.array().unaryExpr([](double x) { return (1 - x * x) * exp(-x * x); });
             break;
 
         case activ_func_type::LEAKYRELU:   // f(x) = max(0.01 * x, x)
-            outM = activation1D.array().unaryExpr([](double x) { return x > 0.0 ? x : 0.01 * x; });
+            output1D = activation1D.array().unaryExpr([](double x) { return x > 0.0 ? x : 0.01 * x; });
             break;
 
         default:
             std::cerr << "[Error]: Unknown activation function type!" << std::endl;
             break;
     }
-    return outM;
-}
 
- /**
- *  Calculate activations and output of the layer
- */ 
-void CNNLayer::calculateOutput1D(std::string activFunc){
     switch (pool) {
         case pool_type::NONE:
-            output1D = biasAndActivation();
             break;
         
         case pool_type::MAX:
-            output1D = maxPool(biasAndActivation(),sizes.poolSize);
+            output1D = maxPool(output1D,sizes.poolSize);
             break;
 
         case pool_type::AVG:
-            output1D = averagePool(biasAndActivation(),sizes.poolSize);
+            output1D = averagePool(output1D,sizes.poolSize);
             break;
 
         default:
@@ -314,4 +337,102 @@ Eigen::MatrixXd CNNLayer::getOutput1D(){
 
 Eigen::MatrixXd CNNLayer::getActivations1D(){
     return activation1D;
+}
+
+Eigen::VectorXd CNNLayer::getBias1D(){
+    return bias1D;
+}
+
+void CNNLayer::calculateGradients(){
+    Eigen::MatrixXd activationsDelta;
+
+        switch (activ_func) {
+        case activ_func_type::RELU:  // f'(x) = 0 for x <= 0 ; f'(x) = 1 for x > 0
+            activationsDelta = activation1D.array().unaryExpr([](double x) { return x > 0.0 ? 1.0 : 0.0; });
+            break;
+        
+        case activ_func_type::SIGMOID:  // f'(x) = sigmoid(x) * (1 - sigmoid(x))
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return (1.0 / (1.0 + std::exp(-x))) * (1.0 - (1.0 / (1.0 + std::exp(-x)))); });
+            break;
+
+        case activ_func_type::LINEAR:  // f'(x) = 1
+            activation1D.setOnes(); 
+            break;
+
+        case activ_func_type::TANH:  // f'(x) = 1 - tanh(x)^2
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return 1.0 - ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0) * ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0); });
+            break;
+        
+        case activ_func_type::GAUSSIAN:  // f'(x) = -2x * exp(-x^2)
+            activationsDelta = activation1D.array().unaryExpr([](double x) { return -2.0 * x * std::exp(-x * x); });
+            break;
+
+        case activ_func_type::IABS:  // f'(x) = 1 / (1 + |x|)^2  ...not sure // MJ: correct
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return 1.0 / ((1.0 + std::abs(x)) * (1.0 + std::abs(x))); });
+            break;  
+
+        case activ_func_type::LOGLOG:  // f'(x) = exp(-exp(-x) - x)  // MJ: f'(x) = exp(-exp(-x)) * exp(-x)
+            activationsDelta = activation1D.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(-x)) * std::exp(-x);});
+            break; 
+        
+        case activ_func_type::CLOGLOG:  // f'(x) = exp(-exp(x) + x)
+            activationsDelta = activation1D.array().unaryExpr([](double x) { return std::exp(-1.0 * std::exp(x) + x); });
+            break;
+
+        case activ_func_type::CLOGLOGM:  // f'(x) = 7 * exp(x - 0.7 * exp(x)) / 5.0    (for f(x) = 1 - 2 * exp(-0.7 * exp(x)))  
+            // MJ: f'(x) = - 1 / (exp(x) - 1) for x > 0
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return -1.0 / (std::exp(x)-1.0); });
+            break;
+
+        case activ_func_type::ROOTSIG:  // f'(x) for f(x) = x / (1 + sqrt(1.0 + exp(-x * x)))  
+            // MJ: ( 1 + 2 * sqrt(1 + x^2) - (1 + x^2)^(3/2) ) / ( (1 + x^2)^(3/2) * (1 + sqrt(1 + x^2))^2 )
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return (1.0 + 2.0 * sqrt(1.0 + x * x) - std::pow((1.0 + x * x),(3.0/2.0))) / 
+                     (std::pow((1.0 + x * x),(3.0/2.0)) * (1.0 + sqrt(1.0 + x * x)) * (1.0 + sqrt(1.0 + x * x))); });
+            break;
+
+        case activ_func_type::LOGSIG:  // f'(x) = 2 * sigmoid(x)^2 * (1 - sigmoid(x))
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return 2.0 * (1.0 / (1.0 + std::exp(-x))) * (1.0 / (1.0 + std::exp(-x))) * (1.0-(1.0 / (1.0 + std::exp(-x)))); });
+            break;
+
+        case activ_func_type::SECH:  // f'(x) = -sech(x) * tanh(h)
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return - (2.0 / (std::exp(x) + std::exp(-x))) * ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0); });
+            break;
+
+        case activ_func_type::WAVE:  // f'(x) = 2x * (x^2 - 2) * exp(-x^2)
+            activationsDelta = activation1D.array().unaryExpr([](double x) 
+            { return 2.0 * x * (x * x - 2.0) * exp(-x * x); });
+            break;
+
+        case activ_func_type::LEAKYRELU:  // f'(x) = 0.01 for x <= 0 ; f'(x) = 1 for x > 0
+            activationsDelta = activation1D.array().unaryExpr([](double x) { return x > 0.0 ? 1.0 : 0.01; });
+            break;
+
+        default:
+            std::cerr << "[Error]: Unknown activation function type!" << std::endl;
+            break;
+    }
+
+    // Detect any NaN or infinite
+    if (!activation1D.array().isFinite().all()) {
+        std::cerr << "[Warning] Non-finite activations detected!\n";
+    }
+
+    activationsDelta.array().colwise() *= deltaFromNextLayer.array();
+    activationsDelta = sumColumnBlocks(activationsDelta, activationsDelta.cols() / sizes.numFilt);
+
+    filtersGradient = convolution1D(currentInput1D,activationsDelta);
+    filtersGradient = sumColumnBlocks(filtersGradient, filtersGradient.cols() / sizes.numFilt);
+
+    inputGradient = convolution1D(flipRowsAndPad(filters1D,deltaFromNextLayer.rows()-1),deltaFromNextLayer);
+}
+
+void CNNLayer::setDeltaFromNextLayer(const Eigen::VectorXd& nextDelta){
+    deltaFromNextLayer = nextDelta;
 }
