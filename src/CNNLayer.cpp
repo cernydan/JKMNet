@@ -32,8 +32,12 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
     activ_func = strToActivation(activFunc);
     pool = strToPoolType(poolType);
 
-    bias1D = Eigen::VectorXd(sizes.numFilt);
-    bias1D.setZero();
+    bias1D = Eigen::VectorXd::Zero(sizes.numFilt);
+    MtForAdamBias = Eigen::VectorXd::Zero(sizes.numFilt);
+    VtForAdamBias = Eigen::VectorXd::Zero(sizes.numFilt);
+
+    MtForAdam = Eigen::MatrixXd::Zero(sizes.filtSize, sizes.numFilt);
+    VtForAdam = Eigen::MatrixXd::Zero(sizes.filtSize, sizes.numFilt);
 
     auto weightInit = strToWeightInit(initType);
 
@@ -343,6 +347,10 @@ Eigen::VectorXd CNNLayer::getBias1D(){
     return bias1D;
 }
 
+Eigen::VectorXd CNNLayer::getDelta(){
+    return delta;
+}
+
 void CNNLayer::calculateGradients(){
     Eigen::MatrixXd activationsDelta;
 
@@ -431,8 +439,16 @@ void CNNLayer::calculateGradients(){
     filtersGradient = sumColumnBlocks(filtersGradient, filtersGradient.cols() / sizes.numFilt);
 
     inputGradient = convolution1D(flipRowsAndPad(filters1D,deltaFromNextLayer.rows()-1),deltaFromNextLayer);
+    delta = inputGradient.rowwise().sum();
 }
 
 void CNNLayer::setDeltaFromNextLayer(const Eigen::VectorXd& nextDelta){
     deltaFromNextLayer = nextDelta;
+}
+
+void CNNLayer::updateFiltersAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi){
+    MtForAdam = beta1 * MtForAdam.array() + (1 - beta1) * filtersGradient.array();
+    VtForAdam = beta2 * VtForAdam.array() + (1 - beta2) * filtersGradient.array() * filtersGradient.array();
+    filters1D -= learningRate * (MtForAdam.array() / ((1 - std::pow(beta1, iterationNum)) * 
+               (sqrt(VtForAdam.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
 }

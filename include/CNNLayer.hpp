@@ -65,8 +65,10 @@ public:
     Eigen::MatrixXd getOutput1D(); 
     Eigen::MatrixXd getActivations1D();
     Eigen::VectorXd getBias1D();
+    Eigen::VectorXd getDelta();
     void calculateGradients();
     void setDeltaFromNextLayer(const Eigen::VectorXd& nextDelta);
+    void updateFiltersAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi);
 
 protected:
 private:
@@ -78,9 +80,14 @@ private:
     Eigen::MatrixXd output1D;   //!< Calculated layer output matrix
     activ_func_type activ_func = activ_func_type::RELU;  //!< The type of activation function, where default is RELU
     pool_type pool;
+    Eigen::VectorXd delta;
     Eigen::VectorXd deltaFromNextLayer;
     Eigen::MatrixXd filtersGradient;
     Eigen::MatrixXd inputGradient;
+    Eigen::MatrixXd MtForAdam;
+    Eigen::MatrixXd VtForAdam;
+    Eigen::VectorXd MtForAdamBias;
+    Eigen::VectorXd VtForAdamBias;
 
 };
 
