@@ -185,7 +185,7 @@ Eigen::MatrixXd CNNLayer::convolution1D(const Eigen::MatrixXd& inputs, const Eig
     return outM;
 }
 
-Eigen::MatrixXd CNNLayer::maxPool(const Eigen::MatrixXd& inputs, int size){
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXi>CNNLayer::maxPool(const Eigen::MatrixXd& inputs, int size){
     const int inCols = inputs.cols(), inRows = inputs.rows(); 
     if (inRows < size)
         throw std::invalid_argument("pool size can't be larger than input rows");
@@ -195,13 +195,20 @@ Eigen::MatrixXd CNNLayer::maxPool(const Eigen::MatrixXd& inputs, int size){
     
     const int outRows = inRows / size;
     Eigen::MatrixXd outM(outRows, inCols);
+    Eigen::MatrixXi indices(outRows, inCols);
 
     for (int i = 0; i < inCols; i++) {
         for (int j = 0; j < outRows; j++) {
-            outM(j, i) = inputs.block(j * size, i, size, 1).maxCoeff();
+            Eigen::VectorXd block = inputs.block(j * size, i, size, 1);
+            double maxVal = block.maxCoeff();
+            Eigen::Index idx;
+            block.maxCoeff(&idx);
+            int globalIndex = j * size + idx;
+            outM(j, i)  = maxVal;
+            indices(j, i) = globalIndex;
         }
     }
-    return outM;
+    return {outM, indices};
 }
 
 Eigen::MatrixXd CNNLayer::averagePool(const Eigen::MatrixXd& inputs, int size){
@@ -322,7 +329,7 @@ void CNNLayer::calculateOutput1D(){
             break;
         
         case pool_type::MAX:
-            output1D = maxPool(output1D,sizes.poolSize);
+            std::tie(output1D , maxPoolBpIndicesHelp) = maxPool(output1D,sizes.poolSize);
             break;
 
         case pool_type::AVG:
@@ -432,7 +439,37 @@ void CNNLayer::calculateGradients(){
         std::cerr << "[Warning] Non-finite activations detected!\n";
     }
 
-    activationsDelta.array().colwise() *= deltaFromNextLayer.array();
+    switch (pool) {
+    case pool_type::NONE:
+        activationsDelta.array().colwise() *= deltaFromNextLayer.array();
+        break;
+    
+    case pool_type::MAX:
+        for(int i = 0; i < activationsDelta.cols(); i++){
+            maxPoolBpHelp = Eigen::VectorXd::Zero(activation1D.rows());
+            for(int j = 0; j < deltaFromNextLayer.size(); j++){
+                maxPoolBpHelp(maxPoolBpIndicesHelp(j,i)) = deltaFromNextLayer(j);
+            }
+            activationsDelta.col(i).array() *= maxPoolBpHelp.array();
+        }
+        break;
+
+    case pool_type::AVG:
+        avgPoolBpHelp = Eigen::VectorXd(activation1D.rows());
+        for(int i = 0; i < deltaFromNextLayer.size(); i++){
+            for(int j = 0; j < sizes.poolSize; j++){
+                avgPoolBpHelp(i*sizes.poolSize + j) = deltaFromNextLayer(i) / sizes.poolSize;
+            }
+        }
+        activationsDelta.array().colwise() *= avgPoolBpHelp.array();
+
+        break;
+
+    default:
+        std::cerr << "[Error]: Unknown pooling type!" << std::endl;
+        break;
+    }
+
     activationsDelta = sumColumnBlocks(activationsDelta, activationsDelta.cols() / sizes.numFilt);
 
     filtersGradient = convolution1D(currentInput1D,activationsDelta);

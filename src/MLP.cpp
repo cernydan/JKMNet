@@ -1036,6 +1036,30 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
 }
 
 /**
+ * Forward pass and update weights with Adam algorithm (one input)
+ */
+void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate, int iterationNum) {
+    if (layers_.empty())
+        throw std::logic_error("runMLP called before initMLP");
+
+    calcOneOutput(input);
+
+    // Output layer BP
+    layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
+    layers_[layers_.size()-1].calculateOnlineGradient();
+    layers_[layers_.size()-1].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
+
+    // Remaining layers BP
+    if(layers_.size() > 1){
+        for(int i = layers_.size() - 2; i >= 0; --i){
+            layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+            layers_[i].calculateOnlineGradient();
+            layers_[i].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
+        }
+    }
+}
+
+/**
  * Online backpropagation - separete inp out matrices
  */
 void MLP::onlineBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y) {
@@ -1631,5 +1655,11 @@ void MLP::calculateOutputs(const Eigen::MatrixXd& inputMat){
 
 Eigen::MatrixXd MLP::getOutputs() const{
     return outputMat;
+}
+
+Eigen::VectorXd MLP::getFirstLayerDeltaSum(){
+    Eigen::VectorXd delt(1);
+    delt(0) = layers_[0].getDeltas().sum();
+    return delt;
 }
 

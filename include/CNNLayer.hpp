@@ -57,7 +57,7 @@ public:
     void setCurrentInput1D(const Eigen::MatrixXd& currentInp); //!< Setter for current 1D input matrix 
 
     Eigen::MatrixXd convolution1D(const Eigen::MatrixXd& inputs, const Eigen::MatrixXd& filters);
-    Eigen::MatrixXd maxPool(const Eigen::MatrixXd& inputs, int size);
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXi> maxPool(const Eigen::MatrixXd& inputs, int size);
     Eigen::MatrixXd averagePool(const Eigen::MatrixXd& inputs, int size);
     Eigen::MatrixXd flipRowsAndPad(const Eigen::MatrixXd& mat, int pad);
     Eigen::MatrixXd sumColumnBlocks(const Eigen::MatrixXd& mat, int blockSize);
@@ -88,6 +88,9 @@ private:
     Eigen::MatrixXd VtForAdam;
     Eigen::VectorXd MtForAdamBias;
     Eigen::VectorXd VtForAdamBias;
+    Eigen::VectorXd avgPoolBpHelp;
+    Eigen::VectorXd maxPoolBpHelp;
+    Eigen::MatrixXi maxPoolBpIndicesHelp;
 
 };
 

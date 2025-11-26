@@ -60,3 +60,17 @@ void CNN::runCNN1D(const Eigen::MatrixXd& input){
 Eigen::VectorXd CNN::getOutput(){
     return output;
 }
+
+void CNN::bpAdam1input(Eigen::VectorXd deltaFromMlp, double learningRate, int iterationNum){
+    const int lastLayerIdx = layers_.size()-1;
+    layers_[lastLayerIdx].setDeltaFromNextLayer(deltaFromMlp);
+    layers_[lastLayerIdx].calculateGradients();
+    layers_[lastLayerIdx].updateFiltersAdam(learningRate, iterationNum, 0.9, 0.99, 1e-8);
+
+    for(int i = lastLayerIdx - 1; i >= 0; i--){
+        layers_[i].setDeltaFromNextLayer(layers_[i+1].getDelta());
+        layers_[i].calculateGradients();
+        layers_[i].updateFiltersAdam(learningRate, iterationNum, 0.9, 0.99, 1e-8);
+    }
+    
+}

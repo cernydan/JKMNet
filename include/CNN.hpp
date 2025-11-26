@@ -16,6 +16,7 @@ public:
     void initCNN(const Eigen::MatrixXd& input, int rngSeed);
     void runCNN1D(const Eigen::MatrixXd& input);
     Eigen::VectorXd getOutput();
+    void bpAdam1input(Eigen::VectorXd deltaFromMlp, double learningRate, int iterationNum);
 
 protected:
 private:
