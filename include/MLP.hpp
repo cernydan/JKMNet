@@ -90,6 +90,7 @@ class MLP {
         bool compareInitAndRun(const Eigen::VectorXd& input, double tol = 1e-6, int rngSeed = 0) const;  //!< Compare if 'initMLP' and 'runMLP' produce the same output
         bool testRepeatable(const Eigen::VectorXd& input, int repeats = 10, double tol = 1e-8, int rngSeed = 0) const; //!< Repeatability check for 'runMLP'
         void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate); //!< Forward pass and update weights with backpropagation (one input)
+        void runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate, int iterationNum); //!< Forward pass and update weights with Adam algorithm (one input)
 
         void onlineBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);    //!< Online backpropagation - separete inp out matrices
         void onlineAdam(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Online backpropagation using Adam algorithm - separete inp out matrices
@@ -118,6 +119,7 @@ class MLP {
         void calculateOutputs(const Eigen::MatrixXd& inputMat); //!< Calculate outputs for given matrix of inputs
         Eigen::MatrixXd getOutputs() const;  //!< Getter for output matrix
         TrainingResult getResult() const {return result;}
+        Eigen::VectorXd getFirstLayerDeltaSum(); //!< Sum deltas of first layer neurons to vector of size 1 for preceding networks
 
     protected:
 
