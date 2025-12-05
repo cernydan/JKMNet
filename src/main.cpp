@@ -26,6 +26,7 @@
 #include "PSO.hpp"
 #include "HyperparamObjective.hpp"
 #include "HyperparamOptimizer.hpp"
+#include "CNN.hpp"
 
 #include <iostream>
 #include <string>

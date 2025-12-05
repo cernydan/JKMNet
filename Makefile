@@ -15,9 +15,11 @@ OBJ = obj/main.o \
       obj/Data.o \
       obj/Metrics.o \
       obj/CNNLayer.o \
+	  obj/CNN.o \
       obj/PSO.o \
       obj/HyperparamObjective.o \
       obj/HyperparamOptimizer.o
+
 
 .PHONY: all clean run dirs
 
@@ -45,6 +47,9 @@ obj/Metrics.o: src/Metrics.cpp
 	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/CNNLayer.o: src/CNNLayer.cpp
+	$(CC) -c $< -o $@ $(CPPFLAGS)
+
+obj/CNN.o: src/CNN.cpp
 	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/PSO.o: src/PSO.cpp

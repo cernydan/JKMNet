@@ -32,6 +32,8 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
     activ_func = strToActivation(activFunc);
     pool = strToPoolType(poolType);
 
+    if(sizes.poolSize == 0){pool = pool_type::NONE;}
+
     bias1D = Eigen::VectorXd::Zero(sizes.numFilt);
     MtForAdamBias = Eigen::VectorXd::Zero(sizes.numFilt);
     VtForAdamBias = Eigen::VectorXd::Zero(sizes.numFilt);
