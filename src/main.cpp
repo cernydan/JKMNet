@@ -26,6 +26,7 @@
 #include "PSO.hpp"
 #include "HyperparamObjective.hpp"
 #include "HyperparamOptimizer.hpp"
+#include "CNN.hpp"
 
 #include <iostream>
 #include <string>
@@ -123,6 +124,6 @@ int main(int argc, char** argv) {
     std::cout << "===========================================\n";
     JKMNet net_(cfg, nthreads);
     net_.ensembleRunMlpVector();
-
+    
     return 0;
 }

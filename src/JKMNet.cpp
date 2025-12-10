@@ -346,11 +346,11 @@ void JKMNet::ensembleRunMlpVector(){
     data_.applyTransform();
     std::cout << "-> Data transformed." << std::endl;
 
-    auto [X_train, Y_train, X_valid, Y_valid] = data_.makeMats(cfg_.input_numbers,
-                                                              static_cast<int>(cfg_.mlp_architecture.back()),
-                                                              cfg_.train_fraction,
-                                                              cfg_.shuffle,
-                                                              cfg_.seed);
+    auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeMats(cfg_.input_numbers,
+                                                                                static_cast<int>(cfg_.mlp_architecture.back()),
+                                                                                cfg_.train_fraction,
+                                                                                cfg_.shuffle,
+                                                                                cfg_.seed);
 
     std::cout << "-> Data split into training and validation sets." << std::endl;
 
@@ -360,7 +360,7 @@ void JKMNet::ensembleRunMlpVector(){
     }
 
     // Save real data
-    Eigen::MatrixXd Y_true_calib_save = Y_train;
+    Eigen::MatrixXd Y_true_calib_save = data_.unshuffleMatrix(Y_train, calIdxForUnshuffle);
     Eigen::MatrixXd Y_true_valid_save = Y_valid;
     try {
         Y_true_calib_save = data_.inverseTransformOutputs(Y_true_calib_save);
@@ -370,6 +370,7 @@ void JKMNet::ensembleRunMlpVector(){
     }
     data_.saveMatrixCsv(cfg_.real_calib, Y_true_calib_save, colNames);
     data_.saveMatrixCsv(cfg_.real_valid, Y_true_valid_save, colNames);
+    data_.saveVector(pat_indices, cfg_.pattern_indices);
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
     // Configure MLP
@@ -534,7 +535,9 @@ void JKMNet::ensembleRunMlpVector(){
         Metrics::saveMetricRow(rsrFile,   colNames, rsrVals,   true);
 
 
-        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), Y_pred_calib, colNames);
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), 
+                            data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle), 
+                            colNames);
 
         logFile << "-> Calibration metrics and predictions saved.\n";
 
@@ -626,11 +629,11 @@ void JKMNet::predictFromSavedWeights(const std::string &weightsPath)
     data_.applyTransform();
     std::cout << "-> Data transformed.\n";
 
-    auto [X_train, Y_train, X_valid, Y_valid] = data_.makeMats(cfg_.input_numbers,
-                                                              static_cast<int>(cfg_.mlp_architecture.back()),
-                                                              cfg_.train_fraction,
-                                                              cfg_.shuffle,
-                                                              cfg_.seed);
+    auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeMats(cfg_.input_numbers,
+                                                                                static_cast<int>(cfg_.mlp_architecture.back()),
+                                                                                cfg_.train_fraction,
+                                                                                cfg_.shuffle,
+                                                                                cfg_.seed);
     Eigen::MatrixXd X_pred = X_valid;
     Eigen::MatrixXd Y_true = Y_valid;
 

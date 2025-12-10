@@ -1397,7 +1397,7 @@ Data::makeKFoldMats(
     return { trainInps, trainOuts, validInps, validOuts };
 }
 
-std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
 Data::makeMats(std::vector<int> inpNumsOfVars,
                           int outRows,
                           double trainFraction,
@@ -1425,6 +1425,7 @@ Data::makeMats(std::vector<int> inpNumsOfVars,
 
     const int inpC = static_cast<int>(std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0));
 
+    std::vector<int>globalIdx;
     std::vector<std::vector<double>> rowsIn;
     std::vector<std::vector<double>> rowsOut;
     rowsIn.reserve(static_cast<size_t>(CRcand));
@@ -1458,6 +1459,7 @@ Data::makeMats(std::vector<int> inpNumsOfVars,
 
         rowsIn.push_back(std::move(inrow));
         rowsOut.push_back(std::move(outrow));
+        globalIdx.push_back(i);
     }
 
     const int total = static_cast<int>(rowsIn.size());
@@ -1490,6 +1492,20 @@ Data::makeMats(std::vector<int> inpNumsOfVars,
         for (int c = 0; c < inpC; ++c) validIn(vi, c) = rowsIn[ri][c];
         for (int c = 0; c < outRows; ++c) validOut(vi, c) = rowsOut[ri][c];
     }
+    std::vector<int> calIdx(idx.begin(), idx.begin() + nTrain);
+    return { trainIn, trainOut, validIn, validOut, globalIdx, calIdx};
+}
 
-    return { trainIn, trainOut, validIn, validOut };
+bool Data::saveVector(const std::vector<int>& v, const std::string& path) {
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) {
+        std::cerr << "[Data::saveVector] Cannot open file: " << path << "\n";
+        return false;
+    }
+    for (size_t i = 0; i < v.size(); ++i) {
+        ofs << v[i];
+        ofs << "\n";
+    }
+    ofs.close();
+    return true;
 }

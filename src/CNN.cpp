@@ -18,22 +18,22 @@ void CNN::initCNN(const Eigen::MatrixXd& input, int rngSeed){
                     architecture[0][0], 
                     input.rows(),
                     input.cols(),
-                    architecture[0][2],
+                    architecture[0][2]
                     //PRIDELAT INIT ATD Z VEKTORU!
-                    )
-    layers_[0].setCurrentInput(input);
+                    );
+    layers_[0].setCurrentInput1D(input);
     layers_[0].calculateOutput1D();
 
     for(size_t i = 1; i < architecture.size(); i++){
         layers_.emplace_back();
         layers_[i].init1DCNNLayer(architecture[i][1], 
                         architecture[i][0], 
-                        layers[i-1].getOutput().rows(),
-                        layers[i-1].getOutput().cols(),
-                        architecture[0][2],
+                        layers_[i-1].getOutput1D().rows(),
+                        layers_[i-1].getOutput1D().cols(),
+                        architecture[i][2]
                     //PRIDELAT INIT ATD Z VEKTORU!
-                    )
-        layers_[i].setCurrentInput(layers[i-1].getOutput());
+                    );
+        layers_[i].setCurrentInput1D(layers_[i-1].getOutput1D());
         layers_[i].calculateOutput1D();
     }
 }
