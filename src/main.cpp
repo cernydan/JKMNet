@@ -124,6 +124,6 @@ int main(int argc, char** argv) {
     std::cout << "===========================================\n";
     JKMNet net_(cfg, nthreads);
     net_.ensembleRunMlpVector();
-
+    
     return 0;
 }

@@ -110,12 +110,13 @@ class Data {
             bool largerPieceCalib,
             unsigned seed);
 
-        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
         makeMats(std::vector<int> inpNumsOfVars,
                           int outRows,
                           double trainFraction,
                           bool shuffleCalib,
                           unsigned seed) const;
+        bool saveVector(const std::vector<int>& v, const std::string& path);
 
     protected:
 
