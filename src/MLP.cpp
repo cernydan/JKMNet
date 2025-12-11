@@ -1023,15 +1023,16 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
     // Output layer BP
     layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
     layers_[layers_.size()-1].calculateOnlineGradient();
-    layers_[layers_.size()-1].updateWeights(learningRate);
 
     // Remaining layers BP
     if(layers_.size() > 1){
         for(int i = layers_.size() - 2; i >= 0; --i){
             layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
             layers_[i].calculateOnlineGradient();
-            layers_[i].updateWeights(learningRate);
         }
+    }
+    for(size_t i = 0; i < getNumLayers(); i++){
+        layers_[i].updateWeights(learningRate);
     }
 }
 
@@ -1047,15 +1048,16 @@ void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsO
     // Output layer BP
     layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
     layers_[layers_.size()-1].calculateOnlineGradient();
-    layers_[layers_.size()-1].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
 
     // Remaining layers BP
     if(layers_.size() > 1){
         for(int i = layers_.size() - 2; i >= 0; --i){
             layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
             layers_[i].calculateOnlineGradient();
-            layers_[i].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
         }
+    }
+    for(size_t i = 0; i < getNumLayers(); i++){
+        layers_[i].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
     }
 }
 
@@ -1102,17 +1104,18 @@ void MLP::onlineBP(int maxIterations, double maxError, double learningRate, cons
             // Output layer BP
             layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
             layers_[lastLayerIndex].calculateOnlineGradient();
-            layers_[lastLayerIndex].updateWeights(learningRate);
 
             // Remaining layers BP
             if(layers_.size() > 1){
                 for(int i = lastLayerIndex - 1; i >= 0; --i){
                     layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
                     layers_[i].calculateOnlineGradient();
-                    layers_[i].updateWeights(learningRate);
                 }
             }
             Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            for(size_t i = 0; i < getNumLayers(); i++){
+                layers_[i].updateWeights(learningRate);
+            }
         }
         Error = Error / numOfPatterns;
         if(Error <= maxError){
@@ -1183,17 +1186,18 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
             // Output layer BP
             layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
             layers_[lastLayerIndex].calculateOnlineGradient();
-            layers_[lastLayerIndex].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
 
             // Remaining layers BP
             if(layers_.size() > 1){
                 for(int i = lastLayerIndex - 1; i >= 0; --i){
                     layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
                     layers_[i].calculateOnlineGradient();
-                    layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
                 }
             }
             Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            for(size_t i = 0; i < getNumLayers(); i++){
+                layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+            }
         }
         Error = Error / numOfPatterns;
         if(Error <= maxError){
