@@ -17,12 +17,14 @@ public:
     void runCNN1D(const Eigen::MatrixXd& input);
     Eigen::VectorXd getOutput();
     void bpAdam1input(Eigen::VectorXd deltaFromMlp, double learningRate, int iterationNum);
+    void calculateOutputs1D(const Eigen::MatrixXd& inputs);
 
 protected:
 private:
     std::vector<CNNLayer> layers_;
     std::vector<std::vector<int>> architecture;
     Eigen::VectorXd output;
+    Eigen::MatrixXd outputs;
 };
 
 #endif // CNN_HPP

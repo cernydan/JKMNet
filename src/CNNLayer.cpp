@@ -37,6 +37,7 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
     bias1D = Eigen::VectorXd::Zero(sizes.numFilt);
     MtForAdamBias = Eigen::VectorXd::Zero(sizes.numFilt);
     VtForAdamBias = Eigen::VectorXd::Zero(sizes.numFilt);
+    biasGradient = Eigen::VectorXd::Zero(sizes.numFilt);
 
     MtForAdam = Eigen::MatrixXd::Zero(sizes.filtSize, sizes.numFilt);
     VtForAdam = Eigen::MatrixXd::Zero(sizes.filtSize, sizes.numFilt);
@@ -182,6 +183,25 @@ Eigen::MatrixXd CNNLayer::convolution1D(const Eigen::MatrixXd& inputs, const Eig
                 }
                 outM(k , i * inCols + j) = konvo;
             }
+        }
+    }
+    return outM;
+}
+
+Eigen::MatrixXd CNNLayer::convolution1DSeparCols(const Eigen::MatrixXd& inputs, const Eigen::MatrixXd& filters){
+    const int inCols = inputs.cols(), filCols = filters.cols(), filRows = filters.rows(), 
+                       outRows = inputs.rows() - filRows + 1;
+    if (inCols != filCols)
+        throw std::invalid_argument("[convolution1DSeparCols] Col nums don't match");
+    Eigen::MatrixXd outM = Eigen::MatrixXd(outRows, inCols);
+    double konvo;
+    for(int j = 0; j < inCols; j++){
+        for(int k = 0; k < outRows; k++){
+            konvo = 0.0;
+            for(int l = 0; l < filRows; l++){
+                konvo += filters(l,j) * inputs(k + l,j);
+            }
+            outM(k , j) = konvo;
         }
     }
     return outM;
@@ -438,7 +458,7 @@ void CNNLayer::calculateGradients(){
 
     // Detect any NaN or infinite
     if (!activation1D.array().isFinite().all()) {
-        std::cerr << "[Warning] Non-finite activations detected!\n";
+        std::cerr << "[Warning CNN] Non-finite activations detected!\n";
     }
 
     switch (pool) {
@@ -474,10 +494,13 @@ void CNNLayer::calculateGradients(){
 
     activationsDelta = sumColumnBlocks(activationsDelta, activationsDelta.cols() / sizes.numFilt);
 
+    biasGradient = activationsDelta.colwise().sum();
+
     filtersGradient = convolution1D(currentInput1D,activationsDelta);
     filtersGradient = sumColumnBlocks(filtersGradient, filtersGradient.cols() / sizes.numFilt);
 
-    inputGradient = convolution1D(flipRowsAndPad(filters1D,deltaFromNextLayer.rows()-1),deltaFromNextLayer);
+    inputGradient = convolution1DSeparCols(flipRowsAndPad(filters1D,activationsDelta.rows()-1),activationsDelta);
+
     delta = inputGradient.rowwise().sum();
 }
 
@@ -489,5 +512,10 @@ void CNNLayer::updateFiltersAdam(double learningRate, int iterationNum, double b
     MtForAdam = beta1 * MtForAdam.array() + (1 - beta1) * filtersGradient.array();
     VtForAdam = beta2 * VtForAdam.array() + (1 - beta2) * filtersGradient.array() * filtersGradient.array();
     filters1D -= learningRate * (MtForAdam.array() / ((1 - std::pow(beta1, iterationNum)) * 
-               (sqrt(VtForAdam.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
+                (sqrt(VtForAdam.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
+
+    MtForAdamBias = beta1 * MtForAdamBias.array() + (1 - beta1) * biasGradient.array();
+    VtForAdamBias = beta2 * VtForAdamBias.array() + (1 - beta2) * biasGradient.array() * biasGradient.array();
+    bias1D -= learningRate * (MtForAdamBias.array() / ((1 - std::pow(beta1, iterationNum)) * 
+               (sqrt(VtForAdamBias.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
 }

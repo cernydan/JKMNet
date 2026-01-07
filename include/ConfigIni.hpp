@@ -127,6 +127,7 @@ inline activ_func_type strToActivation(const std::string &s) {
     if (u == "TANH") return activ_func_type::TANH;
     if (u == "SIGMOID") return activ_func_type::SIGMOID;
     if (u == "LINEAR") return activ_func_type::LINEAR;
+    if (u == "ROOTSIG") return activ_func_type::ROOTSIG;
 
     throw std::runtime_error("Unknown activation: " + s);
 }

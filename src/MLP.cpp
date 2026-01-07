@@ -1631,7 +1631,7 @@ void MLP::calcOneOutput(const Eigen::VectorXd& inputVec){
     // Remaining layers
     for (size_t i = 1; i < getNumLayers(); ++i) {
         layers_[i].setInputs(layers_[i-1].getOutput());
-        layers_[i].calculateOutput(activFuncs[i]);
+        layers_[i].calculateOutput(activFuncs[i]);    
     }
     output = layers_[getNumLayers()-1].getOutput();
 }

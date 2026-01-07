@@ -53,7 +53,7 @@ double evaluateMLPwithParams(const Eigen::VectorXd &params, const RunConfig &cfg
 
         int out = static_cast<int>(cfg.mlp_architecture.back());
 
-        auto [X_train, Y_train, X_valid, Y_valid] = data.makeMats(cfg.input_numbers,
+        auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data.makeMats(cfg.input_numbers,
                                                                   static_cast<int>(cfg.mlp_architecture.back()),
                                                                   cfg.train_fraction,
                                                                   cfg.shuffle,

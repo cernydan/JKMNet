@@ -64,7 +64,7 @@ public:
         activ_func_type  activFunc = activ_func_type::RELU,
         int rngSeed = 0,
         double minVal = 0.0,
-        double maxVal = 1.0);   
+        double maxVal = 0.1);   
     void initWeights(unsigned numNeurons, 
         unsigned numInputs, 
         weight_init_type initType, 
