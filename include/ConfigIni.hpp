@@ -127,7 +127,15 @@ inline activ_func_type strToActivation(const std::string &s) {
     if (u == "TANH") return activ_func_type::TANH;
     if (u == "SIGMOID") return activ_func_type::SIGMOID;
     if (u == "LINEAR") return activ_func_type::LINEAR;
+    if (u == "IABS") return activ_func_type::IABS;
+    if (u == "GAUSSIAN") return activ_func_type::GAUSSIAN;
+    if (u == "LOGLOG") return activ_func_type::LOGLOG;
+    if (u == "CLOGLOG") return activ_func_type::CLOGLOG;
+    if (u == "CLOGLOGM") return activ_func_type::CLOGLOGM;
     if (u == "ROOTSIG") return activ_func_type::ROOTSIG;
+    if (u == "LOGSIG") return activ_func_type::LOGSIG;
+    if (u == "SECH") return activ_func_type::SECH;
+    if (u == "WAVE") return activ_func_type::WAVE;
 
     throw std::runtime_error("Unknown activation: " + s);
 }

@@ -47,9 +47,9 @@ public:
                         int inputCols,
                         int poolSize,
                         std::string initType = "RANDOM",
-                        std::string activFunc = "LEAKYRELU",
+                        std::string activFunc = "RELU",
                         double minVal = 0.0,
-                        double maxVal = 0.1,
+                        double maxVal = 1.0,
                         std::string poolType = "MAX",
                         int rngSeed = 0);
     void setFilters1D(const Eigen::MatrixXd& newFilters);    //!< Setter for 1D filters matrix
