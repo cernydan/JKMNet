@@ -65,12 +65,19 @@ void CNN::bpAdam1input(Eigen::VectorXd deltaFromMlp, double learningRate, int it
     const int lastLayerIdx = layers_.size()-1;
     layers_[lastLayerIdx].setDeltaFromNextLayer(deltaFromMlp);
     layers_[lastLayerIdx].calculateGradients();
-    layers_[lastLayerIdx].updateFiltersAdam(learningRate, iterationNum, 0.9, 0.99, 1e-8);
 
     for(int i = lastLayerIdx - 1; i >= 0; i--){
         layers_[i].setDeltaFromNextLayer(layers_[i+1].getDelta());
         layers_[i].calculateGradients();
+    }
+
+    for(size_t i = 0; i < layers_.size(); i++){
         layers_[i].updateFiltersAdam(learningRate, iterationNum, 0.9, 0.99, 1e-8);
     }
-    
+}
+
+void CNN::calculateOutputs1D(const Eigen::MatrixXd& inputs){
+    for(int i = 0; i < inputs.rows(); i++){
+        
+    }
 }

@@ -37,6 +37,8 @@ public:
     ~CNNLayer() = default;  //!< The destructor 
     CNNLayer(const CNNLayer&) = default;  //!< The copy constructor
     CNNLayer& operator=(const CNNLayer&) = default;   //!< The assignment operator
+    CNNLayer(CNNLayer&&) = default;
+    CNNLayer& operator=(CNNLayer&&) = default;
 
     //!< Initialize a CNN layer 
     void init1DCNNLayer(int numberOfFilters, 
@@ -57,6 +59,7 @@ public:
     void setCurrentInput1D(const Eigen::MatrixXd& currentInp); //!< Setter for current 1D input matrix 
 
     Eigen::MatrixXd convolution1D(const Eigen::MatrixXd& inputs, const Eigen::MatrixXd& filters);
+    Eigen::MatrixXd convolution1DSeparCols(const Eigen::MatrixXd& inputs, const Eigen::MatrixXd& filters);
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXi> maxPool(const Eigen::MatrixXd& inputs, int size);
     Eigen::MatrixXd averagePool(const Eigen::MatrixXd& inputs, int size);
     Eigen::MatrixXd flipRowsAndPad(const Eigen::MatrixXd& mat, int pad);
@@ -84,6 +87,7 @@ private:
     Eigen::VectorXd deltaFromNextLayer;
     Eigen::MatrixXd filtersGradient;
     Eigen::MatrixXd inputGradient;
+    Eigen::VectorXd biasGradient;
     Eigen::MatrixXd MtForAdam;
     Eigen::MatrixXd VtForAdam;
     Eigen::VectorXd MtForAdamBias;

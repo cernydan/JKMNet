@@ -455,8 +455,8 @@ Eigen::VectorXd Layer::setActivationFunction(const Eigen::VectorXd& weightedSum,
             activatedOutput = activatedOutput.array().unaryExpr([](double x) { return 1 - 2 * std::exp(-0.7 * std::exp(x)); });
             break;
 
-        case activ_func_type::ROOTSIG:  // f(x) = x / ((1 + sqrt(1 + x^2)) * sqrt(1 + x^2))
-            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return x / (1 + std::sqrt(1.0 + std::exp(-x * x))); });
+        case activ_func_type::ROOTSIG:  // f(x) = x / (1 + sqrt(1 + x^2))
+            activatedOutput = activatedOutput.array().unaryExpr([](double x) { return x / (1.0 + std::sqrt(1.0 + x * x)); });
             break;
 
         case activ_func_type::LOGSIG:  // f(x) = sigmoid(x)^2
@@ -534,19 +534,17 @@ Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, acti
         case activ_func_type::CLOGLOGM:  // f'(x) = 7 * exp(x - 0.7 * exp(x)) / 5.0    (for f(x) = 1 - 2 * exp(-0.7 * exp(x)))  
             // MJ: f'(x) = - 1 / (exp(x) - 1) for x > 0
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
-            { return -1.0 / (std::exp(x)-1.0); });
+            { return 1.4 * std::exp(x) * std::exp(-0.7 * std::exp(x)); });
             break;
 
-        case activ_func_type::ROOTSIG:  // f'(x) for f(x) = x / (1 + sqrt(1.0 + exp(-x * x)))  
-            // MJ: ( 1 + 2 * sqrt(1 + x^2) - (1 + x^2)^(3/2) ) / ( (1 + x^2)^(3/2) * (1 + sqrt(1 + x^2))^2 )
+        case activ_func_type::ROOTSIG:  // f'(x) = x / ((1 + sqrt(1 + x^2)) * sqrt(1 + x^2))
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
-            { return (1.0 + 2.0 * sqrt(1.0 + x * x) - std::pow((1.0 + x * x),(3.0/2.0))) / 
-                     (std::pow((1.0 + x * x),(3.0/2.0)) * (1.0 + sqrt(1.0 + x * x)) * (1.0 + sqrt(1.0 + x * x))); });
+            { return 1.0 / ((1.0 + std::sqrt(1.0 + x * x)) * std::sqrt(1.0 + x * x)); });
             break;
 
         case activ_func_type::LOGSIG:  // f'(x) = 2 * sigmoid(x)^2 * (1 - sigmoid(x))
             derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
-            { return 2.0 * (1.0 / (1.0 + std::exp(-x))) * (1.0 / (1.0 + std::exp(-x))) * (1.0-(1.0 / (1.0 + std::exp(-x)))); });
+            { return 2.0 * std::exp(-x) / std::pow((1 + std::exp(-x)),3); });
             break;
 
         case activ_func_type::SECH:  // f'(x) = -sech(x) * tanh(h)
