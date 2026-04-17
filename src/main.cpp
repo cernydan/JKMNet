@@ -27,6 +27,7 @@
 #include "HyperparamObjective.hpp"
 #include "HyperparamOptimizer.hpp"
 #include "CNN.hpp"
+#include "LSTMLayer.hpp"
 
 #include <iostream>
 #include <string>
