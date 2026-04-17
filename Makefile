@@ -18,7 +18,8 @@ OBJ = obj/main.o \
 	  obj/CNN.o \
       obj/PSO.o \
       obj/HyperparamObjective.o \
-      obj/HyperparamOptimizer.o
+      obj/HyperparamOptimizer.o \
+	  obj/LSTMLayer.o
 
 
 .PHONY: all clean run dirs
@@ -59,6 +60,9 @@ obj/HyperparamObjective.o: src/HyperparamObjective.cpp
 	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 obj/HyperparamOptimizer.o: src/HyperparamOptimizer.cpp
+	$(CC) -c $< -o $@ $(CPPFLAGS)
+	
+obj/LSTMLayer.o: src/LSTMLayer.cpp
 	$(CC) -c $< -o $@ $(CPPFLAGS)
 
 $(TARGET): $(OBJ)
