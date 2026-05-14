@@ -96,6 +96,8 @@ class MLP {
         void onlineAdam(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Online backpropagation using Adam algorithm - separete inp out matrices
         void batchAdam(int maxIterations, double maxError, int batchSize, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Batch backpropagation using Adam algorithm - separete inp out matrices
         void batchBP(int maxIterations, double maxError, int batchSize, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);    //!< Batch backpropagation - separete inp out matrices
+        void onlinePenalizeBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y, double lambda = 0.0001);    //!< Online backpropagation with high weights penalization
+        void onlineMomentumBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y, double moment = 0.9);    //!< Online backpropagation with momentum
 
         std::vector<Eigen::MatrixXd> onlineAdamEpochVal(
             const Eigen::MatrixXd &Xtrain,
@@ -135,11 +137,32 @@ class MLP {
             double learningRate,
             int metricsAfterXEpochs);
 
+        std::vector<Eigen::MatrixXd> onlinePenalizeBpEpochVal(
+            const Eigen::MatrixXd &Xtrain,
+            const Eigen::MatrixXd &Ytrain,
+            const Eigen::MatrixXd &Xval,
+            const Eigen::MatrixXd &Yval,
+            int maxIterations,
+            double learningRate,
+            int metricsAfterXEpochs,
+            double lambda = 0.0001);
+
+        std::vector<Eigen::MatrixXd> onlineMomentumBpEpochVal(
+            const Eigen::MatrixXd &Xtrain,
+            const Eigen::MatrixXd &Ytrain,
+            const Eigen::MatrixXd &Xval,
+            const Eigen::MatrixXd &Yval,
+            int maxIterations,
+            double learningRate,
+            int metricsAfterXEpochs,
+            double moment = 0.9);
+
         void calcOneOutput(const Eigen::VectorXd& inputVec);  //!< Forward pass for one input
         void calculateOutputs(const Eigen::MatrixXd& inputMat); //!< Calculate outputs for given matrix of inputs
         Eigen::MatrixXd getOutputs() const;  //!< Getter for output matrix
         TrainingResult getResult() const {return result;}
         Eigen::VectorXd getFirstLayerDeltaSum(); //!< Sum deltas of first layer neurons to vector of size 1 for preceding networks
+        Eigen::VectorXd getFirstLayerInputDelta();
 
     protected:
 

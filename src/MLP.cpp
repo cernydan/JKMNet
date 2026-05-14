@@ -1401,6 +1401,176 @@ void MLP::batchBP(int maxIterations, double maxError, int batchSize, double lear
     }
 }
 
+/**
+ * Online backpropagation - separete inp out matrices
+ */
+void MLP::onlinePenalizeBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y, double lambda) {
+    if (layers_.empty())
+        throw std::logic_error("onlineBP called before initMLP");
+
+    if (X.rows() == 0 || Y.rows() == 0)
+        throw std::invalid_argument("Empty training data passed to onlineBP");
+
+    if (X.rows() != Y.rows())
+        throw std::invalid_argument("matrices have different number of rows");
+
+    if (maxIterations <= 0 || maxError < 0.0)
+        throw std::invalid_argument("maxIterations and maxError must be positive");
+    
+    if (learningRate <= 0.0 || learningRate > 1.0)
+        throw std::invalid_argument("learningRate must be between 0 and 1");
+
+    if (lambda <= 0.0 || lambda > 1.0)
+        throw std::invalid_argument("lambda must be between 0 and 1");
+
+    int numOfPatterns = X.rows();                // number of patterns in calibration matrix
+    int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
+    int outSize = nNeurons.back();                   // number of output neurons
+    int lastLayerIndex = getNumLayers()-1;
+
+    if (inpSize != X.cols())
+        throw std::runtime_error("Input matrix row length doesnt match the initialized input size");
+
+    if (outSize != Y.cols())
+        throw std::runtime_error("Output matrix row length doesnt match the initialized output size");
+
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIterations + 1; iter++){
+        Error = 0.0;
+        for (int pat = 0; pat < numOfPatterns; pat++){
+            Eigen::VectorXd currentInp = X.row(pat);
+            Eigen::VectorXd currentObs = Y.row(pat);
+            
+            calcOneOutput(currentInp);
+
+            // Output layer BP
+            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            layers_[lastLayerIndex].calculateOnlineGradientPenalize(lambda);
+
+            // Remaining layers BP
+            if(layers_.size() > 1){
+                for(int i = lastLayerIndex - 1; i >= 0; --i){
+                    layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+                    layers_[i].calculateOnlineGradientPenalize(lambda);
+                }
+            }
+            Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            for(size_t i = 0; i < getNumLayers(); i++){
+                layers_[i].updateWeights(learningRate);
+            }
+        }
+        Error = Error / numOfPatterns;
+        if(Error <= maxError){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            result.iterations = iter;
+            result.finalLoss = Error;
+            result.time = duration.count();
+            result.converged = true;
+
+            break;
+        }
+    }
+    if(Error > maxError){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    result.iterations = maxIterations;
+    result.finalLoss = Error;
+    result.time = duration.count();
+    result.converged = false;
+    }
+}
+
+/**
+ * Online backpropagation with momentum
+ */
+void MLP::onlineMomentumBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y, double moment) {
+    if (layers_.empty())
+        throw std::logic_error("onlineBP called before initMLP");
+
+    if (X.rows() == 0 || Y.rows() == 0)
+        throw std::invalid_argument("Empty training data passed to onlineBP");
+
+    if (X.rows() != Y.rows())
+        throw std::invalid_argument("matrices have different number of rows");
+
+    if (maxIterations <= 0 || maxError < 0.0)
+        throw std::invalid_argument("maxIterations and maxError must be positive");
+    
+    if (learningRate <= 0.0 || learningRate > 1.0)
+        throw std::invalid_argument("learningRate must be between 0 and 1");
+        
+    if (moment <= 0.0 || moment > 1.0)
+        throw std::invalid_argument("momentum must be between 0 and 1");
+
+    int numOfPatterns = X.rows();                // number of patterns in calibration matrix
+    int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
+    int outSize = nNeurons.back();                   // number of output neurons
+    int lastLayerIndex = getNumLayers()-1;
+
+    if (inpSize != X.cols())
+        throw std::runtime_error("Input matrix row length doesnt match the initialized input size");
+
+    if (outSize != Y.cols())
+        throw std::runtime_error("Output matrix row length doesnt match the initialized output size");
+
+    double Error;
+    auto start = high_resolution_clock::now();
+    for (int iter = 1; iter < maxIterations + 1; iter++){
+        Error = 0.0;
+        for (int pat = 0; pat < numOfPatterns; pat++){
+            Eigen::VectorXd currentInp = X.row(pat);
+            Eigen::VectorXd currentObs = Y.row(pat);
+            
+            calcOneOutput(currentInp);
+
+            // Output layer BP
+            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            layers_[lastLayerIndex].calculateOnlineGradient();
+
+            // Remaining layers BP
+            if(layers_.size() > 1){
+                for(int i = lastLayerIndex - 1; i >= 0; --i){
+                    layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+                    layers_[i].calculateOnlineGradient();
+                }
+            }
+            Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            for(size_t i = 0; i < getNumLayers(); i++){
+                layers_[i].updateWeightsMomentum(learningRate, moment);
+            }
+        }
+        Error = Error / numOfPatterns;
+        if(Error <= maxError){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            result.iterations = iter;
+            result.finalLoss = Error;
+            result.time = duration.count();
+            result.converged = true;
+
+            break;
+        }
+    }
+    if(Error > maxError){
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+
+    // Store results
+    result.iterations = maxIterations;
+    result.finalLoss = Error;
+    result.time = duration.count();
+    result.converged = false;
+    }
+}
+
 std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
@@ -1453,15 +1623,45 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
         }
     }
 
+    int numOfPatterns = Xtrain.rows();                  // number of patterns in calibration matrix
+    int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
+    int outSize = nNeurons.back();                   // number of output neurons
+    int lastLayerIndex = getNumLayers()-1;
+
+    if (inpSize != Xtrain.cols())
+        throw std::runtime_error("Input matrix row length doesnt match the initialized input size");
+
+    if (outSize != Ytrain.cols())
+        throw std::runtime_error("Output matrix row length doesnt match the initialized output size");
+
     auto start = high_resolution_clock::now();
-    for(int epoch = 0; epoch < maxIterations; epoch++){
+    double Error;
+    for(int epoch = 1; epoch <= maxIterations; epoch++){
         // Run online Adam
-        try {
-            onlineAdam(1, 0.0, learningRate, Xtrain, Ytrain);
-        } catch (const std::exception &ex) {
-            std::cerr << "[onlineAdam] training failed: " << ex.what() << "\n";
-            throw;
+        Error = 0.0;
+        for (int pat = 0; pat < numOfPatterns; pat++){
+            Eigen::VectorXd currentInp = Xtrain.row(pat);
+            Eigen::VectorXd currentObs = Ytrain.row(pat);
+
+            calcOneOutput(currentInp);
+
+            // Output layer BP
+            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            layers_[lastLayerIndex].calculateOnlineGradient();
+
+            // Remaining layers BP
+            if(layers_.size() > 1){
+                for(int i = lastLayerIndex - 1; i >= 0; --i){
+                    layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+                    layers_[i].calculateOnlineGradient();
+                }
+            }
+            Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            for(size_t i = 0; i < getNumLayers(); i++){
+                layers_[i].updateAdam(learningRate,epoch,0.9, 0.99, 1e-8);
+            }
         }
+        Error = Error / numOfPatterns;
 
         if(metricsAfterXEpochs == 1){
             calculateOutputs(Xtrain);
@@ -1543,11 +1743,9 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
-    
-    calculateOutputs(Xtrain);
 
     result.converged = false;
-    result.finalLoss = Metrics::mse(Ytrain,outputMat);
+    result.finalLoss = Error;
     result.iterations = maxIterations;
     result.time = duration.count();
 
@@ -1760,15 +1958,51 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
         }
     }
 
+    int numOfPatterns = Xtrain.rows();                  // number of patterns in calibration matrix
+    int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
+    int outSize = nNeurons.back();                   // number of output neurons
+    int lastLayerIndex = getNumLayers()-1;
+
+    if (inpSize != Xtrain.cols())
+        throw std::runtime_error("Input matrix row length doesnt match the initialized input size");
+
+    if (outSize != Ytrain.cols())
+        throw std::runtime_error("Output matrix row length doesnt match the initialized output size");
+
+    double Error;
     auto start = high_resolution_clock::now();
-    for(int epoch = 0; epoch < maxIterations; epoch++){
+    for(int epoch = 1; epoch <= maxIterations; epoch++){
         // Run batch Adam
-        try {
-            batchAdam(1, 0.0, batchSize, learningRate, Xtrain, Ytrain);
-        } catch (const std::exception &ex) {
-            std::cerr << "[batchAdam] training failed: " << ex.what() << "\n";
-            throw;
-        }
+        Error = 0.0;
+        for(int batch = 0; batch < (numOfPatterns + batchSize - 1)/batchSize; batch++){
+            int start = batch * batchSize;
+            int end   = std::min(start + batchSize,numOfPatterns);
+            for (int pat = start; pat < end; pat++){
+
+                Eigen::VectorXd currentInp = Xtrain.row(pat);
+                Eigen::VectorXd currentObs = Ytrain.row(pat);
+                
+                calcOneOutput(currentInp);
+
+                // Output layer gradient
+                layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+                layers_[lastLayerIndex].calculateBatchGradient();
+
+                // Remaining layers BP
+                if(layers_.size() > 1){
+                    for(int i = lastLayerIndex - 1; i >= 0; --i){
+                        layers_[i].calculateDeltas(layers_[i+1].getWeights(),layers_[i+1].getDeltas(),activFuncs[i]);
+                        layers_[i].calculateBatchGradient();
+                    }
+                }
+                Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+                }
+                for (int i = 0; i <= lastLayerIndex; i++){
+                    layers_[i].updateAdam(learningRate,epoch,0.9, 0.99, 1e-8);
+                    layers_[i].setGradient(layers_[i].getGradient().setZero());
+                }
+            }
+            Error = Error / numOfPatterns;
 
         if(metricsAfterXEpochs == 1){
             calculateOutputs(Xtrain);
@@ -1851,10 +2085,8 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
 
-    calculateOutputs(Xtrain);
-
     result.converged = false;
-    result.finalLoss = Metrics::mse(Ytrain,outputMat);
+    result.finalLoss = Error;
     result.iterations = maxIterations;
     result.time = duration.count();
 
@@ -2015,6 +2247,320 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     return resultMetrics;
 }
 
+std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
+    const Eigen::MatrixXd &Xtrain,
+    const Eigen::MatrixXd &Ytrain,
+    const Eigen::MatrixXd &Xval,
+    const Eigen::MatrixXd &Yval,
+    int maxIterations,
+    double learningRate,
+    int metricsAfterXEpochs,
+    double lambda)
+{
+    if (layers_.empty())
+        throw std::logic_error("onlineBpEpochVal called before initMLP");
+
+    if (Xtrain.rows() == 0 || Ytrain.rows() == 0 || Xval.rows() == 0 || Yval.rows() == 0)
+        throw std::invalid_argument("Empty training data passed to onlineBpEpochVal");
+            
+    if (Xtrain.rows() != Ytrain.rows())
+        throw std::invalid_argument("train matrices have different number of rows");
+
+    if (Xval.rows() != Yval.rows())
+        throw std::invalid_argument("validation matrices have different number of rows");
+
+    if (maxIterations <= 0 || metricsAfterXEpochs <= 0)
+        throw std::invalid_argument("maxIterations and metricsAfterXEpochs must be positive");
+    
+    if (learningRate <= 0.0 || learningRate > 1.0)
+        throw std::invalid_argument("learningRate must be between 0 and 1");
+
+    if (metricsAfterXEpochs > maxIterations)
+        throw std::invalid_argument("metricsAfterXEpochs can't be bigger than maxIterations");
+    
+    if (lambda <= 0.0 || lambda > 1.0)
+        throw std::invalid_argument("lambda must be between 0 and 1");
+
+    std::vector<Eigen::MatrixXd> resultMetrics;
+    int rowControl;
+    if(metricsAfterXEpochs == 1){
+        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
+        for(int i = 0; i < 14; i++){
+            resultMetrics.push_back(prepMat);
+        }
+    } else {
+        rowControl = maxIterations / metricsAfterXEpochs;
+        if(maxIterations % metricsAfterXEpochs == 0){
+            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
+            for(int i = 0; i < 14; i++){
+                resultMetrics.push_back(prepMat);
+            }
+        } else {
+            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
+            for(int i = 0; i < 14; i++){
+                resultMetrics.push_back(prepMat);
+            }
+        }
+    }
+
+    auto start = high_resolution_clock::now();
+    for(int epoch = 0; epoch < maxIterations; epoch++){
+        // Run online BP
+        try {
+            onlinePenalizeBP(1, 0.0, learningRate, Xtrain, Ytrain,lambda);
+        } catch (const std::exception &ex) {
+            std::cerr << "[onlinePenalizeBP] training failed: " << ex.what() << "\n";
+            throw;
+        }
+
+        if(metricsAfterXEpochs == 1){
+            calculateOutputs(Xtrain);
+            for (int c = 0; c < Ytrain.cols(); ++c) {
+                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            }
+
+            calculateOutputs(Xval);
+            for (int c = 0; c < Ytrain.cols(); ++c) {
+                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+            }
+        } else {
+            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
+                int row = epoch / metricsAfterXEpochs - 1;
+                calculateOutputs(Xtrain);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                }
+
+                calculateOutputs(Xval);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+                }
+            }
+            if(epoch == maxIterations - 1){
+                int row;
+                if(maxIterations % metricsAfterXEpochs == 0){
+                    row = rowControl - 1;
+                } else {
+                    row = rowControl;
+                }
+                calculateOutputs(Xtrain);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                }
+
+                calculateOutputs(Xval);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+                }
+            }
+        }
+    }
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    
+    calculateOutputs(Xtrain);
+
+    result.converged = false;
+    result.finalLoss = Metrics::mse(Ytrain,outputMat);
+    result.iterations = maxIterations;
+    result.time = duration.count();
+
+    return resultMetrics;
+}
+
+std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
+    const Eigen::MatrixXd &Xtrain,
+    const Eigen::MatrixXd &Ytrain,
+    const Eigen::MatrixXd &Xval,
+    const Eigen::MatrixXd &Yval,
+    int maxIterations,
+    double learningRate,
+    int metricsAfterXEpochs,
+    double moment)
+{
+    if (layers_.empty())
+        throw std::logic_error("onlineBpEpochVal called before initMLP");
+
+    if (Xtrain.rows() == 0 || Ytrain.rows() == 0 || Xval.rows() == 0 || Yval.rows() == 0)
+        throw std::invalid_argument("Empty training data passed to onlineBpEpochVal");
+            
+    if (Xtrain.rows() != Ytrain.rows())
+        throw std::invalid_argument("train matrices have different number of rows");
+
+    if (Xval.rows() != Yval.rows())
+        throw std::invalid_argument("validation matrices have different number of rows");
+
+    if (maxIterations <= 0 || metricsAfterXEpochs <= 0)
+        throw std::invalid_argument("maxIterations and metricsAfterXEpochs must be positive");
+    
+    if (learningRate <= 0.0 || learningRate > 1.0)
+        throw std::invalid_argument("learningRate must be between 0 and 1");
+
+    if (metricsAfterXEpochs > maxIterations)
+        throw std::invalid_argument("metricsAfterXEpochs can't be bigger than maxIterations");
+    
+    if (moment <= 0.0 || moment > 1.0)
+        throw std::invalid_argument("lambda must be between 0 and 1");
+
+    std::vector<Eigen::MatrixXd> resultMetrics;
+    int rowControl;
+    if(metricsAfterXEpochs == 1){
+        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
+        for(int i = 0; i < 14; i++){
+            resultMetrics.push_back(prepMat);
+        }
+    } else {
+        rowControl = maxIterations / metricsAfterXEpochs;
+        if(maxIterations % metricsAfterXEpochs == 0){
+            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
+            for(int i = 0; i < 14; i++){
+                resultMetrics.push_back(prepMat);
+            }
+        } else {
+            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
+            for(int i = 0; i < 14; i++){
+                resultMetrics.push_back(prepMat);
+            }
+        }
+    }
+
+    auto start = high_resolution_clock::now();
+    for(int epoch = 0; epoch < maxIterations; epoch++){
+        // Run online BP
+        try {
+            onlineMomentumBP(1, 0.0, learningRate, Xtrain, Ytrain, moment);
+        } catch (const std::exception &ex) {
+            std::cerr << "[onlineMomentumBP] training failed: " << ex.what() << "\n";
+            throw;
+        }
+
+        if(metricsAfterXEpochs == 1){
+            calculateOutputs(Xtrain);
+            for (int c = 0; c < Ytrain.cols(); ++c) {
+                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+            }
+
+            calculateOutputs(Xval);
+            for (int c = 0; c < Ytrain.cols(); ++c) {
+                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+            }
+        } else {
+            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
+                int row = epoch / metricsAfterXEpochs - 1;
+                calculateOutputs(Xtrain);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                }
+
+                calculateOutputs(Xval);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+                }
+            }
+            if(epoch == maxIterations - 1){
+                int row;
+                if(maxIterations % metricsAfterXEpochs == 0){
+                    row = rowControl - 1;
+                } else {
+                    row = rowControl;
+                }
+                calculateOutputs(Xtrain);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                }
+
+                calculateOutputs(Xval);
+                for (int c = 0; c < Ytrain.cols(); ++c) {
+                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+                }
+            }
+        }
+    }
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    
+    calculateOutputs(Xtrain);
+
+    result.converged = false;
+    result.finalLoss = Metrics::mse(Ytrain,outputMat);
+    result.iterations = maxIterations;
+    result.time = duration.count();
+
+    return resultMetrics;
+}
+
 /**
  * Forward pass reusing existing weights
  */
@@ -2062,3 +2608,9 @@ Eigen::VectorXd MLP::getFirstLayerDeltaSum(){
     return delt;
 }
 
+Eigen::VectorXd MLP::getFirstLayerInputDelta(){
+    Eigen::VectorXd delt;
+    delt = layers_[0].getWeights().transpose() * layers_[0].getDeltas();
+    delt.conservativeResize(delt.size() - 1);
+    return delt;
+}

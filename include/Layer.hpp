@@ -79,11 +79,13 @@ public:
     void setGradient(const Eigen::MatrixXd& grad);  //!< Getter for gradient
     void calculateOnlineGradient(); //!< Calculation of the gradient matrix for online backpropagation
     void calculateBatchGradient(); //!< Calculation of the gradient matrix for batch backpropagation
+    void calculateOnlineGradientPenalize(double lambda = 0.0001); //!< Calculation of the gradient matrix for online backpropagation with high weight penalization
 
     Eigen::MatrixXd getWeights() const;  //!< Getter for weights
     void setWeights(const Eigen::MatrixXd &newWeights);  //!< Setter for weights
     void updateWeights(double learningRate);  //!< Apply a gradient calculation: W = W – η·(∂E/∂W)
     void updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi); //!<  Apply a gradient calculation using ADAM algorithm
+    void updateWeightsMomentum(double learningRate, double moment = 0.9); //!< Apply a gradient calculation: W = W – η·(∂E/∂W) with momentum
 
     Eigen::VectorXd calculateWeightedSum();  //!< Calculate the weighted sum (linear combination) - calculate activations
     Eigen::VectorXd setActivationFunction(const Eigen::VectorXd &weightedSum, activ_func_type activFuncType); //!< Apply activation function to weighted sum
@@ -115,6 +117,7 @@ private:
     Eigen::MatrixXd weightGrad;  //!< The backpropagation gradient matrix for the layer (∂E/∂W)
     Eigen::MatrixXd MtForAdam;  //!< Mt parameter for every weight in ADAM algorithm
     Eigen::MatrixXd VtForAdam;  //!< Vt parameter for every weight in ADAM algorithm
+    Eigen::MatrixXd previousWeights; //!< The matrix for saving matrix from previous training step
 };
 
 #endif // LAYER_HPP
