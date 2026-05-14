@@ -18,7 +18,8 @@ Layer::Layer()
       activ_func(activ_func_type::RELU),
       weightGrad(),
       MtForAdam(),
-      VtForAdam() {
+      VtForAdam(),
+      previousWeights() {
 }
 
 /**
@@ -40,7 +41,8 @@ Layer::Layer(const Layer& other): weights(),
       activ_func(activ_func_type::RELU),
       weightGrad(),
       MtForAdam(),
-      VtForAdam()  {
+      VtForAdam(),
+      previousWeights()  {
 
     weights = other.weights;
     inputs = other.inputs;
@@ -52,6 +54,7 @@ Layer::Layer(const Layer& other): weights(),
     deltas = other.deltas;
     VtForAdam = other.VtForAdam;
     MtForAdam = other.MtForAdam;
+    previousWeights = other.previousWeights;
 
 }
 
@@ -71,6 +74,7 @@ Layer& Layer::operator=(const Layer& other){
         weightGrad     = other.weightGrad;
         MtForAdam      = other.MtForAdam;
         VtForAdam      = other.VtForAdam;
+        previousWeights = other.previousWeights;
     
   }
   return *this;
@@ -87,7 +91,8 @@ Layer::Layer(Layer&& other) noexcept
       activ_func(other.activ_func),
       weightGrad(std::move(other.weightGrad)),
       MtForAdam(std::move(other.MtForAdam)),
-      VtForAdam(std::move(other.VtForAdam)) {
+      VtForAdam(std::move(other.VtForAdam)),
+      previousWeights(std::move(other.previousWeights)) {
 
 }
    
@@ -105,6 +110,7 @@ Layer& Layer::operator=(Layer&& other) noexcept {
         weightGrad     = std::move(other.weightGrad);
         MtForAdam      = std::move(other.MtForAdam);
         VtForAdam      = std::move(other.VtForAdam);
+        previousWeights = std::move(other.previousWeights);
     
   }
   return *this;
@@ -189,6 +195,8 @@ void Layer::initLayer(unsigned numInputs,
     // Initialize ADAM parameters
     MtForAdam.setZero(numNeurons, numInputs+1);
     VtForAdam.setZero(numNeurons, numInputs+1);
+
+    previousWeights = weights;
 }
 
 /**
@@ -345,6 +353,13 @@ void Layer::calculateBatchGradient() {
 }
 
 /**
+ * Calculation of the gradient matrix for online backpropagation with high weight penalization
+ */
+void Layer::calculateOnlineGradientPenalize(double lambda) {
+    weightGrad = deltas * inputs.transpose() + lambda * weights;
+}
+
+/**
  * Getter for the weight matrix of the layer
  */
 Eigen::MatrixXd Layer::getWeights() const {
@@ -363,6 +378,15 @@ void Layer::setWeights(const Eigen::MatrixXd& newWeights) {
  */
 void Layer::updateWeights(double learningRate) {
     weights -= learningRate * weightGrad;
+}
+
+/**
+ * Apply a gradient calculation: W = W – η·∂E/∂W with momentum
+ */
+void Layer::updateWeightsMomentum(double learningRate, double moment) {
+    Eigen::MatrixXd newWeights = weights - learningRate * weightGrad + moment * (weights - previousWeights);
+    previousWeights = weights;
+    weights = newWeights;
 }
 
 /**

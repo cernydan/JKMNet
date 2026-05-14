@@ -462,6 +462,20 @@ void JKMNet::ensembleRunMlpVector(){
                 );
                 break;
 
+            case TrainerType::ONLINE_BP_PENALIZE:
+                mlps_[run].onlinePenalizeBP(
+                    cfg_.max_iterations, cfg_.max_error,
+                    cfg_.learning_rate,  X_train, Y_train, 0.0001  //Add lambda choice to config
+                );
+                break;
+
+            case TrainerType::ONLINE_BP_MOMENTUM:
+                mlps_[run].onlineMomentumBP(
+                    cfg_.max_iterations, cfg_.max_error,
+                    cfg_.learning_rate,  X_train, Y_train,0.9 //Add moment choice to config
+                );
+                break;
+
             case TrainerType::ONLINE_ADAM_EPOCH:
                 resultMetrics = mlps_[run].onlineAdamEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
@@ -531,6 +545,48 @@ void JKMNet::ensembleRunMlpVector(){
                     X_train, Y_train, X_valid, Y_valid,
                     cfg_.batch_size, cfg_.max_iterations,
                     cfg_.learning_rate, cfg_.max_metrics_step
+                );
+                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
+                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
+                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
+                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
+                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
+                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
+                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
+                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
+                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
+                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
+                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
+                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
+                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
+                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                break;
+
+            case TrainerType::ONLINE_BP_PENALIZE_EPOCH:
+                resultMetrics = mlps_[run].onlinePenalizeBpEpochVal(
+                    X_train, Y_train, X_valid, Y_valid,
+                    cfg_.max_iterations, cfg_.learning_rate, cfg_.max_metrics_step, 0.0001   //Add lambda choice to config
+                );
+                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
+                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
+                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
+                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
+                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
+                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
+                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
+                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
+                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
+                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
+                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
+                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
+                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
+                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                break;
+
+            case TrainerType::ONLINE_BP_MOMENTUM_EPOCH:
+                resultMetrics = mlps_[run].onlineMomentumBpEpochVal(
+                    X_train, Y_train, X_valid, Y_valid,
+                    cfg_.max_iterations, cfg_.learning_rate, cfg_.max_metrics_step, 0.9   //Add moment choice to config
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
                 Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);

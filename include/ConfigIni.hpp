@@ -200,7 +200,11 @@ enum class TrainerType {
     ONLINE_BP,
     BATCH_BP,
     ONLINE_BP_EPOCH,
-    BATCH_BP_EPOCH
+    BATCH_BP_EPOCH,
+    ONLINE_BP_MOMENTUM,
+    ONLINE_BP_PENALIZE,
+    ONLINE_BP_MOMENTUM_EPOCH,
+    ONLINE_BP_PENALIZE_EPOCH
 };
 
 inline TrainerType strToTrainerType(const std::string& s) {
@@ -212,6 +216,10 @@ inline TrainerType strToTrainerType(const std::string& s) {
     if (s == "batch_bp")        return TrainerType::BATCH_BP;
     if (s == "online_bp_epoch") return TrainerType::ONLINE_BP_EPOCH;
     if (s == "batch_bp_epoch")  return TrainerType::BATCH_BP_EPOCH;
+    if (s == "online_bp_momentum")       return TrainerType::ONLINE_BP_MOMENTUM;
+    if (s == "online_bp_penalize")       return TrainerType::ONLINE_BP_PENALIZE;
+    if (s == "online_bp_momentum_epoch")       return TrainerType::ONLINE_BP_MOMENTUM_EPOCH;
+    if (s == "online_bp_penalize_epoch")       return TrainerType::ONLINE_BP_PENALIZE_EPOCH;
     throw std::invalid_argument("Unknown trainer type: " + s);
 }
 

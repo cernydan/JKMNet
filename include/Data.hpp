@@ -144,7 +144,6 @@ class Data {
         std::vector<std::string> m_timestamps_backup;  //!< Timestamps backup
         std::vector<size_t> m_na_row_indices;  //!< Indices of removed rows (in original coordinates)
         bool m_has_filtered_rows = false;  //!< True if removeRowsWithNa() was applied
-
 };
 
 #endif // DATA_HPP
