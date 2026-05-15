@@ -75,7 +75,7 @@ struct RunConfig {
     std::string trainer = "online";                 // "online" or "batch"
     std::vector<unsigned> mlp_architecture;         // e.g. [8,6,2]
     std::vector<std::vector<int>> input_numbers;                 // e.g. [-2,-1 0; -1,0,1,2 ; ; -2,-1 ]
-    std::string activation = "RELU";
+    std::vector<std::string> activation = {"RELU"};
     std::string weight_init = "RANDOM";
 
     int ensemble_runs = 25;
@@ -191,6 +191,25 @@ strVecToTransformTypes(const std::vector<std::string>& strs)
     }
     return out;
 }
+
+inline std::vector<activ_func_type>
+strVecToActivationTypes(const std::vector<std::string>& strs)
+{
+    std::vector<activ_func_type> out;
+    out.reserve(strs.size());
+    for (std::size_t i = 0; i < strs.size(); ++i) {
+        try {
+            out.push_back(strToActivation(strs[i]));
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                "Invalid activation at index " + std::to_string(i) +
+                ": " + strs[i]
+            );
+        }
+    }
+    return out;
+}
+
 
 enum class TrainerType {
     ONLINE_ADAM,
@@ -379,7 +398,10 @@ inline RunConfig parseConfigIni(const std::string &path) {
     if (!sinpnums.empty()) cfg.input_numbers = parseOffsetLists(sinpnums);
 
     std::string sact = get("activation");
-    if (!sact.empty()) cfg.activation = trimStr(sact);
+    if (!sact.empty()) cfg.activation = parseStringList(sact);
+    if (cfg.activation.size() == 1 && cfg.mlp_architecture.size() > 1) {
+        cfg.activation.resize(cfg.mlp_architecture.size(), cfg.activation[0]);
+    }
 
     std::string swinit = get("weight_init");
     if (!swinit.empty()) cfg.weight_init = trimStr(swinit);
