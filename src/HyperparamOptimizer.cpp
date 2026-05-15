@@ -57,8 +57,8 @@ RunConfig optimizeHyperparams(const RunConfig& cfg_in) {
         (unsigned)best_hidden,
         (unsigned)cfg.mlp_architecture.back()
     };
-    cfg.activation = act_name;
-
+    std::vector<std::string> activs(cfg.mlp_architecture.size(), act_name);
+    cfg.activation = activs;
     std::cout << "\n[PSO] Configuration updated for best parameters. \n";
 
     return cfg;

@@ -343,7 +343,9 @@ void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_i
     for (auto v : cfg.mlp_architecture) os << v << " ";
     os << "\n";
     os << "Trainer: "        << cfg.trainer        << "\n";
-    os << "Activation: "     << cfg.activation     << "\n";
+    os << "Activation: ";
+    for (const auto& a : cfg.activation) os << a << " ";
+    os << "\n";
     os << "Weight init: "    << cfg.weight_init    << "\n";
     os << "Input numbers: ";
     for (const auto& v : cfg.input_numbers) {

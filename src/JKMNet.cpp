@@ -309,7 +309,7 @@ void JKMNet::init_mlps(){
     mlps_ = std::vector<MLP>(Nmlps);
     MLP setMlp;
     setMlp.setArchitecture(cfg_.mlp_architecture);
-    setMlp.setActivations(std::vector<activ_func_type>(cfg_.mlp_architecture.size(), strToActivation(cfg_.activation)));
+    setMlp.setActivations(strVecToActivationTypes(cfg_.activation));
     setMlp.setWInitType(std::vector<weight_init_type>(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init)));
     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(std::accumulate(cfg_.input_numbers.begin(),cfg_.input_numbers.end(),0,
                         [](int s, const std::vector<int>& v) {return s + static_cast<int>(v.size());}));
@@ -763,8 +763,7 @@ void JKMNet::predictFromSavedWeights(const std::string &weightsPath)
     MLP mlp;
     mlp.setArchitecture(cfg_.mlp_architecture);
 
-    std::vector<activ_func_type> activs(cfg_.mlp_architecture.size(), strToActivation(cfg_.activation));
-    mlp.setActivations(activs);
+    mlp.setActivations(strVecToActivationTypes(cfg_.activation));
 
     std::vector<weight_init_type> wInits(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init));
     mlp.setWInitType(wInits);
