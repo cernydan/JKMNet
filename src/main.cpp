@@ -129,90 +129,102 @@ int main(int argc, char** argv) {
     return 0;
 
 
-/// LSTM TEST
+// //// LSTM TEST
 
-    // std::cout << "-> Loading data..." << std::endl;
-    // Data data_;
-    // data_.loadFilteredCSV("data/inputs/data_all_daily.csv", {"93148340"}, {"T1", "T2", "T3", "moisture"}, "date", "ID");
-    // std::cout << "-> Data loaded." << std::endl;
+//     std::vector<std::string> vars = {"T3","ET","prec", "moisture"};
+//     std::vector<std::string> trans = {"MINMAX","MINMAX","MINMAX","NONLINEAR"};
+//     std::unordered_set<std::string> idt = {"93148340"};
+//     int histts = 30;
+//     int futts = 3;
+//     int firstpartouts = 50;
+//     std::vector<unsigned int> mlparch = {50,1};
+//     std::vector<activ_func_type> mlpact = {activ_func_type::SIGMOID,activ_func_type::RELU};
+//     std::vector<weight_init_type> mlpinit = {weight_init_type::XG, weight_init_type::HE};
 
-    // std::cout << "-> Transforming data..." << std::endl;
-    // data_.setTransform(strVecToTransformTypes({"MINMAX","MINMAX","MINMAX","NONLINEAR"}),
-    //                    0.9,
-    //                    false);
-    // data_.applyTransform();
-    // std::cout << "-> Data transformed." << std::endl;
-    // std::cout<<data_.numericData().rows();
+//     std::cout << "-> Loading data..." << std::endl;
+//     Data data_;
+//     data_.loadFilteredCSV("data/inputs/data_all_daily_eddy.csv", idt , vars, "date", "ID");
+//     std::cout << "-> Data loaded." << std::endl;
 
-    // LSTMLayer hist;
-    // hist.initLSTMLayer(4,50,30,30,true,"RANDOM",0,0.0,0.1);
-    // LSTMLayer fut;
-    // fut.initLSTMLayer(3,50,3,3,true,"RANDOM",0,0.0,0.1);
-    // LSTMLayer toget;
-    // toget.initLSTMLayer(50,50,33,3,false,"RANDOM",0,0.0,0.1);
-    // MLP final;
+//     std::cout << "-> Transforming data..." << std::endl;
+//     data_.setTransform(strVecToTransformTypes(trans),
+//                        5.0,
+//                        false);
+//     data_.applyTransform();
+//     std::cout << "-> Data transformed." << std::endl;
+//     std::cout<<data_.numericData().rows();
+
+//     LSTMLayer hist;
+//     hist.initLSTMLayer(vars.size(),firstpartouts,histts,histts,true,"XG",0);
+//     LSTMLayer fut;
+//     fut.initLSTMLayer(vars.size() - 1,firstpartouts,futts,futts,true,"XG",0);
+//     LSTMLayer toget;
+//     toget.initLSTMLayer(firstpartouts,firstpartouts,histts + futts,futts,false,"XG",0);
+//     MLP final;
     
-    // final.setArchitecture({20,20,3});
-    // final.setActivations({activ_func_type::SIGMOID,activ_func_type::SIGMOID,activ_func_type::SIGMOID});
-    // final.setWInitType({weight_init_type::HE,weight_init_type::HE,weight_init_type::HE});
-    // Eigen::VectorXd x0 = Eigen::VectorXd::Zero(150);
-    // final.initMLP(x0, 0);
+//     final.setArchitecture(mlparch);
+//     final.setActivations(mlpact);
+//     final.setWInitType(mlpinit);
+//     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(firstpartouts);
+//     final.initMLP(x0, 0);
 
-    // for(int it = 0; it < 500; it++){
-    //     for(int i = 0; i < 800; i++){
-    //         Eigen::MatrixXd hinp = data_.numericData().block(0+i,0,30,4);
-    //         Eigen::MatrixXd finp = data_.numericData().block(30+i,0,3,3);
-    //         Eigen::VectorXd obs = data_.numericData().block(30+i,3,3,1);
+//     for(int it = 0; it < 500; it++){
+//         for(int i = 0; i < 800; i++){
+//             Eigen::MatrixXd hinp = data_.numericData().block(0+i,0,histts,vars.size());
+//             Eigen::MatrixXd finp = data_.numericData().block(histts+i,0,futts,vars.size() - 1);
+//             Eigen::MatrixXd obs = data_.numericData().block(histts+i,vars.size() - 1,futts,1);
 
-    //         if (!(hinp.array().isFinite().all() &&
-    //             finp.array().isFinite().all() &&
-    //             obs.array().isFinite().all())) {
-    //             continue;
-    //         }
+//             if (!(hinp.array().isFinite().all() &&
+//                 finp.array().isFinite().all() &&
+//                 obs.array().isFinite().all())) {
+//                 continue;
+//             }
             
-    //         int lr = 0.01;
-    //         if (it > 10){
-    //             lr = 0.005;
-    //         } else if(it > 200){
-    //             lr = 0.001;
-    //         } else if(it > 300){
-    //             lr = 0.0005;
-    //         }else if(it > 350){
-    //             lr = 0.00005;
-    //         }
+//             double lr = 0.01;
+//             if (it > 350){ lr = 0.00005; }
+//             else if (it > 300){ lr = 0.0005; }
+//             else if (it > 200){ lr = 0.001; }
+//             else if (it > 10) { lr = 0.005; }
+//             else              { lr = 0.01;  }
 
-    //         hist.setInputTSSegment(hinp);
-    //         fut.setInputTSSegment(finp);
-    //         hist.calculateTimeSteps();
-    //         fut.calculateTimeSteps();
-    //         Eigen::MatrixXd betw = Eigen::MatrixXd::Zero(33,50);
-    //         betw.block(0,0,30,50) = hist.getForwardOutput();
-    //         betw.block(30,0,3,50) = fut.getForwardOutput();
-    //         toget.setInputTSSegment(betw);
-    //         toget.calculateTimeSteps();
-    //         Eigen::VectorXd ltom = Eigen::VectorXd(150);
-    //         ltom = toget.getForwardOutputVector();
-    //         final.runAndBP(ltom,obs,lr);  
-    //         toget.setDeltaFromNextLayer(final.getFirstLayerInputDelta());
-    //         toget.calculateGradients();
-    //         Eigen::MatrixXd futdelt = toget.getDeltaInputs().block(0,30,50,3);
-    //         Eigen::MatrixXd histdelt = toget.getDeltaInputs().block(0,0,50,30);
-    //         fut.setDeltaFromNextLayer(futdelt);
-    //         hist.setDeltaFromNextLayer(histdelt);
-    //         fut.calculateGradients();
-    //         hist.calculateGradients();
-    //         toget.updateWeights(lr);
-    //         fut.updateWeights(lr);
-    //         hist.updateWeights(lr);
-    //         toget.eraseMemory();
-    //         fut.eraseMemory();
-    //         hist.eraseMemory();
+//             hist.setInputTSSegment(hinp);
+//             fut.setInputTSSegment(finp);
+//             hist.calculateTimeSteps();
+//             fut.calculateTimeSteps();
+//             Eigen::MatrixXd betw = Eigen::MatrixXd::Zero(histts + futts,firstpartouts);
+//             betw.block(0,0,histts,firstpartouts) = hist.getForwardOutput();
+//             betw.block(histts,0,futts,firstpartouts) = fut.getForwardOutput();
+//             toget.setInputTSSegment(betw);
+//             toget.calculateTimeSteps();
 
-    //         //std::cout<<"lstmout:  "<<ltom.transpose()<<"\n";
-    //         std::cout<<"obs:  "<<obs.transpose()<<"\n\n";
-    //         std::cout<<"mod:  "<<final.getOutput().transpose()<<"\n\n\n";
-    //     }
-    // }
+//             Eigen::MatrixXd ltom = toget.getForwardOutput().transpose();
+//             Eigen::MatrixXd deltaMtol = Eigen::MatrixXd(ltom.rows(), ltom.cols());
+
+//             for(int p = 0; p < ltom.cols(); p++){
+//                 final.runAndBP(ltom.col(p),obs.row(p),lr);
+//                 deltaMtol.col(p) = final.getFirstLayerInputDelta();
+//                 std::cout<< "mod "<<p<<" : "<<final.getOutput()<<"\n";
+//             }
+ 
+//             toget.setDeltaFromNextLayer(deltaMtol);
+//             toget.calculateGradients();
+//             Eigen::MatrixXd futdelt = toget.getDeltaInputs().block(0,histts,firstpartouts,futts);
+//             Eigen::MatrixXd histdelt = toget.getDeltaInputs().block(0,0,firstpartouts,histts);
+//             fut.setDeltaFromNextLayer(futdelt);
+//             hist.setDeltaFromNextLayer(histdelt);
+//             fut.calculateGradients();
+//             hist.calculateGradients();
+//             toget.updateWeights(lr);
+//             fut.updateWeights(lr);
+//             hist.updateWeights(lr);
+//             toget.eraseMemory();
+//             fut.eraseMemory();
+//             hist.eraseMemory();
+
+//             std::cout<<"obs:  "<<obs.transpose()<<"\n\n";
+//             //std::cout<<"lstmout:  "<<ltom<<"\n\n";
+//         }
+//     }
 
 //More ids test
 
