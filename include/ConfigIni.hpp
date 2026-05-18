@@ -159,6 +159,7 @@ inline weight_init_type strToWeightInit(const std::string &s) {
     if (u == "LHS") return weight_init_type::LHS;
     if (u == "LHS2") return weight_init_type::LHS2;
     if (u == "HE") return weight_init_type::HE;
+    if (u == "XG") return weight_init_type::XG;
 
     throw std::runtime_error("Unknown weight_init: " + s);
 }

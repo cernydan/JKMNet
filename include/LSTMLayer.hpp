@@ -59,6 +59,7 @@ private:
     Eigen::MatrixXd gatesActivations;  //!< Computed activations all gates (by rows) all time steps (by columns)
     Eigen::MatrixXd gatesOutputs;   //!< Computed outputs all gates (by rows) all time steps (by columns)
     Eigen::MatrixXd cellState;      //!< Computed cell state (long memory) all cells (rows) all time steps (columns)
+    Eigen::MatrixXd tanhCellState;      //!< Computed cell state (long memory) all cells (rows) all time steps (columns) after tanh function
     Eigen::MatrixXd output;         //!< Computed outputs (short memory) all cells (rows) all time steps (columns)
     Eigen::MatrixXd forwardOutput;  //!< Computed outputs all cells (rows) only outTS time steps (columns)
     Eigen::MatrixXd Wgradient;

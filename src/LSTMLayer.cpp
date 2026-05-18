@@ -17,19 +17,6 @@ Eigen::VectorXd LSTMLayer::tanhVector(const Eigen::VectorXd& vec) {
     return res;
 }
 
-Eigen::VectorXd LSTMLayer::sigmoidDerivVector(const Eigen::VectorXd& vec) {
-    Eigen::VectorXd res = vec;
-    res = res.array().unaryExpr([](double x) { return (1.0 / (1.0 + std::exp(-x))) * (1.0 - (1.0 / (1.0 + std::exp(-x)))); });
-    return res;
-}
-
-Eigen::VectorXd LSTMLayer::tanhDerivVector(const Eigen::VectorXd& vec) {
-    Eigen::VectorXd res = vec;
-    res = res.array().unaryExpr([](double x) 
-    { return 1.0 - ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0) * ((2.0 / (1.0 + std::exp(-2.0 * x))) - 1.0); });
-    return res;
-}
-
 void LSTMLayer::initLSTMLayer(const int numInputs,        
                 const int numCells,
                 const int numTimeSteps,
@@ -61,6 +48,26 @@ void LSTMLayer::initLSTMLayer(const int numInputs,
             break;
         }
 
+        case weight_init_type::HE: {
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
+            std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (settings.inputs)));
+            W = Eigen::MatrixXd(settings.cells4gates, settings.inputs);          
+            W = W.unaryExpr([&](double) { return dist(gen); });
+            U = Eigen::MatrixXd(settings.cells4gates, settings.cells);          
+            U = U.unaryExpr([&](double) { return dist(gen); });
+            break;
+        }
+
+        case weight_init_type::XG: {
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
+            std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (settings.inputs + settings.cells)));
+            W = Eigen::MatrixXd(settings.cells4gates, settings.inputs);          
+            W = W.unaryExpr([&](double) { return dist(gen); });
+            U = Eigen::MatrixXd(settings.cells4gates, settings.cells);          
+            U = U.unaryExpr([&](double) { return dist(gen); });
+            break;
+        }
+
         default:
             std::cerr << "[Error]: Unknown weight initialization type! Selected RANDOM initialization." << std::endl;
             // Select random initialization
@@ -78,15 +85,18 @@ void LSTMLayer::initLSTMLayer(const int numInputs,
     gatesActivations = Eigen::MatrixXd::Zero(settings.cells4gates,settings.timeSteps);
     gatesOutputs = Eigen::MatrixXd::Zero(settings.cells4gates,settings.timeSteps);
     cellState = Eigen::MatrixXd::Zero(settings.cells,settings.timeSteps);
+    tanhCellState = Eigen::MatrixXd::Zero(settings.cells,settings.timeSteps);
     output = Eigen::MatrixXd::Zero(settings.cells,settings.timeSteps);
     forwardOutput = Eigen::MatrixXd::Zero(settings.cells,settings.outTS);
     Wgradient = Eigen::MatrixXd::Zero(settings.cells4gates, settings.inputs);
-    Ugradient = Eigen::MatrixXd::Zero(settings.cells, settings.cells);
+    Ugradient = Eigen::MatrixXd::Zero(settings.cells4gates, settings.cells);
     bGradient = Eigen::VectorXd::Zero(settings.cells4gates);
     deltaOutput = Eigen::MatrixXd::Zero(settings.cells,settings.timeSteps);
     deltaCellState = Eigen::MatrixXd::Zero(settings.cells,settings.timeSteps);
     deltaGates = Eigen::MatrixXd::Zero(settings.cells4gates,settings.timeSteps);
     deltaInputs = Eigen::MatrixXd::Zero(settings.inputs, settings.timeSteps);
+
+    b.segment(settings.cells,settings.cells).setOnes();  //Setting forget gate bias to 1 should help training
 
     settings.initialized = true;
 }
@@ -118,8 +128,10 @@ void LSTMLayer::calculateTimeSteps(){
     cellState.col(0) = gatesOutputs.col(0).segment(2 * c, c).array() *    //input 
                        gatesOutputs.col(0).segment(0, c).array();         //candidate
     
+    tanhCellState.col(0) = tanhVector(cellState.col(0));
+    
     output.col(0) = gatesOutputs.col(0).segment(3 * c, c).array() *       //output
-                    tanhVector(cellState.col(0)).array();
+                    tanhCellState.col(0).array();
 
     //rest of TS
     for(int i = 1 ; i < timeStepsInputs.rows() ; i++){
@@ -133,8 +145,10 @@ void LSTMLayer::calculateTimeSteps(){
                            gatesOutputs.col(i).segment(2 * c, c).array() *  //input  
                            gatesOutputs.col(i).segment(0, c).array();       //candidate
         
+        tanhCellState.col(i) = tanhVector(cellState.col(i));
+
         output.col(i) = gatesOutputs.col(i).segment(3 * c, c).array() *     //output
-                        tanhVector(cellState.col(i)).array();
+                        tanhCellState.col(i).array();
     }
     forwardOutput = output.rightCols(settings.outTS);
 }
@@ -157,28 +171,33 @@ void LSTMLayer::calculateGradients(){
 
         deltaCellState.col(i) = deltaOutput.col(i).array() * 
                                 gatesOutputs.col(i).segment(3 * c, c).array() *    //output
-                                tanhDerivVector(cellState.col(i)).array();
+                                (1.0 - tanhCellState.col(i).array().square());
+
+        if(i < t){
+            deltaCellState.col(i).array() += deltaCellState.col(i+1).array() *
+                                            gatesOutputs.col(i+1).segment(c, c).array(); // forget
+        }
 
         deltaGates.col(i).segment(0, c) =                                                                //candidate
                                          deltaCellState.col(i).array() *
                                          gatesOutputs.col(i).segment(2 * c, c).array() *                 //input
-                                         tanhDerivVector(gatesActivations.col(i).segment(0, c)).array(); //candidate
+                                         (1.0 - gatesOutputs.col(i).segment(0, c).array().square()); //candidate
 
         (i > 0) ? deltaGates.col(i).segment(c, c) =                                                                   //forget
                                                     deltaCellState.col(i).array() *
                                                     cellState.col(i-1).array() * 
-                                                    sigmoidDerivVector(gatesActivations.col(i).segment(c, c)).array() :   //forget
+                                                    gatesOutputs.col(i).segment(c, c).array() * (1.0 - gatesOutputs.col(i).segment(c, c).array()) :   //forget
                                                     deltaGates.col(0).segment(c, c).setZero();
         
         deltaGates.col(i).segment(2 * c, c) =                                                               //input
                                              deltaCellState.col(i).array() *
                                              gatesOutputs.col(i).segment(0, c).array() *                    //candidate
-                                             sigmoidDerivVector(gatesActivations.col(i).segment(2 * c, c)).array(); //input
+                                             gatesOutputs.col(i).segment(2 * c, c).array() * (1.0 - gatesOutputs.col(i).segment(2 * c, c).array()); //input
 
         deltaGates.col(i).segment(3 * c, c) =                                                               //output
                                              deltaOutput.col(i).array() * 
-                                             tanhVector(cellState.col(i)).array() * 
-                                             sigmoidDerivVector(gatesActivations.col(i).segment(3 * c, c)).array(); //output
+                                             tanhCellState.col(i).array() * 
+                                             gatesOutputs.col(i).segment(3 * c, c).array() * (1.0 - gatesOutputs.col(i).segment(3 * c, c).array()); //output
         
     }
 
@@ -199,17 +218,22 @@ void LSTMLayer::updateWeights(double learningRate){
 
 void LSTMLayer::eraseMemory(){
     cellState.setZero();
+    tanhCellState.setZero();
     output.setZero();
-    // timeStepsInputs.setZero();
-    // gatesActivations.setZero();
-    // gatesOutputs.setZero();
-    // Wgradient.setZero();
-    // Ugradient.setZero();
-    // bGradient.setZero();
-    // deltaOutput.setZero();
-    // deltaCellState.setZero();
-    // deltaGates.setZero();
-
+    timeStepsInputs.setZero();
+    gatesActivations.setZero();
+    gatesOutputs.setZero();
+    Wgradient.setZero();
+    Ugradient.setZero();
+    bGradient.setZero();
+    deltaOutput.setZero();
+    deltaCellState.setZero();
+    deltaGates.setZero();
+    forwardOutput.setZero();
+    nextLayerDelta.setZero();
+    if(!settings.isFirstLayer){
+        deltaInputs.setZero();
+    }
 }
 
 void LSTMLayer::setDeltaFromNextLayer(const Eigen::VectorXd& delta){

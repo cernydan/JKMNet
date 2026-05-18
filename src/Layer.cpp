@@ -150,6 +150,7 @@ std::string Layer::wInitTypeName(weight_init_type w) {
         case weight_init_type::LHS: return "LHS";
         case weight_init_type::LHS2: return "LHS2";
         case weight_init_type::HE: return "HE";
+        case weight_init_type::XG: return "XG";
     }
     return "Unknown";
 }
@@ -292,6 +293,14 @@ void Layer::initWeights(unsigned numNeurons,
         case weight_init_type::HE: {
             std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
             std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (numInputs)));
+            weights = Eigen::MatrixXd(numNeurons, numInputs);            
+            weights = weights.unaryExpr([&](double) { return dist(gen); });
+            break;
+        }
+
+        case weight_init_type::XG: {
+            std::mt19937 gen(rngSeed == 0 ? std::random_device{}() : rngSeed);
+            std::normal_distribution<> dist(0.0, std::sqrt(2.0 / (numInputs + numNeurons)));
             weights = Eigen::MatrixXd(numNeurons, numInputs);            
             weights = weights.unaryExpr([&](double) { return dist(gen); });
             break;
