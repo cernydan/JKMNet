@@ -1,4 +1,4 @@
-# 🧠 JKMNet - MLP Ensemble and Prediction Framework
+# JKMNet: A configurable neural-network framework for environmental time-series prediction
 
 `JKMNet` is a C++20 project for training and applying **feed-forward neural networks (MLP)** to environmental and time-series data.  
 The framework supports **parallel ensemble training**, **Adam optimizer**, and **post-hoc prediction from saved weights**.
