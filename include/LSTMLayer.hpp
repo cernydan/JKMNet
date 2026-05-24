@@ -26,8 +26,6 @@ public:
 
     Eigen::VectorXd sigmoidVector(const Eigen::VectorXd& vec);  //!< Sigmoid function for all elements in vector
     Eigen::VectorXd tanhVector(const Eigen::VectorXd& vec);     //!< Sigmoid derivative function for all elements in vector
-    Eigen::VectorXd sigmoidDerivVector(const Eigen::VectorXd& vec);     //!< Tanh function for all elements in vector
-    Eigen::VectorXd tanhDerivVector(const Eigen::VectorXd& vec);    //!< Tanh derivative function for all elements in vector
 
     void initLSTMLayer(const int numInputs,        
                     const int numCells,

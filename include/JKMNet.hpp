@@ -5,6 +5,7 @@
 #include "Layer.hpp"
 #include "Data.hpp"
 #include "Metrics.hpp"
+#include "LSTMLayer.hpp"
 
 #include <stdio.h>
 #include <iostream>
@@ -78,6 +79,8 @@ class JKMNet {
         void ensembleRunMlpVector();  //>! Ensemble run - load settings, read data, train, test
 
         void predictFromSavedWeights(const std::string &weightsPath);  //>! Predict outputs from saved weights
+
+        void ensembleLstmFirstTest();
 
     protected:
 
