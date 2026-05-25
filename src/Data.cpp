@@ -354,6 +354,9 @@ void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_i
         os << " | ";
     }
     os << "\n";
+    os << "LSTM timesteps: "           << cfg.lstm_time_steps          << "\n";
+    os << "LSTM cells: "           << cfg.lstm_cells          << "\n";
+    os << "\n";
 
     // --- Training ---
     os << "Learning rate: "  << cfg.learning_rate  << "\n";
@@ -1625,3 +1628,223 @@ bool Data::saveVector(const std::vector<int>& v, const std::string& path) {
     ofs.close();
     return true;
 }
+
+std::tuple<std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
+Data::makeLstmPastData(int timeSteps,
+                     int outRows,
+                    double trainFraction,
+                    bool shuffleCalib,
+                    unsigned seed) const{
+
+    if (timeSteps <= 0)
+        throw std::invalid_argument("timeSteps must be positive");
+
+    if (trainFraction <= 0.0 || trainFraction >= 1.0)
+        throw std::invalid_argument("trainFraction must be in (0,1)");
+
+    const size_t DC = m_data.cols();
+    if (DC < 1)
+        throw std::runtime_error("Data has no columns");
+
+    const int nRows = static_cast<int>(m_data.rows());
+    const int CRcand = nRows - outRows - timeSteps + 1;
+
+    if (CRcand <= 0)
+        throw std::runtime_error(
+            "Not enough rows to build patterns with given timeSteps/outRows"
+        );
+
+    std::vector<int> globalIdx;
+    std::vector<Eigen::MatrixXd> allIns;
+    std::vector<std::vector<double>> rowsOut;
+
+    allIns.reserve(static_cast<size_t>(CRcand));
+    rowsOut.reserve(static_cast<size_t>(CRcand));
+
+    for (int i = 0; i < CRcand; ++i) {
+        bool ok = true;
+
+        // --- vstupy ---
+        Eigen::MatrixXd inBlock = m_data.block(i,0,timeSteps,DC);
+
+        if (!(inBlock.array().isFinite().all())) {
+                ok = false;
+            }
+        if (!ok) continue;
+
+        std::vector<double> outrow;
+        outrow.reserve(outRows);
+
+        for (int j = 0; j < outRows; ++j) {
+            int rindex = i + timeSteps + j;
+            double v = m_data(rindex, static_cast<Eigen::Index>(DC - 1));
+            if (!std::isfinite(v)) {
+                ok = false;
+                break;
+            }
+            outrow.push_back(v);
+        }
+        if (!ok) continue;
+
+        allIns.push_back(std::move(inBlock));
+        rowsOut.push_back(std::move(outrow));
+        globalIdx.push_back(i);
+    }
+
+    const int total = static_cast<int>(rowsOut.size());
+    if (total == 0)
+        throw std::runtime_error("No valid patterns after filtering NaNs");
+
+    int nTrain = static_cast<int>(std::floor(trainFraction * total));
+    nTrain = std::max(1, std::min(nTrain, total - 1));
+
+    std::vector<int> idx(total);
+    std::iota(idx.begin(), idx.end(), 0);
+
+    if (shuffleCalib && nTrain > 1) {
+        std::mt19937 gen(seed == 0 ? std::random_device{}() : seed);
+        std::shuffle(idx.begin(), idx.begin() + nTrain, gen);
+    }
+
+    std::vector<Eigen::MatrixXd> trainIn;
+    Eigen::MatrixXd trainOut(nTrain, outRows);
+    std::vector<Eigen::MatrixXd> validIn;
+    Eigen::MatrixXd validOut(total - nTrain, outRows);
+
+    for (int i = 0; i < nTrain; ++i) {
+        int ri = idx[i];
+        trainIn.push_back(allIns[ri]);
+        for (int c = 0; c < outRows; ++c)
+            trainOut(i, c) = rowsOut[ri][c];
+    }
+
+    for (int i = nTrain; i < total; ++i) {
+        int ri = idx[i];
+        int vi = i - nTrain;
+        validIn.push_back(allIns[ri]);
+        for (int c = 0; c < outRows; ++c)
+            validOut(vi, c) = rowsOut[ri][c];
+    }
+
+    std::vector<int> calIdx(idx.begin(), idx.begin() + nTrain);
+
+    return {trainIn, trainOut, validIn, validOut, globalIdx, calIdx};
+}
+
+// std::tuple<std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
+// Data::makeLstmPastFutureData(int pastTimeSteps,
+//                     int futureTimeSteps,
+//                     double trainFraction,
+//                     bool shuffleCalib,
+//                     unsigned seed) const{
+
+//     if (pastTimeSteps <= 0)
+//         throw std::invalid_argument("pastTimeSteps must be positive");
+
+//     if (futureTimeSteps <= 0)
+//         throw std::invalid_argument("futureTimeSteps must be positive");
+
+//     if (trainFraction <= 0.0 || trainFraction >= 1.0)
+//         throw std::invalid_argument("trainFraction must be in (0,1)");
+
+//     const size_t DC = m_data.cols();
+//     if (DC < 1)
+//         throw std::runtime_error("Data has no columns");
+
+//     const int nRows = static_cast<int>(m_data.rows());
+//     const int lastNeeded = std::max(maxOff, outRows - 1);
+//     const int CRcand = nRows - lastNeeded + minOff;
+
+//     if (CRcand <= 0)
+//         throw std::runtime_error(
+//             "Not enough rows to build patterns with given offsets/outRows"
+//         );
+
+//     std::vector<int> globalIdx;
+//     std::vector<std::vector<double>> rowsIn;
+//     std::vector<std::vector<double>> rowsOut;
+
+//     rowsIn.reserve(static_cast<size_t>(CRcand));
+//     rowsOut.reserve(static_cast<size_t>(CRcand));
+
+//     for (int i = 0; i < CRcand; ++i) {
+//         bool ok = true;
+
+//         // --- vstupy ---
+//         std::vector<double> inrow;
+//         inrow.reserve(inpC);
+
+//         for (size_t j = 0; j < DC; ++j) {
+//             for (int off : inpOffsets[j]) {
+//                 int rindex = i - minOff + off;
+//                 double v = m_data(rindex, static_cast<Eigen::Index>(j));
+//                 if (!std::isfinite(v)) {
+//                     ok = false;
+//                     break;
+//                 }
+//                 inrow.push_back(v);
+//             }
+//             if (!ok) break;
+//         }
+//         if (!ok) continue;
+
+//         std::vector<double> outrow;
+//         outrow.reserve(outRows);
+
+//         for (int j = 0; j < outRows; ++j) {
+//             int rindex = i - minOff + j;
+//             double v = m_data(rindex, static_cast<Eigen::Index>(DC - 1));
+//             if (!std::isfinite(v)) {
+//                 ok = false;
+//                 break;
+//             }
+//             outrow.push_back(v);
+//         }
+//         if (!ok) continue;
+
+//         rowsIn.push_back(std::move(inrow));
+//         rowsOut.push_back(std::move(outrow));
+//         globalIdx.push_back(i);
+//     }
+
+//     const int total = static_cast<int>(rowsIn.size());
+//     if (total == 0)
+//         throw std::runtime_error("No valid patterns after filtering NaNs");
+
+//     int nTrain = static_cast<int>(std::floor(trainFraction * total));
+//     nTrain = std::max(1, std::min(nTrain, total - 1));
+
+//     std::vector<int> idx(total);
+//     std::iota(idx.begin(), idx.end(), 0);
+
+//     if (shuffleCalib && nTrain > 1) {
+//         std::mt19937 gen(seed == 0 ? std::random_device{}() : seed);
+//         std::shuffle(idx.begin(), idx.begin() + nTrain, gen);
+//     }
+
+//     Eigen::MatrixXd trainIn(nTrain, inpC);
+//     Eigen::MatrixXd trainOut(nTrain, outRows);
+//     Eigen::MatrixXd validIn(total - nTrain, inpC);
+//     Eigen::MatrixXd validOut(total - nTrain, outRows);
+
+//     for (int i = 0; i < nTrain; ++i) {
+//         int ri = idx[i];
+//         for (int c = 0; c < inpC; ++c)
+//             trainIn(i, c) = rowsIn[ri][c];
+//         for (int c = 0; c < outRows; ++c)
+//             trainOut(i, c) = rowsOut[ri][c];
+//     }
+
+//     for (int i = nTrain; i < total; ++i) {
+//         int ri = idx[i];
+//         int vi = i - nTrain;
+//         for (int c = 0; c < inpC; ++c)
+//             validIn(vi, c) = rowsIn[ri][c];
+//         for (int c = 0; c < outRows; ++c)
+//             validOut(vi, c) = rowsOut[ri][c];
+//     }
+
+//     std::vector<int> calIdx(idx.begin(), idx.begin() + nTrain);
+
+//     return {trainIn, trainOut, validIn, validOut, globalIdx, calIdx};
+// }

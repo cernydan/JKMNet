@@ -124,7 +124,9 @@ int main(int argc, char** argv) {
     std::cout << " Running Ensemble\n";
     std::cout << "===========================================\n";
     JKMNet net_(cfg, nthreads);
-    net_.ensembleRunMlpVector();
+    
+    //net_.ensembleRunMlpVector();    // CHANGE BACK, POSSIBLY MAKE OPTION
+    net_.ensembleLstmFirstTest();
     
     return 0;
 
