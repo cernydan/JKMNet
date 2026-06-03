@@ -126,7 +126,8 @@ int main(int argc, char** argv) {
     JKMNet net_(cfg, nthreads);
     
     //net_.ensembleRunMlpVector();    // CHANGE BACK, POSSIBLY MAKE OPTION
-    net_.ensembleLstmFirstTest();
+    //net_.ensembleLstmFirstTest();
+    net_.ensembleLstmPastFutureTest();
     
     return 0;
 

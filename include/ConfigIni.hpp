@@ -89,7 +89,8 @@ struct RunConfig {
     double train_fraction = 0.8;
     bool split_shuffle = true;
 
-    int lstm_time_steps = 30;
+    int lstm_past_time_steps = 30;
+    int lstm_future_time_steps = 10;
     int lstm_cells = 10;
 
     // transforms
@@ -437,8 +438,11 @@ inline RunConfig parseConfigIni(const std::string &path) {
     std::string strainf = get("train_fraction");
     if (!strainf.empty()) cfg.train_fraction = std::stod(strainf);
 
-    std::string stimesteps = get("lstm_time_steps");
-    if (!stimesteps.empty()) cfg.lstm_time_steps = std::stoi(stimesteps);
+    std::string spasttimesteps = get("lstm_past_time_steps");
+    if (!spasttimesteps.empty()) cfg.lstm_past_time_steps = std::stoi(spasttimesteps);
+
+    std::string sfuturetimesteps = get("lstm_future_time_steps");
+    if (!sfuturetimesteps.empty()) cfg.lstm_future_time_steps = std::stoi(sfuturetimesteps);
 
     std::string scells = get("lstm_cells");
     if (!scells.empty()) cfg.lstm_cells = std::stoi(scells);

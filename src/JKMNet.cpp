@@ -313,7 +313,6 @@ void JKMNet::init_mlps(){
     setMlp.setWInitType(std::vector<weight_init_type>(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init)));
     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(std::accumulate(cfg_.input_numbers.begin(),cfg_.input_numbers.end(),0,
                         [](int s, const std::vector<int>& v) {return s + static_cast<int>(v.size());}));
-    
     #pragma omp parallel for num_threads(nthreads_)
     for(unsigned i = 0; i < Nmlps; i++){
         mlps_[i] = setMlp;
@@ -827,8 +826,8 @@ void JKMNet::ensembleLstmFirstTest(){
     data_.applyTransform();
     std::cout << "-> Data transformed." << std::endl;
 
-    auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeLstmPastData(cfg_.lstm_time_steps,
-                                                                                cfg_.lstm_cells,
+    auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeLstmPastData(cfg_.lstm_past_time_steps,
+                                                                                cfg_.lstm_future_time_steps,
                                                                                 cfg_.train_fraction,
                                                                                 cfg_.shuffle,
                                                                                 cfg_.seed);
@@ -858,8 +857,11 @@ void JKMNet::ensembleLstmFirstTest(){
     std::vector<LSTMLayer> lstm_vec(cfg_.ensemble_runs);
     #pragma omp parallel for num_threads(nthreads_)
     for(int i = 0; i < cfg_.ensemble_runs; i++){
-        lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_time_steps,1,true,cfg_.weight_init,cfg_.seed);;
+        lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,1,true,"XG",cfg_.seed);;
     }
+        // Configure MLP
+    setNmlps(cfg_.ensemble_runs);
+    init_mlps();
 
     std::cout << "-> Ensemble run starting..." << std::endl;
     // ------------------------------------------------------
@@ -892,10 +894,10 @@ void JKMNet::ensembleLstmFirstTest(){
             for(size_t i = 0; i < X_train.size() ; i++){
                 lstm_vec[run].setInputTSSegment(X_train[i]);
                 lstm_vec[run].calculateTimeSteps();
-                Eigen::VectorXd error = lstm_vec[run].getForwardOutputVector().array() - Y_train.row(i).transpose().array();
-                lstm_vec[run].setDeltaFromNextLayer(error);
+                mlps_[run].runAndBP(lstm_vec[run].getForwardOutputVector(),Y_train.row(i),cfg_.learning_rate);
+                lstm_vec[run].setDeltaFromNextLayer(mlps_[run].getFirstLayerInputDelta());
                 lstm_vec[run].calculateGradients();
-                lstm_vec[run].updateWeights(cfg_.learning_rate);
+                lstm_vec[run].updateWeights(cfg_.learning_rate * 10);
                 lstm_vec[run].eraseMemory();
             }
         }
@@ -910,7 +912,8 @@ void JKMNet::ensembleLstmFirstTest(){
         for(size_t i = 0; i < X_train.size() ; i++){
             lstm_vec[run].setInputTSSegment(X_train[i]);
             lstm_vec[run].calculateTimeSteps();
-            Y_pred_calib.row(i) = lstm_vec[run].getForwardOutputVector();
+            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
+            Y_pred_calib.row(i) = mlps_[run].getOutput();
             lstm_vec[run].eraseMemory();
         }
 
@@ -963,8 +966,281 @@ void JKMNet::ensembleLstmFirstTest(){
         for(size_t i = 0; i < X_valid.size() ; i++){
             lstm_vec[run].setInputTSSegment(X_valid[i]);
             lstm_vec[run].calculateTimeSteps();
-            Y_pred_valid.row(i) = lstm_vec[run].getForwardOutputVector();
+            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
+            Y_pred_valid.row(i) = mlps_[run].getOutput();
             lstm_vec[run].eraseMemory();
+        }
+
+        try {
+            Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
+            Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid);
+        } catch (...) {}
+
+        // One file for each metrics per each run
+        std::vector<double> mseValsV, rmseValsV, piValsV, nsValsV, kgeValsV, pbiasValsV, rsrValsV;
+
+        for (int c = 0; c < Y_true_valid.cols(); ++c) {
+            mseValsV.push_back(Metrics::mse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval()));
+            rmseValsV.push_back(Metrics::rmse(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval()));
+            piValsV.push_back(Metrics::pi(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval()));
+            nsValsV.push_back(Metrics::ns(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval()));
+            kgeValsV.push_back(Metrics::kge(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval()));
+            pbiasValsV.push_back(Metrics::pbias(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval()));
+            rsrValsV.push_back(Metrics::rsr(Y_true_valid.col(c).eval(), Y_pred_valid.col(c).eval()));
+        }
+
+        std::string mseFileV   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "MSE");
+        std::string rmseFileV  = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "RMSE");
+        std::string piFileV    = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "PI");
+        std::string nsFileV    = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "NS");
+        std::string kgeFileV   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "KGE");
+        std::string pbiasFileV = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "PBIAS");
+        std::string rsrFileV   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "RSR");
+
+        Metrics::saveMetricRow(mseFileV,   colNames, mseValsV,   true);
+        Metrics::saveMetricRow(rmseFileV,  colNames, rmseValsV,  true);
+        Metrics::saveMetricRow(piFileV,    colNames, piValsV,    true);
+        Metrics::saveMetricRow(nsFileV,    colNames, nsValsV,    true);
+        Metrics::saveMetricRow(kgeFileV,   colNames, kgeValsV,   true);
+        Metrics::saveMetricRow(pbiasFileV, colNames, pbiasValsV, true);
+        Metrics::saveMetricRow(rsrFileV,   colNames, rsrValsV,   true);
+
+        
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_valid, run_id), Y_pred_valid, colNames);
+        logFile << "-> Validation metrics and predictions saved.\n";
+
+        logFile << "Run " << run_id << " finished.\n";
+        logFile << "-------------------------------------------\n";
+
+    }
+
+    std::cout << "-> Ensemble run finished." << std::endl;
+
+    std::cout << "\n===========================================\n";
+    std::cout << " Running Ensemble finished \n";
+    std::cout << "===========================================\n";
+}
+
+void JKMNet::ensembleLstmPastFutureTest(){
+    std::cout << "The number of threads is " << nthreads_ << std::endl;
+
+    // ------------------------------------------------------
+    // Load & preprocess data
+    // ------------------------------------------------------
+    std::unordered_set<std::string> idFilter;
+    if (!cfg_.id.empty()) {
+        std::vector<std::string> ids = parseStringList(cfg_.id);
+        idFilter = std::unordered_set<std::string>(ids.begin(), ids.end());
+    }
+
+    std::cout << "-> Loading data..." << std::endl;
+    data_.loadFilteredCSV(cfg_.data_file, idFilter, cfg_.columns, cfg_.timestamp, cfg_.id_col);
+    std::cout << "-> Data loaded." << std::endl;
+
+    std::cout << "-> Transforming data..." << std::endl;
+    data_.setTransform(strVecToTransformTypes(cfg_.transform),
+                       cfg_.transform_alpha,
+                       cfg_.exclude_last_col_from_transform);
+    data_.applyTransform();
+    std::cout << "-> Data transformed." << std::endl;
+
+    auto [X_trainPast, X_trainFuture, Y_train, X_validPast, X_validFuture, Y_valid, pat_indices, calIdxForUnshuffle] = 
+                                                    data_.makeLstmPastFutureData(cfg_.lstm_past_time_steps,
+                                                                                cfg_.lstm_future_time_steps,
+                                                                                cfg_.train_fraction,
+                                                                                cfg_.shuffle,
+                                                                                cfg_.seed);
+
+    std::cout << "-> Data split into training and validation sets." << std::endl;
+
+    std::vector<std::string> colNames;
+    for (int c = 0; c < Y_train.cols(); ++c) {
+        colNames.push_back("h" + std::to_string(c+1));
+    }
+
+    // Save real data
+    Eigen::MatrixXd Y_true_calib_save = data_.unshuffleMatrix(Y_train, calIdxForUnshuffle);
+    Eigen::MatrixXd Y_true_valid_save = Y_valid;
+    try {
+        Y_true_calib_save = data_.inverseTransformOutputs(Y_true_calib_save);
+        Y_true_valid_save = data_.inverseTransformOutputs(Y_true_valid_save);
+    } catch (const std::exception &ex) {
+        std::cerr << "[Warning] inverseTransformOutputs failed (save GT): " << ex.what() << "\n";
+    }
+    data_.saveMatrixCsv(cfg_.real_calib, Y_true_calib_save, colNames);
+    data_.saveMatrixCsv(cfg_.real_valid, Y_true_valid_save, colNames);
+    data_.saveVector(pat_indices, cfg_.pattern_indices);
+    std::cout << "-> Real calibration and validation data saved." << std::endl;
+
+    // Configure LSTMLayer
+    std::vector<LSTMLayer> lstm_past_vec(cfg_.ensemble_runs);
+    std::vector<LSTMLayer> lstm_future_vec(cfg_.ensemble_runs);
+    std::vector<LSTMLayer> lstm_together_vec(cfg_.ensemble_runs);
+    std::vector<Eigen::MatrixXd> between_lstm(cfg_.ensemble_runs);
+    std::vector<Eigen::MatrixXd> lstm_to_mlp(cfg_.ensemble_runs);
+    std::vector<Eigen::MatrixXd> delta_mlp_to_lstm(cfg_.ensemble_runs);
+    std::vector<Eigen::MatrixXd> separate_obs(cfg_.ensemble_runs);
+    #pragma omp parallel for num_threads(nthreads_)
+    for(int i = 0; i < cfg_.ensemble_runs; i++){
+        lstm_past_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,cfg_.lstm_past_time_steps,true,"XG",cfg_.seed);
+        lstm_future_vec[i].initLSTMLayer(cfg_.columns.size()-1,cfg_.lstm_cells,cfg_.lstm_future_time_steps,cfg_.lstm_future_time_steps,true,"XG",cfg_.seed);
+        lstm_together_vec[i].initLSTMLayer(cfg_.lstm_cells,cfg_.lstm_cells,cfg_.lstm_past_time_steps + cfg_.lstm_future_time_steps,cfg_.lstm_future_time_steps,false,"XG",cfg_.seed);
+        between_lstm[i] = Eigen::MatrixXd(cfg_.lstm_future_time_steps + cfg_.lstm_past_time_steps, cfg_.lstm_cells);
+        lstm_to_mlp[i] = Eigen::MatrixXd(cfg_.lstm_cells,cfg_.lstm_future_time_steps);
+        delta_mlp_to_lstm[i] = Eigen::MatrixXd(cfg_.lstm_cells,cfg_.lstm_future_time_steps);
+        separate_obs[i] = Eigen::MatrixXd(1,cfg_.lstm_future_time_steps);
+    }
+        // Configure MLP
+    setNmlps(cfg_.ensemble_runs);
+    init_mlps();
+
+    std::cout << "-> Ensemble run starting..." << std::endl;
+    // ------------------------------------------------------
+    // Ensemble loop
+    // ------------------------------------------------------
+    #pragma omp parallel for num_threads(nthreads_)
+    for (unsigned run = 0; run < lstm_past_vec.size() ; ++run) {
+        std::string run_id = std::to_string(run+1);  // string
+        unsigned run_id_integer = run + 1; // integer
+
+        // Check, if exists folder 'outputs/logs'
+        if (!std::filesystem::exists(cfg_.log_dir)) {
+            std::filesystem::create_directories(cfg_.log_dir);
+        }
+        // Set the output file for the log messages        
+        std::string filename = cfg_.log_dir + "log_run" + run_id + ".log";
+        std::ofstream logFile(filename);
+
+        // Log all settings 
+        data_.logRunSettings(logFile, cfg_, run_id_integer);
+
+        logFile << "Run " << run_id << " starting...\n";
+
+        // Train
+        logFile << "-> Training starting...\n";
+
+        int runIndex = run + 1;
+
+        for(int iter = 0; iter < cfg_.max_iterations ; iter++){
+            for(size_t i = 0; i < X_trainPast.size() ; i++){
+                lstm_past_vec[run].setInputTSSegment(X_trainPast[i]);
+                lstm_future_vec[run].setInputTSSegment(X_trainFuture[i]);
+                lstm_past_vec[run].calculateTimeSteps();
+                lstm_future_vec[run].calculateTimeSteps();
+                between_lstm[run].block(0,0,cfg_.lstm_past_time_steps,between_lstm[run].cols()) = lstm_past_vec[run].getForwardOutput();
+                between_lstm[run].block(cfg_.lstm_past_time_steps,0,cfg_.lstm_future_time_steps,between_lstm[run].cols()) = lstm_future_vec[run].getForwardOutput();
+                lstm_together_vec[run].setInputTSSegment(between_lstm[run]);
+                lstm_together_vec[run].calculateTimeSteps();
+                lstm_to_mlp[run] = lstm_together_vec[run].getForwardOutput().transpose();
+                separate_obs[run] = Y_train.row(i);
+                for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
+                    mlps_[run].runAndBP(lstm_to_mlp[run].col(s),separate_obs[run].col(s),cfg_.learning_rate);
+                    delta_mlp_to_lstm[run].col(s) = mlps_[run].getFirstLayerInputDelta();
+                }
+                lstm_together_vec[run].setDeltaFromNextLayer(delta_mlp_to_lstm[run]);
+                lstm_together_vec[run].calculateGradients();
+                lstm_past_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,0,cfg_.lstm_cells,cfg_.lstm_past_time_steps)));
+                lstm_future_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,cfg_.lstm_past_time_steps,cfg_.lstm_cells,cfg_.lstm_future_time_steps)));
+                lstm_past_vec[run].calculateGradients();
+                lstm_future_vec[run].calculateGradients();
+                lstm_past_vec[run].updateWeights(cfg_.learning_rate * 10);
+                lstm_future_vec[run].updateWeights(cfg_.learning_rate * 10);
+                lstm_together_vec[run].updateWeights(cfg_.learning_rate * 10);
+                lstm_past_vec[run].eraseMemory();
+                lstm_future_vec[run].eraseMemory();
+                lstm_together_vec[run].eraseMemory();
+            }
+        }
+
+        logFile << "-> Training finished.\n";
+
+        // Evaluate calibration
+        logFile << "-> Evaluating calibration set...\n";
+        Eigen::MatrixXd Y_pred_calib = Eigen::MatrixXd(Y_train.rows(),Y_train.cols());
+        Eigen::MatrixXd Y_true_calib = Y_train;
+
+        for(size_t i = 0; i < X_trainPast.size() ; i++){
+            lstm_past_vec[run].setInputTSSegment(X_trainPast[i]);
+            lstm_future_vec[run].setInputTSSegment(X_trainFuture[i]);
+            lstm_past_vec[run].calculateTimeSteps();
+            lstm_future_vec[run].calculateTimeSteps();
+            between_lstm[run].block(0,0,cfg_.lstm_past_time_steps,between_lstm[run].cols()) = lstm_past_vec[run].getForwardOutput();
+            between_lstm[run].block(cfg_.lstm_past_time_steps,0,cfg_.lstm_future_time_steps,between_lstm[run].cols()) = lstm_future_vec[run].getForwardOutput();
+            lstm_together_vec[run].setInputTSSegment(between_lstm[run]);
+            lstm_together_vec[run].calculateTimeSteps();
+            lstm_to_mlp[run] = lstm_together_vec[run].getForwardOutput().transpose();
+            for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
+                mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
+                Y_pred_calib(i,s) = mlps_[run].getOutput().value();
+            }
+            lstm_past_vec[run].eraseMemory();
+            lstm_future_vec[run].eraseMemory();
+            lstm_together_vec[run].eraseMemory();
+        }
+
+        try {
+            Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
+            Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
+        } catch (...) {}
+
+        // One file for each metrics per each run
+        std::vector<double> mseVals, rmseVals, piVals, nsVals, kgeVals, pbiasVals, rsrVals;
+
+        for (int c = 0; c < Y_true_calib.cols(); ++c) {
+            mseVals.push_back(Metrics::mse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval()));
+            rmseVals.push_back(Metrics::rmse(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval()));
+            piVals.push_back(Metrics::pi(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval()));
+            nsVals.push_back(Metrics::ns(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval()));
+            kgeVals.push_back(Metrics::kge(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval()));
+            pbiasVals.push_back(Metrics::pbias(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval()));
+            rsrVals.push_back(Metrics::rsr(Y_true_calib.col(c).eval(), Y_pred_calib.col(c).eval()));
+        }
+        // per-metric filenames for this run
+        std::string mseFile   = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "MSE");
+        std::string rmseFile  = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "RMSE");
+        std::string piFile    = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "PI");
+        std::string nsFile    = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "NS");
+        std::string kgeFile   = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "KGE");
+        std::string pbiasFile = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "PBIAS");
+        std::string rsrFile   = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "RSR");
+        // always write header once per file (this is one run)
+        Metrics::saveMetricRow(mseFile,   colNames, mseVals,   true);
+        Metrics::saveMetricRow(rmseFile,  colNames, rmseVals,  true);
+        Metrics::saveMetricRow(piFile,    colNames, piVals,    true);
+        Metrics::saveMetricRow(nsFile,    colNames, nsVals,    true);
+        Metrics::saveMetricRow(kgeFile,   colNames, kgeVals,   true);
+        Metrics::saveMetricRow(pbiasFile, colNames, pbiasVals, true);
+        Metrics::saveMetricRow(rsrFile,   colNames, rsrVals,   true);
+
+
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), 
+                            data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle), 
+                            colNames);
+
+        logFile << "-> Calibration metrics and predictions saved.\n";
+
+        // Evaluate validation
+        logFile << "-> Evaluating validation set...\n";
+        Eigen::MatrixXd Y_pred_valid = Eigen::MatrixXd(Y_valid.rows(),Y_valid.cols());
+        Eigen::MatrixXd Y_true_valid = Y_valid;
+
+        for(size_t i = 0; i < X_validPast.size() ; i++){
+            lstm_past_vec[run].setInputTSSegment(X_validPast[i]);
+            lstm_future_vec[run].setInputTSSegment(X_validFuture[i]);
+            lstm_past_vec[run].calculateTimeSteps();
+            lstm_future_vec[run].calculateTimeSteps();
+            between_lstm[run].block(0,0,cfg_.lstm_past_time_steps,between_lstm[run].cols()) = lstm_past_vec[run].getForwardOutput();
+            between_lstm[run].block(cfg_.lstm_past_time_steps,0,cfg_.lstm_future_time_steps,between_lstm[run].cols()) = lstm_future_vec[run].getForwardOutput();
+            lstm_together_vec[run].setInputTSSegment(between_lstm[run]);
+            lstm_together_vec[run].calculateTimeSteps();
+            lstm_to_mlp[run] = lstm_together_vec[run].getForwardOutput().transpose();
+            for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
+                mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
+                Y_pred_valid(i,s) = mlps_[run].getOutput().value();
+            }
+            lstm_past_vec[run].eraseMemory();
+            lstm_future_vec[run].eraseMemory();
+            lstm_together_vec[run].eraseMemory();
         }
 
         try {
