@@ -125,12 +125,12 @@ class Data {
                      bool shuffleCalib,
                      unsigned seed) const;
 
-        // std::tuple<std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
-        // makeLstmPastFutureData(int allTimeSteps,
-        //              int outRows,
-        //              double trainFraction,
-        //              bool shuffleCalib,
-        //              unsigned seed) const;
+        std::tuple<std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
+        makeLstmPastFutureData(int pastTimeSteps,
+                    int futureTimeSteps,
+                    double trainFraction,
+                    bool shuffleCalib,
+                    unsigned seed) const;
 
     protected:
 

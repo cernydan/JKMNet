@@ -81,6 +81,7 @@ class JKMNet {
         void predictFromSavedWeights(const std::string &weightsPath);  //>! Predict outputs from saved weights
 
         void ensembleLstmFirstTest();
+        void ensembleLstmPastFutureTest();
 
     protected:
 
