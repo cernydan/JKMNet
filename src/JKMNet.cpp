@@ -827,7 +827,7 @@ void JKMNet::ensembleLstmFirstTest(){
     std::cout << "-> Data transformed." << std::endl;
 
     auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeLstmPastData(cfg_.lstm_past_time_steps,
-                                                                                cfg_.lstm_future_time_steps,
+                                                                                cfg_.mlp_architecture.back(),
                                                                                 cfg_.train_fraction,
                                                                                 cfg_.shuffle,
                                                                                 cfg_.seed);
@@ -857,7 +857,7 @@ void JKMNet::ensembleLstmFirstTest(){
     std::vector<LSTMLayer> lstm_vec(cfg_.ensemble_runs);
     #pragma omp parallel for num_threads(nthreads_)
     for(int i = 0; i < cfg_.ensemble_runs; i++){
-        lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,1,true,"XG",cfg_.seed);;
+        lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,cfg_.lstm_future_time_steps,true,"XG",cfg_.seed);
     }
         // Configure MLP
     setNmlps(cfg_.ensemble_runs);
@@ -891,6 +891,7 @@ void JKMNet::ensembleLstmFirstTest(){
         int runIndex = run + 1;
 
         for(int iter = 0; iter < cfg_.max_iterations ; iter++){
+            std::cout<<iter<<"\n\n";
             for(size_t i = 0; i < X_train.size() ; i++){
                 lstm_vec[run].setInputTSSegment(X_train[i]);
                 lstm_vec[run].calculateTimeSteps();
@@ -1143,9 +1144,9 @@ void JKMNet::ensembleLstmPastFutureTest(){
                 lstm_future_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,cfg_.lstm_past_time_steps,cfg_.lstm_cells,cfg_.lstm_future_time_steps)));
                 lstm_past_vec[run].calculateGradients();
                 lstm_future_vec[run].calculateGradients();
-                lstm_past_vec[run].updateWeights(cfg_.learning_rate * 10);
-                lstm_future_vec[run].updateWeights(cfg_.learning_rate * 10);
-                lstm_together_vec[run].updateWeights(cfg_.learning_rate * 10);
+                lstm_past_vec[run].updateWeights(cfg_.learning_rate * 4);
+                lstm_future_vec[run].updateWeights(cfg_.learning_rate * 4);
+                lstm_together_vec[run].updateWeights(cfg_.learning_rate * 3);
                 lstm_past_vec[run].eraseMemory();
                 lstm_future_vec[run].eraseMemory();
                 lstm_together_vec[run].eraseMemory();
