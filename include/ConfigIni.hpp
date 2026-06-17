@@ -51,11 +51,18 @@ static inline std::vector<std::string>
 splitList(const std::string& s, char delim)
 {
     std::vector<std::string> out;
-    std::string cur;
-    std::istringstream iss(s);
-    while (std::getline(iss, cur, delim)) {
-        out.push_back(trimStr(cur));
+    size_t start = 0;
+
+    while (true) {
+        size_t pos = s.find(delim, start);
+        if (pos == std::string::npos) {
+            out.push_back(trimStr(s.substr(start)));
+            break;
+        }
+        out.push_back(trimStr(s.substr(start, pos - start)));
+        start = pos + 1;
     }
+
     return out;
 }
 
