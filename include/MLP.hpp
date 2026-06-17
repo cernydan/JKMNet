@@ -105,6 +105,7 @@ class MLP {
             const Eigen::MatrixXd &Xval,
             const Eigen::MatrixXd &Yval,
             int maxIterations,
+            double maxError,
             double learningRate,
             int metricsAfterXEpochs);
 
@@ -115,6 +116,7 @@ class MLP {
             const Eigen::MatrixXd &Yval,
             int batchSize,
             int maxIterations,
+            double maxError,
             double learningRate,
             int metricsAfterXEpochs);
 
@@ -124,6 +126,7 @@ class MLP {
             const Eigen::MatrixXd &Xval,
             const Eigen::MatrixXd &Yval,
             int maxIterations,
+            double maxError,
             double learningRate,
             int metricsAfterXEpochs);
 
@@ -134,6 +137,7 @@ class MLP {
             const Eigen::MatrixXd &Yval,
             int batchSize,
             int maxIterations,
+            double maxError,
             double learningRate,
             int metricsAfterXEpochs);
 
@@ -143,6 +147,7 @@ class MLP {
             const Eigen::MatrixXd &Xval,
             const Eigen::MatrixXd &Yval,
             int maxIterations,
+            double maxError,
             double learningRate,
             int metricsAfterXEpochs,
             double lambda = 0.0001);
@@ -153,6 +158,7 @@ class MLP {
             const Eigen::MatrixXd &Xval,
             const Eigen::MatrixXd &Yval,
             int maxIterations,
+            double maxError,
             double learningRate,
             int metricsAfterXEpochs,
             double moment = 0.9);

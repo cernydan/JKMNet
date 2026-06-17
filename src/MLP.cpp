@@ -1577,6 +1577,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     const Eigen::MatrixXd &Xval,
     const Eigen::MatrixXd &Yval,
     int maxIterations,
+    double maxError,
     double learningRate,
     int metricsAfterXEpochs)
 {
@@ -1662,28 +1663,27 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
             }
         }
         Error = Error / numOfPatterns;
-
         if(metricsAfterXEpochs == 1){
             calculateOutputs(Xtrain);
             for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[0](epoch - 1,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[1](epoch - 1,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[2](epoch - 1,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[3](epoch - 1,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[4](epoch - 1,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[5](epoch - 1,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[6](epoch - 1,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
             }
 
             calculateOutputs(Xval);
             for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[7](epoch - 1,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[8](epoch - 1,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[9](epoch - 1,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[10](epoch - 1,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[11](epoch - 1,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[12](epoch - 1,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[13](epoch - 1,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
             }
         } else {
             if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
@@ -1740,16 +1740,29 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
                 }
             }
         }
+        if(Error <= maxError){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            result.iterations = epoch;
+            result.finalLoss = Error;
+            result.time = duration.count();
+            result.converged = true;
+
+            break;
+        }
     }
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<seconds>(stop - start);
+    if(Error > maxError){
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<seconds>(stop - start);
 
-    result.converged = false;
-    result.finalLoss = Error;
-    result.iterations = maxIterations;
-    result.time = duration.count();
-
-    return resultMetrics;
+        result.converged = false;
+        result.finalLoss = Error;
+        result.iterations = maxIterations;
+        result.time = duration.count();
+    }
+    return resultMetrics;  
 }
 
 std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
@@ -1758,6 +1771,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
     const Eigen::MatrixXd &Xval,
     const Eigen::MatrixXd &Yval,
     int maxIterations,
+    double maxError,
     double learningRate,
     int metricsAfterXEpochs)
 {
@@ -1808,7 +1822,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
     for(int epoch = 0; epoch < maxIterations; epoch++){
         // Run online BP
         try {
-            onlineBP(1, 0.0, learningRate, Xtrain, Ytrain);
+            onlineBP(1, maxError, learningRate, Xtrain, Ytrain);
         } catch (const std::exception &ex) {
             std::cerr << "[onlineBP] training failed: " << ex.what() << "\n";
             throw;
@@ -1891,15 +1905,17 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
                 }
             }
         }
+        if(result.converged != false){
+            result.iterations = epoch;
+            break;
+        }
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
     
-    calculateOutputs(Xtrain);
-
-    result.converged = false;
-    result.finalLoss = Metrics::mse(Ytrain,outputMat);
-    result.iterations = maxIterations;
+    if(result.converged != true){
+        result.iterations = maxIterations;
+    }
     result.time = duration.count();
 
     return resultMetrics;
@@ -1912,6 +1928,7 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     const Eigen::MatrixXd &Yval,
     int batchSize,
     int maxIterations,
+    double maxError,
     double learningRate,
     int metricsAfterXEpochs)
 {
@@ -2007,24 +2024,24 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
         if(metricsAfterXEpochs == 1){
             calculateOutputs(Xtrain);
             for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[0](epoch - 1,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[1](epoch - 1,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[2](epoch - 1,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[3](epoch - 1,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[4](epoch - 1,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[5](epoch - 1,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[6](epoch - 1,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
             }
 
             calculateOutputs(Xval);
             for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[7](epoch - 1,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[8](epoch - 1,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[9](epoch - 1,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[10](epoch - 1,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[11](epoch - 1,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[12](epoch - 1,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
+                resultMetrics[13](epoch - 1,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
             }
         } else {
             if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
@@ -2081,15 +2098,29 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
                 }
             }
         }
+        if(Error <= maxError){
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+
+            // Store results
+            result.iterations = epoch;
+            result.finalLoss = Error;
+            result.time = duration.count();
+            result.converged = true;
+
+            break;
+        }
     }
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<seconds>(stop - start);
 
-    result.converged = false;
-    result.finalLoss = Error;
-    result.iterations = maxIterations;
-    result.time = duration.count();
+    if(Error > maxError){
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<seconds>(stop - start);
 
+        result.converged = false;
+        result.finalLoss = Error;
+        result.iterations = maxIterations;
+        result.time = duration.count();
+    }
     return resultMetrics;
 }
 
@@ -2100,6 +2131,7 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     const Eigen::MatrixXd &Yval,
     int batchSize,
     int maxIterations,
+    double maxError,
     double learningRate,
     int metricsAfterXEpochs)
 {
@@ -2150,7 +2182,7 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     for(int epoch = 0; epoch < maxIterations; epoch++){
         // Run batch Adam
         try {
-            batchBP(1, 0.0, batchSize, learningRate, Xtrain, Ytrain);
+            batchBP(1, maxError, batchSize, learningRate, Xtrain, Ytrain);
         } catch (const std::exception &ex) {
             std::cerr << "[batchBP] training failed: " << ex.what() << "\n";
             throw;
@@ -2233,15 +2265,17 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
                 }
             }
         }
+        if(result.converged != false){
+            result.iterations = epoch;
+            break;
+        }
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
-
-    calculateOutputs(Xtrain);
-
-    result.converged = false;
-    result.finalLoss = Metrics::mse(Ytrain,outputMat);
-    result.iterations = maxIterations;
+    
+    if(result.converged != true){
+        result.iterations = maxIterations;
+    }
     result.time = duration.count();
 
     return resultMetrics;
@@ -2253,6 +2287,7 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
     const Eigen::MatrixXd &Xval,
     const Eigen::MatrixXd &Yval,
     int maxIterations,
+    double maxError,
     double learningRate,
     int metricsAfterXEpochs,
     double lambda)
@@ -2307,7 +2342,7 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
     for(int epoch = 0; epoch < maxIterations; epoch++){
         // Run online BP
         try {
-            onlinePenalizeBP(1, 0.0, learningRate, Xtrain, Ytrain,lambda);
+            onlinePenalizeBP(1, maxError, learningRate, Xtrain, Ytrain,lambda);
         } catch (const std::exception &ex) {
             std::cerr << "[onlinePenalizeBP] training failed: " << ex.what() << "\n";
             throw;
@@ -2390,15 +2425,17 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
                 }
             }
         }
+        if(result.converged != false){
+            result.iterations = epoch;
+            break;
+        }
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
     
-    calculateOutputs(Xtrain);
-
-    result.converged = false;
-    result.finalLoss = Metrics::mse(Ytrain,outputMat);
-    result.iterations = maxIterations;
+    if(result.converged != true){
+        result.iterations = maxIterations;
+    }
     result.time = duration.count();
 
     return resultMetrics;
@@ -2410,6 +2447,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
     const Eigen::MatrixXd &Xval,
     const Eigen::MatrixXd &Yval,
     int maxIterations,
+    double maxError,
     double learningRate,
     int metricsAfterXEpochs,
     double moment)
@@ -2464,7 +2502,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
     for(int epoch = 0; epoch < maxIterations; epoch++){
         // Run online BP
         try {
-            onlineMomentumBP(1, 0.0, learningRate, Xtrain, Ytrain, moment);
+            onlineMomentumBP(1, maxError, learningRate, Xtrain, Ytrain, moment);
         } catch (const std::exception &ex) {
             std::cerr << "[onlineMomentumBP] training failed: " << ex.what() << "\n";
             throw;
@@ -2547,15 +2585,17 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
                 }
             }
         }
+        if(result.converged != false){
+            result.iterations = epoch;
+            break;
+        }
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(stop - start);
     
-    calculateOutputs(Xtrain);
-
-    result.converged = false;
-    result.finalLoss = Metrics::mse(Ytrain,outputMat);
-    result.iterations = maxIterations;
+    if(result.converged != true){
+        result.iterations = maxIterations;
+    }
     result.time = duration.count();
 
     return resultMetrics;
