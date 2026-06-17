@@ -348,10 +348,11 @@ void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_i
     os << "\n";
     os << "Weight init: "    << cfg.weight_init    << "\n";
     os << "Input numbers: ";
-    for (const auto& v : cfg.input_numbers) {
-        for (int off : v)
+    for (size_t i = 0; i < cfg.input_numbers.size(); ++i) {
+        for (int off : cfg.input_numbers[i])
             os << off << ",";
-        os << " | ";
+        if (i + 1 < cfg.input_numbers.size())
+            os << " | ";
     }
     os << "\n";
     os << "LSTM past timesteps: "           << cfg.lstm_past_time_steps          << "\n";

@@ -478,7 +478,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_ADAM_EPOCH:
                 resultMetrics = mlps_[run].onlineAdamEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
-                    cfg_.max_iterations, cfg_.learning_rate, cfg_.max_metrics_step
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
                 Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
@@ -499,7 +499,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::BATCH_ADAM_EPOCH:
                 resultMetrics = mlps_[run].batchAdamEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
-                    cfg_.batch_size, cfg_.max_iterations,
+                    cfg_.batch_size, cfg_.max_iterations, cfg_.max_error,
                     cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
@@ -521,7 +521,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_BP_EPOCH:
                 resultMetrics = mlps_[run].onlineBpEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
-                    cfg_.max_iterations, cfg_.learning_rate, cfg_.max_metrics_step
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
                 Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
@@ -542,7 +542,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::BATCH_BP_EPOCH:
                 resultMetrics = mlps_[run].batchBpEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
-                    cfg_.batch_size, cfg_.max_iterations,
+                    cfg_.batch_size, cfg_.max_iterations, cfg_.max_error,
                     cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
@@ -564,7 +564,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_BP_PENALIZE_EPOCH:
                 resultMetrics = mlps_[run].onlinePenalizeBpEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
-                    cfg_.max_iterations, cfg_.learning_rate, cfg_.max_metrics_step, 0.0001   //Add lambda choice to config
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step, 0.0001   //Add lambda choice to config
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
                 Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
@@ -585,7 +585,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_BP_MOMENTUM_EPOCH:
                 resultMetrics = mlps_[run].onlineMomentumBpEpochVal(
                     X_train, Y_train, X_valid, Y_valid,
-                    cfg_.max_iterations, cfg_.learning_rate, cfg_.max_metrics_step, 0.9   //Add moment choice to config
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step, 0.9   //Add moment choice to config
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
                 Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
