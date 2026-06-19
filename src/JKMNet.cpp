@@ -348,11 +348,6 @@ void JKMNet::ensembleRunMlpVector(){
     std::cout << "-> Data split into training and validation sets." << std::endl;
 
     std::cout << "-> Transforming data..." << std::endl;
-    data_.setTransform(strVecToTransformTypes(cfg_.transform),
-                       cfg_.transform_alpha,
-                       cfg_.exclude_last_col_from_transform);
-    data_.applyTransform();
-    std::cout << "-> Data transformed." << std::endl;
 
     auto [X_train_trans, Y_train_trans, train_scalers] = data_.transformMats(X_train, Y_train, strVecToTransformTypes(cfg_.transform),
                                                                             cfg_.transform_alpha, cfg_.exclude_last_col_from_transform,
@@ -361,6 +356,8 @@ void JKMNet::ensembleRunMlpVector(){
     auto [X_valid_trans, Y_valid_trans, valid_scalers] = data_.transformMats(X_valid, Y_valid, strVecToTransformTypes(cfg_.transform),
                                                                             cfg_.transform_alpha, cfg_.exclude_last_col_from_transform,
                                                                             cfg_.input_numbers);
+
+    std::cout << "-> Data transformed." << std::endl;
 
     std::vector<std::string> colNames;
     for (int c = 0; c < Y_train.cols(); ++c) {
