@@ -25,6 +25,13 @@ struct Scaler {
     bool fitted = false;
 };
 
+struct VarScaler {
+    transform_type type = transform_type::NONE;
+    double p1 = 0.0;     // MINMAX: min   | ZSCORE: mean | NONLINEAR: alpha
+    double p2 = 0.0;     // MINMAX: max   | ZSCORE: stddev
+    bool fitted = false; // true if statistics were actually computed
+};
+
 struct RunConfig;
 
 class Data {
@@ -63,6 +70,14 @@ class Data {
         void applyTransform();  //!< Apply the previously configured transform to m_data
         void inverseTransform();  //!< Inverse the global transform (to bring predictions back)
         Eigen::MatrixXd inverseTransformOutputs(const Eigen::MatrixXd& M) const;  //!< Inverse the global transform for outputs
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<VarScaler>>
+        transformMats(Eigen::MatrixXd in,
+                     Eigen::MatrixXd out,
+                     const std::vector<transform_type>& transforms,
+                     double alpha,
+                     bool excludeLastCol,
+                     std::vector<std::vector<int>> input_numbers);
+        Eigen::MatrixXd inverseTransformOutputs(const Eigen::MatrixXd& M, const VarScaler& outScaler);
         
         std::vector<size_t> calibPatternOriginalIndices() const { return m_calib_pattern_orig_indices; }
         std::vector<int> calibPatternFilteredIndices() const { return m_calib_pattern_filtered_indices; }

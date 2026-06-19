@@ -339,13 +339,6 @@ void JKMNet::ensembleRunMlpVector(){
     data_.loadFilteredCSV(cfg_.data_file, idFilter, cfg_.columns, cfg_.timestamp, cfg_.id_col);
     std::cout << "-> Data loaded." << std::endl;
 
-    std::cout << "-> Transforming data..." << std::endl;
-    data_.setTransform(strVecToTransformTypes(cfg_.transform),
-                       cfg_.transform_alpha,
-                       cfg_.exclude_last_col_from_transform);
-    data_.applyTransform();
-    std::cout << "-> Data transformed." << std::endl;
-
     auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeMats(cfg_.input_numbers,
                                                                                 static_cast<int>(cfg_.mlp_architecture.back()),
                                                                                 cfg_.train_fraction,
@@ -354,17 +347,29 @@ void JKMNet::ensembleRunMlpVector(){
 
     std::cout << "-> Data split into training and validation sets." << std::endl;
 
+    std::cout << "-> Transforming data..." << std::endl;
+
+    auto [X_train_trans, Y_train_trans, train_scalers] = data_.transformMats(X_train, Y_train, strVecToTransformTypes(cfg_.transform),
+                                                                            cfg_.transform_alpha, cfg_.exclude_last_col_from_transform,
+                                                                            cfg_.input_numbers);
+
+    auto [X_valid_trans, Y_valid_trans, valid_scalers] = data_.transformMats(X_valid, Y_valid, strVecToTransformTypes(cfg_.transform),
+                                                                            cfg_.transform_alpha, cfg_.exclude_last_col_from_transform,
+                                                                            cfg_.input_numbers);
+
+    std::cout << "-> Data transformed." << std::endl;
+
     std::vector<std::string> colNames;
     for (int c = 0; c < Y_train.cols(); ++c) {
         colNames.push_back("h" + std::to_string(c+1));
     }
 
     // Save real data
-    Eigen::MatrixXd Y_true_calib_save = data_.unshuffleMatrix(Y_train, calIdxForUnshuffle);
-    Eigen::MatrixXd Y_true_valid_save = Y_valid;
+    Eigen::MatrixXd Y_true_calib_save = data_.unshuffleMatrix(Y_train_trans, calIdxForUnshuffle);
+    Eigen::MatrixXd Y_true_valid_save = Y_valid_trans;
     try {
-        Y_true_calib_save = data_.inverseTransformOutputs(Y_true_calib_save);
-        Y_true_valid_save = data_.inverseTransformOutputs(Y_true_valid_save);
+        Y_true_calib_save = data_.inverseTransformOutputs(Y_true_calib_save, train_scalers.back());
+        Y_true_valid_save = data_.inverseTransformOutputs(Y_true_valid_save, valid_scalers.back());
     } catch (const std::exception &ex) {
         std::cerr << "[Warning] inverseTransformOutputs failed (save GT): " << ex.what() << "\n";
     }
@@ -433,7 +438,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_ADAM:
                 mlps_[run].onlineAdam(
                     cfg_.max_iterations, cfg_.max_error,
-                    cfg_.learning_rate,  X_train, Y_train
+                    cfg_.learning_rate,  X_train_trans, Y_train_trans
                 );
                 break;
 
@@ -441,7 +446,7 @@ void JKMNet::ensembleRunMlpVector(){
                 mlps_[run].batchAdam(
                     cfg_.max_iterations, cfg_.max_error,
                     cfg_.batch_size, cfg_.learning_rate,
-                    X_train, Y_train
+                    X_train_trans, Y_train_trans
                 );
                 break;
 
@@ -449,7 +454,7 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_BP:
                 mlps_[run].onlineBP(
                     cfg_.max_iterations, cfg_.max_error,
-                    cfg_.learning_rate,  X_train, Y_train
+                    cfg_.learning_rate,  X_train_trans, Y_train_trans
                 );
                 break;
 
@@ -457,27 +462,27 @@ void JKMNet::ensembleRunMlpVector(){
                 mlps_[run].batchBP(
                     cfg_.max_iterations, cfg_.max_error,
                     cfg_.batch_size, cfg_.learning_rate,
-                    X_train, Y_train
+                    X_train_trans, Y_train_trans
                 );
                 break;
 
             case TrainerType::ONLINE_BP_PENALIZE:
                 mlps_[run].onlinePenalizeBP(
                     cfg_.max_iterations, cfg_.max_error,
-                    cfg_.learning_rate,  X_train, Y_train, 0.0001  //Add lambda choice to config
+                    cfg_.learning_rate,  X_train_trans, Y_train_trans, 0.0001  //Add lambda choice to config
                 );
                 break;
 
             case TrainerType::ONLINE_BP_MOMENTUM:
                 mlps_[run].onlineMomentumBP(
                     cfg_.max_iterations, cfg_.max_error,
-                    cfg_.learning_rate,  X_train, Y_train,0.9 //Add moment choice to config
+                    cfg_.learning_rate,  X_train_trans, Y_train_trans,0.9 //Add moment choice to config
                 );
                 break;
 
             case TrainerType::ONLINE_ADAM_EPOCH:
                 resultMetrics = mlps_[run].onlineAdamEpochVal(
-                    X_train, Y_train, X_valid, Y_valid,
+                    X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
@@ -498,7 +503,7 @@ void JKMNet::ensembleRunMlpVector(){
 
             case TrainerType::BATCH_ADAM_EPOCH:
                 resultMetrics = mlps_[run].batchAdamEpochVal(
-                    X_train, Y_train, X_valid, Y_valid,
+                    X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.batch_size, cfg_.max_iterations, cfg_.max_error,
                     cfg_.learning_rate, cfg_.max_metrics_step
                 );
@@ -520,7 +525,7 @@ void JKMNet::ensembleRunMlpVector(){
 
             case TrainerType::ONLINE_BP_EPOCH:
                 resultMetrics = mlps_[run].onlineBpEpochVal(
-                    X_train, Y_train, X_valid, Y_valid,
+                    X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
@@ -541,7 +546,7 @@ void JKMNet::ensembleRunMlpVector(){
 
             case TrainerType::BATCH_BP_EPOCH:
                 resultMetrics = mlps_[run].batchBpEpochVal(
-                    X_train, Y_train, X_valid, Y_valid,
+                    X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.batch_size, cfg_.max_iterations, cfg_.max_error,
                     cfg_.learning_rate, cfg_.max_metrics_step
                 );
@@ -563,7 +568,7 @@ void JKMNet::ensembleRunMlpVector(){
 
             case TrainerType::ONLINE_BP_PENALIZE_EPOCH:
                 resultMetrics = mlps_[run].onlinePenalizeBpEpochVal(
-                    X_train, Y_train, X_valid, Y_valid,
+                    X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step, 0.0001   //Add lambda choice to config
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
@@ -584,7 +589,7 @@ void JKMNet::ensembleRunMlpVector(){
 
             case TrainerType::ONLINE_BP_MOMENTUM_EPOCH:
                 resultMetrics = mlps_[run].onlineMomentumBpEpochVal(
-                    X_train, Y_train, X_valid, Y_valid,
+                    X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step, 0.9   //Add moment choice to config
                 );
                 Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
@@ -612,12 +617,12 @@ void JKMNet::ensembleRunMlpVector(){
 
         // Evaluate calibration
         logFile << "-> Evaluating calibration set...\n";
-        mlps_[run].calculateOutputs(X_train);
+        mlps_[run].calculateOutputs(X_train_trans);
         Eigen::MatrixXd Y_pred_calib = mlps_[run].getOutputs();
-        Eigen::MatrixXd Y_true_calib = Y_train;
+        Eigen::MatrixXd Y_true_calib = Y_train_trans;
         try {
-            Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
-            Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
+            Y_true_calib = data_.inverseTransformOutputs(Y_true_calib, train_scalers.back());
+            Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib, train_scalers.back());
         } catch (...) {}
 
         // One file for each metrics per each run
@@ -666,12 +671,12 @@ void JKMNet::ensembleRunMlpVector(){
         // TODO: predikce, tedy samostatna metoda 
         // Evaluate validation
         logFile << "-> Evaluating validation set...\n";
-        mlps_[run].calculateOutputs(X_valid);
+        mlps_[run].calculateOutputs(X_valid_trans);
         Eigen::MatrixXd Y_pred_valid = mlps_[run].getOutputs();
-        Eigen::MatrixXd Y_true_valid = Y_valid;
+        Eigen::MatrixXd Y_true_valid = Y_valid_trans;
         try {
-            Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
-            Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid);
+            Y_true_valid = data_.inverseTransformOutputs(Y_true_valid, valid_scalers.back());
+            Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid, valid_scalers.back());
         } catch (...) {}
 
         // One file for each metrics per each run
