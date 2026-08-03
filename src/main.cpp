@@ -231,70 +231,54 @@ int main(int argc, char** argv) {
 
 //More ids test
 
-    // std::cout << "-> Loading data..." << std::endl;
-    // int trainIds = 7;
-    // std::vector<std::unordered_set<std::string>> ids_vec = {{"94951006"} ,{"94208511"},{"94951014"},{"95228849"},{"95228106"},{"94208530"},{"94212708"},
-    //                                                         {"95228846"},{"94212735"},{"94951047"},{"94249013"},{"95228110"},{"93148340"},{"94212724"}};
-    // std::vector<std::string> keep_cols = {"T3","prec","moisture"};
-    // std::vector<std::string> transform_cols = {"MINMAX","MINMAX","NONLINEAR"};
-    // std::vector<std::vector<int>> inps = {{-1,0,1,2},{-3,-2,-1,0,1,2},{-7,-6,-5,-4,-3,-2,-1}};
-    // std::vector<Data> data_vec(ids_vec.size());
-    // std::vector<Eigen::MatrixXd> Xs(ids_vec.size());
-    // std::vector<Eigen::MatrixXd> Ys(ids_vec.size());
-    // for(size_t i = 0; i < ids_vec.size() ; i++){
-    //     data_vec[i].loadFilteredCSV("data/inputs/data_all_daily_eddy.csv", ids_vec[i], keep_cols, "date", "ID");
-    //     data_vec[i].setTransform(strVecToTransformTypes(transform_cols), 5.0, false);
-    //     data_vec[i].applyTransform();
-    //     if(i < trainIds){
-    //         auto mats = data_vec[i].makeMats(inps, 3, 0.99, true, 0);
-    //         Xs[i] = std::get<0>(mats);
-    //         Ys[i] = std::get<1>(mats);
-    //     } else {
-    //         auto mats = data_vec[i].makeMats(inps, 3, 0.01, true, 0);
-    //         Xs[i] = std::get<2>(mats);
-    //         Ys[i] = std::get<3>(mats);
-    //     }
-
-    // }
-    // std::cout << "-> Data loaded, transformed,split into training and validation sets." << std::endl;
     
+
+    // Data jendat;
+    // auto Xcal = jendat.loadPreparedMatrix("data/inputs/Xcal.bin");
+    // auto Xval = jendat.loadPreparedMatrix("data/inputs/Xval.bin");
+    // auto Ycal = jendat.loadPreparedMatrix("data/inputs/Ycal.bin");
+    // auto Yval = jendat.loadPreparedMatrix("data/inputs/Yval.bin");
+
     // MLP final;
-    // final.setArchitecture({20,20,3});
-    // final.setActivations({activ_func_type::SIGMOID,activ_func_type::SIGMOID,activ_func_type::RELU});
-    // final.setWInitType({weight_init_type::HE,weight_init_type::HE,weight_init_type::HE});
-    // Eigen::VectorXd x0 = Eigen::VectorXd::Zero(17);
+    // final.setArchitecture({30,3});
+    // final.setActivations({activ_func_type::SIGMOID,activ_func_type::SIGMOID});
+    // final.setWInitType({weight_init_type::XG,weight_init_type::XG});
+    // Eigen::VectorXd x0 = Eigen::VectorXd::Zero(Xcal.cols());
     // final.initMLP(x0, 0);
 
-    // for(int i = 0; i < 2 ; i++){
-    //     for(int j = 0 ; j < trainIds ; j++){
-    //         final.onlineAdam(50,0.0,0.005,Xs[j],Ys[j]);
-    //     }
-    //     for(int j = trainIds - 1 ; j >= 0; j--){
-    //         final.onlineAdam(50,0.0,0.005,Xs[j],Ys[j]);
-    //     }
+    //     final.onlineAdam(10,0.0,0.01,Xcal,Ycal);
+    //     std::vector<int> perm;
+    //     perm = jendat.permutationVector(static_cast<int>(Xcal.rows()));
+    //     Xcal = jendat.shuffleMatrix(Xcal, perm);
+    //     Ycal = jendat.shuffleMatrix(Ycal, perm);
+
+    //     final.onlineAdam(20,0.0,0.005,Xcal,Ycal);
+    //     Xcal = jendat.shuffleMatrix(Xcal, perm);
+    //     Ycal = jendat.shuffleMatrix(Ycal, perm);
+
+    //     final.onlineAdam(30,0.0,0.001,Xcal,Ycal);
+    //     Xcal = jendat.shuffleMatrix(Xcal, perm);
+    //     Ycal = jendat.shuffleMatrix(Ycal, perm);
+
+    //     final.onlineAdam(40,0.0,0.0005,Xcal,Ycal);
+    //     Xcal = jendat.shuffleMatrix(Xcal, perm);
+    //     Ycal = jendat.shuffleMatrix(Ycal, perm);
+
+    //     final.onlineAdam(50,0.0,0.0001,Xcal,Ycal);
+    //     Xcal = jendat.shuffleMatrix(Xcal, perm);
+    //     Ycal = jendat.shuffleMatrix(Ycal, perm);
+
+
+    // final.calculateOutputs(Xval);
+    // Eigen::MatrixXd mod_out = final.getOutputs();
+    // Eigen::VectorXd bef = Eigen::VectorXd::Zero(3);
+
+    // for (int c = 0; c < Yval.cols(); ++c) {
+    //     bef(c) = (Metrics::pi(Yval.col(c).eval(), mod_out.col(c).eval()));
     // }
 
-    // for (size_t i = trainIds ; i < ids_vec.size() ; i++ ){
-    //     final.calculateOutputs(Xs[i]);
-    //     Eigen::MatrixXd mod_out = final.getOutputs();
-    //     Eigen::VectorXd bef = Eigen::VectorXd::Zero(3);
-    //     Eigen::VectorXd aft = Eigen::VectorXd::Zero(3);
-    //     Eigen::MatrixXd Y_val = Ys[i];
-    //     for (int c = 0; c < Y_val.cols(); ++c) {
-    //         bef(c) = (Metrics::pi(Y_val.col(c).eval(), mod_out.col(c).eval()));
-    //     }
+    // std::cout<<bef<<"\n\n";
 
-    //     Y_val = data_vec[i].inverseTransformOutputs(Y_val);
-    //     mod_out = data_vec[i].inverseTransformOutputs(mod_out);
-
-    //     for (int c = 0; c < Y_val.cols(); ++c) {
-    //         aft(c) = (Metrics::pi(Y_val.col(c).eval(), mod_out.col(c).eval()));
-    //     }
-    //     std::cout<<"val id "<<i<<"\n\n";
-    //     std::cout<<bef<<"\n\n";
-    //     std::cout<<aft<<"\n\n";
-
-    //     data_vec[i].saveMatrixCsv(Metrics::addRunIdToFilename("data/outputs/real.csv", std::to_string(i)),Y_val,{"h1","h2","h3"});
-    //     data_vec[i].saveMatrixCsv(Metrics::addRunIdToFilename("data/outputs/model.csv", std::to_string(i)),mod_out,{"h1","h2","h3"});
-    // }
+    // jendat.saveMatrixCsv(Metrics::addRunIdToFilename("data/outputs/model.csv", "1"),mod_out,{"h1","h2","h3"}); 
+    // jendat.saveMatrixCsv(Metrics::addRunIdToFilename("data/outputs/real.csv", "1"),Yval,{"h1","h2","h3"}); 
 }

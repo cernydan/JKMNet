@@ -962,7 +962,7 @@ Data::transformMatsGetScalers(Eigen::MatrixXd in,
                     }
                 }
 
-                scalers[i] = VarScaler{t, mn, mx, true};
+                scalers[i] = VarScaler{t, mn, mx, 0.0, true};
                 break;
             }
 
@@ -981,9 +981,58 @@ Data::transformMatsGetScalers(Eigen::MatrixXd in,
                     }
                 }
 
-                // NONLINEAR has no min/max-style back-transform parameters
-                // beyond alpha itself; record alpha in p1 for convenience.
-                scalers[i] = VarScaler{t, alpha[i], 0.0, true};
+                scalers[i] = VarScaler{t, 0.0 , 0.0, alpha[i], true};
+                break;
+            }
+
+            case transform_type::MINMAXNONLIN:
+            {
+                // --- Step 1: MINMAX ---
+                double mn = std::numeric_limits<double>::infinity();
+                double mx = -std::numeric_limits<double>::infinity();
+                std::size_t cnt = 0;
+ 
+                for (auto& cr : cells) {
+                    Eigen::Index R = rowsFor(cr);
+                    for (Eigen::Index r = 0; r < R; ++r) {
+                        double v = valueAt(cr, r);
+                        if (std::isfinite(v)) {
+                            mn = std::min(mn, v);
+                            mx = std::max(mx, v);
+                            ++cnt;
+                        }
+                    }
+                }
+ 
+                if (cnt == 0) { mn = 0.0; mx = 1.0; }
+ 
+                double span = mx - mn;
+                if (span == 0.0) span = 1.0;
+ 
+                for (auto& cr : cells) {
+                    Eigen::Index R = rowsFor(cr);
+                    for (Eigen::Index r = 0; r < R; ++r) {
+                        double& x = valueAt(cr, r);
+                        if (std::isfinite(x))
+                            x = (x - mn) / span;
+                    }
+                }
+ 
+                // --- Step 2: NONLINEAR on already-scaled values ---
+                for (auto& cr : cells) {
+                    Eigen::Index R = rowsFor(cr);
+                    for (Eigen::Index r = 0; r < R; ++r) {
+                        double& x = valueAt(cr, r);
+                        if (std::isfinite(x)) {
+                            double tmp = 1.0 - std::exp(-alpha[i] * x);
+                            x = std::isfinite(tmp)
+                                ? tmp
+                                : std::numeric_limits<double>::quiet_NaN();
+                        }
+                    }
+                }
+ 
+                scalers[i] = VarScaler{t, mn, mx, alpha[i], true};
                 break;
             }
 
@@ -1013,7 +1062,7 @@ Data::transformMatsGetScalers(Eigen::MatrixXd in,
                             if (std::isfinite(x)) x = 0.0;
                         }
                     }
-                    scalers[i] = VarScaler{t, 0.0, 0.0, true};
+                    scalers[i] = VarScaler{t, 0.0, 0.0, 0.0, true};
                     break;
                 }
 
@@ -1038,7 +1087,7 @@ Data::transformMatsGetScalers(Eigen::MatrixXd in,
                     }
                 }
 
-                scalers[i] = VarScaler{t, mean, stddev, true};
+                scalers[i] = VarScaler{t, mean, stddev,0.0, true};
                 break;
             }
 
@@ -1166,8 +1215,43 @@ Data::transformMatsApplyScalers(Eigen::MatrixXd in,
 
             case transform_type::NONLINEAR:
             {
-                const double alpha = sc.p1;
+                const double alpha = sc.al;
 
+                for (auto& cr : cells) {
+                    Eigen::Index R = rowsFor(cr);
+                    for (Eigen::Index r = 0; r < R; ++r) {
+                        double& x = valueAt(cr, r);
+                        if (std::isfinite(x)) {
+                            double tmp = 1.0 - std::exp(-alpha * x);
+                            x = std::isfinite(tmp)
+                                ? tmp
+                                : std::numeric_limits<double>::quiet_NaN();
+                        }
+                    }
+                }
+                break;
+            }
+
+            case transform_type::MINMAXNONLIN:
+            {
+                // --- Step 1: MINMAX ---
+                double mn   = sc.p1;
+                double mx   = sc.p2;
+                double span = mx - mn;
+                if (span == 0.0) span = 1.0;
+ 
+                for (auto& cr : cells) {
+                    Eigen::Index R = rowsFor(cr);
+                    for (Eigen::Index r = 0; r < R; ++r) {
+                        double& x = valueAt(cr, r);
+                        if (std::isfinite(x))
+                            x = (x - mn) / span;
+                    }
+                }
+ 
+                // --- Step 2: NONLINEAR on already-scaled values ---
+                const double alpha = sc.al;
+ 
                 for (auto& cr : cells) {
                     Eigen::Index R = rowsFor(cr);
                     for (Eigen::Index r = 0; r < R; ++r) {
@@ -1246,7 +1330,7 @@ Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M, const Va
             if (!outScaler.fitted)
                 throw std::runtime_error("inverseTransformOutputs: NONLINEAR outScaler not fitted");
  
-            const double alpha = outScaler.p1;
+            const double alpha = outScaler.al;
             Eigen::MatrixXd out = M;
  
             for (Eigen::Index r = 0; r < out.rows(); ++r) {
@@ -1272,6 +1356,48 @@ Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M, const Va
                     out(r, c) = -std::log(one_minus) / alpha;
                 }
             }
+            return out;
+        }
+
+        case transform_type::MINMAXNONLIN:
+        {
+            if (!outScaler.fitted)
+                throw std::runtime_error("inverseTransformOutputs: MINMAXNONLIN outScaler not fitted");
+ 
+            const double alpha = outScaler.al;
+            double mn   = outScaler.p1;
+            double mx   = outScaler.p2;
+            double span = mx - mn;
+            if (span == 0.0) span = 1.0;
+ 
+            Eigen::MatrixXd out = M;
+ 
+            // Step 1: undo NONLINEAR  =>  x = -log(1 - t) / alpha
+            for (Eigen::Index r = 0; r < out.rows(); ++r) {
+                for (Eigen::Index c = 0; c < out.cols(); ++c) {
+                    double tval = out(r, c);
+                    if (!std::isfinite(tval)) continue;
+ 
+                    if (tval >= 1.0)
+                        tval = std::nextafter(1.0, 0.0);
+ 
+                    if (tval < 0.0) {
+                        if (tval > -1e-12)
+                            tval = 0.0;
+                        else
+                            throw std::runtime_error("inverseTransformOutputs: MINMAXNONLIN transformed value < 0");
+                    }
+ 
+                    double one_minus = 1.0 - tval;
+                    if (!(one_minus > 0.0))
+                        throw std::runtime_error("inverseTransformOutputs: MINMAXNONLIN 1 - t <= 0");
+ 
+                    out(r, c) = -std::log(one_minus) / alpha;
+                }
+            }
+ 
+            // Step 2: undo MINMAX  =>  x = x * span + mn
+            out = out.array() * span + mn;
             return out;
         }
  
@@ -2331,3 +2457,17 @@ Data::makeLstmPastFutureData(int pastTimeSteps,
     return {trainPastIn, trainFutureIn, trainOut, validPastIn, validFutureIn, validOut, globalIdx, calIdx};
 }
 
+Eigen::MatrixXd Data::loadPreparedMatrix(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        std::cerr << "File failed to open!\n";
+    }
+    int32_t rows, cols;
+    in.read(reinterpret_cast<char*>(&rows), sizeof(int32_t));
+    in.read(reinterpret_cast<char*>(&cols), sizeof(int32_t));
+
+    std::vector<double> buffer(static_cast<size_t>(rows) * cols);
+    in.read(reinterpret_cast<char*>(buffer.data()), buffer.size() * sizeof(double));
+
+    return Eigen::Map<Eigen::MatrixXd>(buffer.data(), rows, cols);
+}

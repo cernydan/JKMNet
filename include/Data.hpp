@@ -9,6 +9,8 @@
 #include <random>
 #include <limits> 
 #include <ostream> 
+#include <fstream>
+#include <cstdint>
 
 #include "eigen-3.4/Eigen/Dense"
 
@@ -16,6 +18,7 @@ enum class transform_type {
     NONE = 0,
     MINMAX, 
     NONLINEAR,
+    MINMAXNONLIN,
     ZSCORE
 };
 
@@ -27,8 +30,9 @@ struct Scaler {
 
 struct VarScaler {
     transform_type type = transform_type::NONE;
-    double p1 = 0.0;     // MINMAX: min   | ZSCORE: mean | NONLINEAR: alpha
+    double p1 = 0.0;     // MINMAX: min   | ZSCORE: mean
     double p2 = 0.0;     // MINMAX: max   | ZSCORE: stddev
+    double al = 0.0;     // NONLINEAR: alpha
     bool fitted = false; // true if statistics were actually computed
 };
 
@@ -153,6 +157,8 @@ class Data {
                     double trainFraction,
                     bool shuffleCalib,
                     unsigned seed) const;
+
+        Eigen::MatrixXd loadPreparedMatrix(const std::string& path);
 
     protected:
 
