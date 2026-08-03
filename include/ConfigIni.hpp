@@ -181,6 +181,7 @@ inline transform_type strToTransformType(const std::string &s) {
     if (u == "NONE") return transform_type::NONE;
     if (u == "MINMAX") return transform_type::MINMAX;
     if (u == "NONLINEAR") return transform_type::NONLINEAR;
+    if (u == "MINMAXNONLIN") return transform_type::MINMAXNONLIN;
     if (u == "ZSCORE") return transform_type::ZSCORE;
 
     throw std::runtime_error("Unknown transform: " + s);

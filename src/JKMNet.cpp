@@ -832,7 +832,7 @@ void JKMNet::ensembleLstmFirstTest(){
     std::cout << "-> Data transformed." << std::endl;
 
     auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeLstmPastData(cfg_.lstm_past_time_steps,
-                                                                                cfg_.lstm_future_time_steps,
+                                                                                cfg_.mlp_architecture.back(),
                                                                                 cfg_.train_fraction,
                                                                                 cfg_.shuffle,
                                                                                 cfg_.seed);
@@ -860,15 +860,9 @@ void JKMNet::ensembleLstmFirstTest(){
 
     // Configure LSTMLayer
     std::vector<LSTMLayer> lstm_vec(cfg_.ensemble_runs);
-    std::vector<Eigen::MatrixXd> lstm_to_mlp(cfg_.ensemble_runs);
-    std::vector<Eigen::MatrixXd> delta_mlp_to_lstm(cfg_.ensemble_runs);
-    std::vector<Eigen::MatrixXd> separate_obs(cfg_.ensemble_runs);
     #pragma omp parallel for num_threads(nthreads_)
     for(int i = 0; i < cfg_.ensemble_runs; i++){
         lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,cfg_.lstm_future_time_steps,true,"XG",cfg_.seed);
-        lstm_to_mlp[i] = Eigen::MatrixXd(cfg_.lstm_cells,cfg_.lstm_future_time_steps);
-        delta_mlp_to_lstm[i] = Eigen::MatrixXd(cfg_.lstm_cells,cfg_.lstm_future_time_steps);
-        separate_obs[i] = Eigen::MatrixXd(1,cfg_.lstm_future_time_steps);
     }
         // Configure MLP
     setNmlps(cfg_.ensemble_runs);
@@ -906,16 +900,11 @@ void JKMNet::ensembleLstmFirstTest(){
             for(size_t i = 0; i < X_train.size() ; i++){
                 lstm_vec[run].setInputTSSegment(X_train[i]);
                 lstm_vec[run].calculateTimeSteps();
-                lstm_to_mlp[run] = lstm_vec[run].getForwardOutput().transpose();
-                separate_obs[run] = Y_train.row(i);
-                for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
-                    mlps_[run].runAndCalculateBatchGradient(lstm_to_mlp[run].col(s),separate_obs[run].col(s));
-                    delta_mlp_to_lstm[run].col(s) = mlps_[run].getFirstLayerInputDelta();
-                    mlps_[run].updateWeights(cfg_.learning_rate);
-                }
-                lstm_vec[run].setDeltaFromNextLayer(delta_mlp_to_lstm[run]);
+                mlps_[run].runAndCalculateBatchGradient(lstm_vec[run].getForwardOutputVector(),Y_train.row(i));
+                lstm_vec[run].setDeltaFromNextLayer(mlps_[run].getFirstLayerInputDelta());
                 lstm_vec[run].calculateGradients();
-                lstm_vec[run].updateWeights(cfg_.learning_rate);
+                lstm_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
+                mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
                 lstm_vec[run].eraseMemory();
             }
         }
@@ -930,11 +919,8 @@ void JKMNet::ensembleLstmFirstTest(){
         for(size_t i = 0; i < X_train.size() ; i++){
             lstm_vec[run].setInputTSSegment(X_train[i]);
             lstm_vec[run].calculateTimeSteps();
-            lstm_to_mlp[run] = lstm_vec[run].getForwardOutput().transpose();
-            for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
-                mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
-                Y_pred_calib(i,s) = mlps_[run].getOutput().value();
-            }
+            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
+            Y_pred_calib.row(i) = mlps_[run].getOutput();
             lstm_vec[run].eraseMemory();
         }
 
@@ -987,11 +973,8 @@ void JKMNet::ensembleLstmFirstTest(){
         for(size_t i = 0; i < X_valid.size() ; i++){
             lstm_vec[run].setInputTSSegment(X_valid[i]);
             lstm_vec[run].calculateTimeSteps();
-            lstm_to_mlp[run] = lstm_vec[run].getForwardOutput().transpose();
-            for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
-                mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
-                Y_pred_valid(i,s) = mlps_[run].getOutput().value();
-            }
+            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
+            Y_pred_valid.row(i) = mlps_[run].getOutput();
             lstm_vec[run].eraseMemory();
         }
 
