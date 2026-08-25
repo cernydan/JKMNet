@@ -124,11 +124,26 @@ int main(int argc, char** argv) {
     std::cout << " Running Ensemble\n";
     std::cout << "===========================================\n";
     JKMNet net_(cfg, nthreads);
-    
-    net_.ensembleRunMlpVector();    // CHANGE BACK, POSSIBLY MAKE OPTION
-    //net_.ensembleLstmFirstTest();
-    //net_.ensembleLstmPastFutureTest();
-    
+
+    // Select model type from config
+    std::string modelType = cfg.model_type;
+    std::transform(modelType.begin(), modelType.end(), modelType.begin(), ::tolower);
+
+    if (modelType == "mlp") {
+        std::cout << "[INFO] Using MLP model\n";
+        net_.ensembleRunMlpVector();
+    } else if (modelType == "lstm_first" || modelType == "lstmfirst") {
+        std::cout << "[INFO] Using LSTM model (past data only)\n";
+        net_.ensembleLstmFirstTest();
+    } else if (modelType == "lstm_past_future" || modelType == "lstmpastfuture") {
+        std::cout << "[INFO] Using LSTM model (past + future data)\n";
+        net_.ensembleLstmPastFutureTest();
+    } else {
+        std::cerr << "[Error] Unknown model_type: " << cfg.model_type
+                  << ". Valid options: mlp, lstm_first, lstm_past_future\n";
+        return 1;
+    }
+
     return 0;
 
 

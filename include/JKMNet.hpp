@@ -74,6 +74,7 @@ class JKMNet {
         unsigned getNmlps();  //>! Getter for number of MLPs
 
         void init_mlps(); //>! Initialization of MLPs vector
+        void init_mlpsForLSTM(unsigned lstmOutputSize); //>! Initialization of MLPs vector for LSTM (custom input size)
 
         //void ensembleRun(MLP &mlp_);
         void ensembleRunMlpVector();  //>! Ensemble run - load settings, read data, train, test

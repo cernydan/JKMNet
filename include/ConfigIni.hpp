@@ -99,6 +99,7 @@ struct RunConfig {
     int lstm_past_time_steps = 30;
     int lstm_future_time_steps = 10;
     int lstm_cells = 10;
+    std::string model_type = "mlp";  // mlp, lstm_first, or lstm_past_future
 
     // transforms
     std::vector<std::string> transform;
@@ -468,6 +469,9 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     std::string scells = get("lstm_cells");
     if (!scells.empty()) cfg.lstm_cells = std::stoi(scells);
+
+    std::string smodeltype = get("model_type");
+    if (!smodeltype.empty()) cfg.model_type = trimStr(smodeltype);
 
     std::string ssplitshuffle = get("split_shuffle");
     if (!ssplitshuffle.empty()) cfg.split_shuffle = parseBool(ssplitshuffle);

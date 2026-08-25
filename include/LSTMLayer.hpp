@@ -40,6 +40,8 @@ public:
     void setInputTSSegment(const Eigen::MatrixXd& inputSegment);    //!< Set inputs for n time-steps
     void calculateTimeSteps();      //!< Calculate outputs for n time-steps
     void calculateGradients();
+    void accumulateGradients(const Eigen::MatrixXd& dW, const Eigen::MatrixXd& dU, const Eigen::VectorXd& db);
+    void resetGradients();
     void updateWeights(double learningRate);
     void updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi);
     void eraseMemory();
@@ -48,6 +50,8 @@ public:
     Eigen::MatrixXd getDeltaInputs();
     Eigen::MatrixXd getForwardOutput();
     Eigen::VectorXd getForwardOutputVector();
+    Eigen::VectorXd getLastTimeStepOutput();  //!< Get only the last time step output (for sequence-to-one)
+    void clearGradients();  //!< Clear accumulated gradients
 
 private:
     LSTMSettings settings;  //!< Settings of the layer

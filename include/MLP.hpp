@@ -94,6 +94,8 @@ class MLP {
         void runAndCalculateBatchGradient(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut);
         void updateWeights(double learningRate);
         void updateWeightsAdam(double learningRate, int iterationNum);
+        void updateWeightsAdamNoClear(double learningRate, int iterationNum);  //!< Update weights without clearing gradients
+        void resetGradientsForLSTM();  //!< Reset MLP gradients for LSTM coupling
 
         void onlineBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);    //!< Online backpropagation - separete inp out matrices
         void onlineAdam(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y);  //!< Online backpropagation using Adam algorithm - separete inp out matrices

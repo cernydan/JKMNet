@@ -669,4 +669,9 @@ void Layer::weightsToVector(){
     weightsVector = weights.reshaped<Eigen::RowMajor>();
 }
 
+void Layer::resetAdamState(){
+    MtForAdam.setZero();
+    VtForAdam.setZero();
+}
+
 

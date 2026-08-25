@@ -321,6 +321,25 @@ void JKMNet::init_mlps(){
 }
 
 /**
+ * Initialization of MLPs vector for LSTM (custom input size)
+ */
+void JKMNet::init_mlpsForLSTM(unsigned lstmOutputSize){
+    mlps_.clear();
+    mlps_ = std::vector<MLP>(Nmlps);
+    MLP setMlp;
+    setMlp.setArchitecture(cfg_.mlp_architecture);
+    setMlp.setActivations(strVecToActivationTypes(cfg_.activation));
+    setMlp.setWInitType(std::vector<weight_init_type>(cfg_.mlp_architecture.size(), strToWeightInit(cfg_.weight_init)));
+    // Input size is the LSTM output size (lstm_cells), not the time-series flattened size
+    Eigen::VectorXd x0 = Eigen::VectorXd::Zero(lstmOutputSize);
+    #pragma omp parallel for num_threads(nthreads_)
+    for(unsigned i = 0; i < Nmlps; i++){
+        mlps_[i] = setMlp;
+        mlps_[i].initMLP(x0, cfg_.seed);
+    }
+}
+
+/**
  * Ensemble run - load settings, read data, train, test
  */
 void JKMNet::ensembleRunMlpVector(){
@@ -859,14 +878,15 @@ void JKMNet::ensembleLstmFirstTest(){
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
     // Configure LSTMLayer
+    // For past-only: use outTS=1 since we only need the last time step output (sequence-to-one)
     std::vector<LSTMLayer> lstm_vec(cfg_.ensemble_runs);
     #pragma omp parallel for num_threads(nthreads_)
     for(int i = 0; i < cfg_.ensemble_runs; i++){
-        lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,cfg_.lstm_future_time_steps,true,"XG",cfg_.seed);
+        lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,1,true,"XG",cfg_.seed);
     }
-        // Configure MLP
+    // Configure MLP - input size is lstm_cells (output from LSTM)
     setNmlps(cfg_.ensemble_runs);
-    init_mlps();
+    init_mlpsForLSTM(cfg_.lstm_cells);
 
     std::cout << "-> Ensemble run starting..." << std::endl;
     // ------------------------------------------------------
@@ -895,18 +915,41 @@ void JKMNet::ensembleLstmFirstTest(){
 
         int runIndex = run + 1;
 
+        // Training with gradient accumulation over all patterns
         for(int iter = 1; iter <= cfg_.max_iterations ; iter++){
-            std::cout<<"\n"<< iter<< "\n";
+            if(iter % 50 == 0) {
+                std::cout << "Run " << run_id << " iteration: " << iter << "\n";
+            }
+
+            // Reset gradients at start of each iteration
+            mlps_[run].resetGradientsForLSTM();
+            lstm_vec[run].clearGradients();
+
+            // Accumulate gradients over all training patterns
             for(size_t i = 0; i < X_train.size() ; i++){
+                // Forward pass through LSTM
                 lstm_vec[run].setInputTSSegment(X_train[i]);
                 lstm_vec[run].calculateTimeSteps();
-                mlps_[run].runAndCalculateBatchGradient(lstm_vec[run].getForwardOutputVector(),Y_train.row(i));
+
+                // Get LSTM output for MLP input (last time step only - sequence to one)
+                Eigen::VectorXd lstmOut = lstm_vec[run].getLastTimeStepOutput();
+
+                // Forward + backward pass through MLP (accumulates gradients)
+                mlps_[run].runAndCalculateBatchGradient(lstmOut, Y_train.row(i));
+
+                // Backpropagate delta from MLP to LSTM
                 lstm_vec[run].setDeltaFromNextLayer(mlps_[run].getFirstLayerInputDelta());
+
+                // Calculate LSTM gradients (accumulates)
                 lstm_vec[run].calculateGradients();
-                lstm_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
+
+                // Clear memory for next pattern (but keep gradients)
                 lstm_vec[run].eraseMemory();
             }
+
+            // Update weights after accumulating all gradients
+            lstm_vec[run].updateAdam(cfg_.learning_rate, iter, 0.9, 0.99, 1e-8);
+            mlps_[run].updateWeightsAdamNoClear(cfg_.learning_rate, iter);
         }
 
         logFile << "-> Training finished.\n";
@@ -919,9 +962,9 @@ void JKMNet::ensembleLstmFirstTest(){
         for(size_t i = 0; i < X_train.size() ; i++){
             lstm_vec[run].setInputTSSegment(X_train[i]);
             lstm_vec[run].calculateTimeSteps();
-            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
+            mlps_[run].calcOneOutput(lstm_vec[run].getLastTimeStepOutput());
             Y_pred_calib.row(i) = mlps_[run].getOutput();
-            lstm_vec[run].eraseMemory();
+            // Don't erase memory here - we just need the output
         }
 
         try {
@@ -973,9 +1016,9 @@ void JKMNet::ensembleLstmFirstTest(){
         for(size_t i = 0; i < X_valid.size() ; i++){
             lstm_vec[run].setInputTSSegment(X_valid[i]);
             lstm_vec[run].calculateTimeSteps();
-            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
+            mlps_[run].calcOneOutput(lstm_vec[run].getLastTimeStepOutput());
             Y_pred_valid.row(i) = mlps_[run].getOutput();
-            lstm_vec[run].eraseMemory();
+            // Don't erase memory here - we just need the output
         }
 
         try {
@@ -1097,9 +1140,9 @@ void JKMNet::ensembleLstmPastFutureTest(){
         delta_mlp_to_lstm[i] = Eigen::MatrixXd(cfg_.lstm_cells,cfg_.lstm_future_time_steps);
         separate_obs[i] = Eigen::MatrixXd(1,cfg_.lstm_future_time_steps);
     }
-        // Configure MLP
+    // Configure MLP - input size is lstm_cells (output from combined LSTM)
     setNmlps(cfg_.ensemble_runs);
-    init_mlps();
+    init_mlpsForLSTM(cfg_.lstm_cells);
 
     std::cout << "-> Ensemble run starting..." << std::endl;
     // ------------------------------------------------------
@@ -1128,7 +1171,19 @@ void JKMNet::ensembleLstmPastFutureTest(){
 
         int runIndex = run + 1;
 
+        // Training with gradient accumulation over all patterns
         for(int iter = 1; iter <= cfg_.max_iterations ; iter++){
+            if(iter % 50 == 0) {
+                std::cout << "Run " << run_id << " iteration: " << iter << "\n";
+            }
+
+            // Reset gradients at start of each iteration
+            mlps_[run].resetGradientsForLSTM();
+            lstm_past_vec[run].clearGradients();
+            lstm_future_vec[run].clearGradients();
+            lstm_together_vec[run].clearGradients();
+
+            // Accumulate gradients over all training patterns
             for(size_t i = 0; i < X_trainPast.size() ; i++){
                 lstm_past_vec[run].setInputTSSegment(X_trainPast[i]);
                 lstm_future_vec[run].setInputTSSegment(X_trainFuture[i]);
@@ -1140,24 +1195,36 @@ void JKMNet::ensembleLstmPastFutureTest(){
                 lstm_together_vec[run].calculateTimeSteps();
                 lstm_to_mlp[run] = lstm_together_vec[run].getForwardOutput().transpose();
                 separate_obs[run] = Y_train.row(i);
+
+                // Backpropagate through MLP for each output time step (accumulates gradients)
                 for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
-                    mlps_[run].runAndCalculateBatchGradient(lstm_to_mlp[run].col(s),separate_obs[run].col(s));
+                    mlps_[run].runAndCalculateBatchGradient(lstm_to_mlp[run].col(s), separate_obs[run].col(s));
                     delta_mlp_to_lstm[run].col(s) = mlps_[run].getFirstLayerInputDelta();
-                    mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
                 }
+
+                // Backpropagate from MLP to LSTM
                 lstm_together_vec[run].setDeltaFromNextLayer(delta_mlp_to_lstm[run]);
                 lstm_together_vec[run].calculateGradients();
-                lstm_past_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,0,cfg_.lstm_cells,cfg_.lstm_past_time_steps)));
-                lstm_future_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,cfg_.lstm_past_time_steps,cfg_.lstm_cells,cfg_.lstm_future_time_steps)));
+                Eigen::MatrixXd pastDelta = lstm_together_vec[run].getDeltaInputs()
+                    .block(0,0,cfg_.lstm_cells,cfg_.lstm_past_time_steps);
+                Eigen::MatrixXd futureDelta = lstm_together_vec[run].getDeltaInputs()
+                    .block(0,cfg_.lstm_past_time_steps,cfg_.lstm_cells,cfg_.lstm_future_time_steps);
+                lstm_past_vec[run].setDeltaFromNextLayer(pastDelta);
+                lstm_future_vec[run].setDeltaFromNextLayer(futureDelta);
                 lstm_past_vec[run].calculateGradients();
                 lstm_future_vec[run].calculateGradients();
-                lstm_past_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                lstm_future_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                lstm_together_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
+
+                // Clear forward memory but keep gradients
                 lstm_past_vec[run].eraseMemory();
                 lstm_future_vec[run].eraseMemory();
                 lstm_together_vec[run].eraseMemory();
             }
+
+            // Update weights after accumulating all gradients
+            lstm_past_vec[run].updateAdam(cfg_.learning_rate, iter, 0.9, 0.99, 1e-8);
+            lstm_future_vec[run].updateAdam(cfg_.learning_rate, iter, 0.9, 0.99, 1e-8);
+            lstm_together_vec[run].updateAdam(cfg_.learning_rate, iter, 0.9, 0.99, 1e-8);
+            mlps_[run].updateWeightsAdamNoClear(cfg_.learning_rate, iter);
         }
 
         logFile << "-> Training finished.\n";
@@ -1181,9 +1248,7 @@ void JKMNet::ensembleLstmPastFutureTest(){
                 mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
                 Y_pred_calib(i,s) = mlps_[run].getOutput().value();
             }
-            lstm_past_vec[run].eraseMemory();
-            lstm_future_vec[run].eraseMemory();
-            lstm_together_vec[run].eraseMemory();
+            // Don't erase memory during prediction
         }
 
         try {
@@ -1246,9 +1311,7 @@ void JKMNet::ensembleLstmPastFutureTest(){
                 mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
                 Y_pred_valid(i,s) = mlps_[run].getOutput().value();
             }
-            lstm_past_vec[run].eraseMemory();
-            lstm_future_vec[run].eraseMemory();
-            lstm_together_vec[run].eraseMemory();
+            // Don't erase memory during prediction
         }
 
         try {

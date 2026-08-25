@@ -163,54 +163,75 @@ void LSTMLayer::calculateGradients(){
     int t = settings.timeSteps - 1;
     int c = settings.cells;
 
+    // Initialize deltas for all time steps
+    deltaGates.setZero();
+    deltaCellState.setZero();
+    deltaOutput.setZero();
+
     for(int i = t ; i >= 0 ; i--){
         Eigen::VectorXd delt = Eigen::VectorXd::Zero(c);
+
+        // Add gradient from next layer (only for output time steps)
         if(i >= settings.timeSteps - settings.outTS){
             int idx = i - (settings.timeSteps - settings.outTS);
             delt = nextLayerDelta.col(idx);
         }
 
+        // Add gradient flowing back through recurrent connection
         if(i < t){
             delt += U.transpose() * deltaGates.col(i+1);
         }
         deltaOutput.col(i) = delt;
 
-        deltaCellState.col(i) = deltaOutput.col(i).array() * 
-                                gatesOutputs.col(i).segment(3 * c, c).array() *    //output
-                                (1.0 - tanhCellState.col(i).array().square());
+        // Gradient w.r.t. cell state
+        deltaCellState.col(i) = deltaOutput.col(i).array() *
+                                gatesOutputs.col(i).segment(3 * c, c).array() *    // output gate
+                                (1.0 - tanhCellState.col(i).array().square());     // tanh'
 
+        // Accumulate gradient from future cell state (forget gate path)
         if(i < t){
             deltaCellState.col(i).array() += deltaCellState.col(i+1).array() *
-                                            gatesOutputs.col(i+1).segment(c, c).array(); // forget
+                                            gatesOutputs.col(i+1).segment(c, c).array(); // forget gate
         }
 
-        deltaGates.col(i).segment(0, c) =                                                                //candidate
+        // Candidate gate gradient (tanh)
+        deltaGates.col(i).segment(0, c) =
                                          deltaCellState.col(i).array() *
-                                         gatesOutputs.col(i).segment(2 * c, c).array() *                 //input
-                                         (1.0 - gatesOutputs.col(i).segment(0, c).array().square()); //candidate
+                                         gatesOutputs.col(i).segment(2 * c, c).array() *
+                                         (1.0 - gatesOutputs.col(i).segment(0, c).array().square());
 
-        (i > 0) ? deltaGates.col(i).segment(c, c) =                                                                   //forget
+        // Forget gate gradient (sigmoid)
+        deltaGates.col(i).segment(c, c) =
                                                     deltaCellState.col(i).array() *
-                                                    cellState.col(i-1).array() * 
-                                                    gatesOutputs.col(i).segment(c, c).array() * (1.0 - gatesOutputs.col(i).segment(c, c).array()) :   //forget
-                                                    deltaGates.col(0).segment(c, c).setZero();
-        
-        deltaGates.col(i).segment(2 * c, c) =                                                               //input
-                                             deltaCellState.col(i).array() *
-                                             gatesOutputs.col(i).segment(0, c).array() *                    //candidate
-                                             gatesOutputs.col(i).segment(2 * c, c).array() * (1.0 - gatesOutputs.col(i).segment(2 * c, c).array()); //input
+                                                    cellState.col(i).array() *  // Use current cell state, not previous!
+                                                    gatesOutputs.col(i).segment(c, c).array() *
+                                                    (1.0 - gatesOutputs.col(i).segment(c, c).array());
 
-        deltaGates.col(i).segment(3 * c, c) =                                                               //output
-                                             deltaOutput.col(i).array() * 
-                                             tanhCellState.col(i).array() * 
-                                             gatesOutputs.col(i).segment(3 * c, c).array() * (1.0 - gatesOutputs.col(i).segment(3 * c, c).array()); //output
-        
+        // Input gate gradient (sigmoid)
+        deltaGates.col(i).segment(2 * c, c) =
+                                             deltaCellState.col(i).array() *
+                                             gatesOutputs.col(i).segment(0, c).array() *
+                                             gatesOutputs.col(i).segment(2 * c, c).array() *
+                                             (1.0 - gatesOutputs.col(i).segment(2 * c, c).array());
+
+        // Output gate gradient (sigmoid)
+        deltaGates.col(i).segment(3 * c, c) =
+                                             deltaOutput.col(i).array() *
+                                             tanhCellState.col(i).array() *
+                                             gatesOutputs.col(i).segment(3 * c, c).array() *
+                                             (1.0 - gatesOutputs.col(i).segment(3 * c, c).array());
     }
 
+    // Compute weight gradients: dW/delta = delta * input^T
     Wgradient = deltaGates * timeStepsInputs;
+
+    // Bias gradient is sum over all time steps
     bGradient = deltaGates.rowwise().sum();
+
+    // Recurrent weight gradient: dU/delta = delta * output^T
     Ugradient = deltaGates * output.transpose();
 
+    // Gradient w.r.t. inputs (for layers before this one)
     if(!settings.isFirstLayer){
         deltaInputs = W.transpose() * deltaGates;
     }
@@ -240,19 +261,24 @@ void LSTMLayer::updateAdam(double learningRate, int iterationNum, double beta1, 
 }
 
 void LSTMLayer::eraseMemory(){
+    // Clear forward pass memory
     cellState.setZero();
     tanhCellState.setZero();
     output.setZero();
     timeStepsInputs.setZero();
     gatesActivations.setZero();
     gatesOutputs.setZero();
-    Wgradient.setZero();
-    Ugradient.setZero();
-    bGradient.setZero();
+    forwardOutput.setZero();
+
+    // Clear gradient accumulators (keep these if doing batch accumulation)
+    // Wgradient.setZero();
+    // Ugradient.setZero();
+    // bGradient.setZero();
+
+    // Clear backpropagation deltas
     deltaOutput.setZero();
     deltaCellState.setZero();
     deltaGates.setZero();
-    forwardOutput.setZero();
     nextLayerDelta.setZero();
     if(!settings.isFirstLayer){
         deltaInputs.setZero();
@@ -262,11 +288,32 @@ void LSTMLayer::eraseMemory(){
 void LSTMLayer::setDeltaFromNextLayer(const Eigen::VectorXd& delta){
     if (delta.size() % settings.outTS != 0)
         throw std::logic_error("[setDeltaFromNextLayer] unable to split vector into columns (non-divisible)");
-    nextLayerDelta =  Eigen::Map<const Eigen::MatrixXd>(delta.data(), (delta.size() / settings.outTS), settings.outTS);
+    int numRows = delta.size() / settings.outTS;
+    nextLayerDelta = Eigen::Map<const Eigen::MatrixXd>(delta.data(), numRows, settings.outTS);
 }
-    
+
 void LSTMLayer::setDeltaFromNextLayer(const Eigen::MatrixXd& delta){
-    nextLayerDelta = delta;
+    // Handle both transposed and non-transposed inputs
+    if (delta.cols() == settings.outTS && delta.rows() == settings.cells) {
+        // Standard case: rows = cells, cols = outTS
+        nextLayerDelta = delta;
+    } else if (delta.rows() == settings.cells && delta.cols() >= settings.outTS) {
+        // Take the last outTS columns if we have more time steps
+        nextLayerDelta = delta.rightCols(settings.outTS);
+    } else if (delta.cols() == settings.cells && delta.rows() == settings.outTS) {
+        // Transposed case: transpose to match expected format
+        nextLayerDelta = delta.transpose();
+    } else {
+        throw std::logic_error("[setDeltaFromNextLayer] dimension mismatch: delta " +
+            std::to_string(delta.rows()) + "x" + std::to_string(delta.cols()) +
+            " vs expected cells=" + std::to_string(settings.cells) + ", outTS=" + std::to_string(settings.outTS));
+    }
+}
+
+void LSTMLayer::clearGradients(){
+    Wgradient.setZero();
+    Ugradient.setZero();
+    bGradient.setZero();
 }
 
 Eigen::MatrixXd LSTMLayer::getDeltaInputs(){
@@ -278,5 +325,27 @@ Eigen::MatrixXd LSTMLayer::getForwardOutput(){
 }
 
 Eigen::VectorXd LSTMLayer::getForwardOutputVector(){
-    return forwardOutput.reshaped<Eigen::ColMajor>();
+    // Return flattened output in row-major order (time steps first, then cells)
+    return forwardOutput.reshaped<Eigen::RowMajor>();
+}
+
+Eigen::VectorXd LSTMLayer::getLastTimeStepOutput(){
+    // Return only the last time step output (column) as a vector
+    // forwardOutput is (cells x outTS), we want the last column
+    if (forwardOutput.cols() == 0) {
+        throw std::runtime_error("getLastTimeStepOutput called before forward pass");
+    }
+    return forwardOutput.col(forwardOutput.cols() - 1);
+}
+
+void LSTMLayer::accumulateGradients(const Eigen::MatrixXd& dW, const Eigen::MatrixXd& dU, const Eigen::VectorXd& db){
+    Wgradient += dW;
+    Ugradient += dU;
+    bGradient += db;
+}
+
+void LSTMLayer::resetGradients(){
+    Wgradient.setZero();
+    Ugradient.setZero();
+    bGradient.setZero();
 }

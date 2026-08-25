@@ -98,6 +98,7 @@ public:
     Eigen::VectorXd getOutput(); //!< Getter for output
     Eigen::VectorXd getDeltas(); //!< Getter for deltas
     void setDeltas(const Eigen::VectorXd &newDeltas); //!< Setter for deltas
+    void resetAdamState();  //!< Reset Adam optimizer state variables
 
     static std::string activationName(activ_func_type f);  //!< Mapping activ_func_type from enum to string
     static std::string wInitTypeName(weight_init_type w);  //!< Mapping weight_init_type from enum to string

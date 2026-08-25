@@ -1100,6 +1100,26 @@ void MLP::updateWeightsAdam(double learningRate, int iterationNum){
     }
 }
 
+void MLP::updateWeightsAdamNoClear(double learningRate, int iterationNum){
+    if (layers_.empty())
+        throw std::logic_error("updateWeightsAdamNoClear called before initMLP");
+
+    for(size_t i = 0; i < getNumLayers(); i++){
+        layers_[i].updateAdam(learningRate, iterationNum, 0.9, 0.99, 1e-8);
+        // Do NOT clear gradients - allow accumulation
+    }
+}
+
+void MLP::resetGradientsForLSTM(){
+    if (layers_.empty())
+        return;
+
+    for(size_t i = 0; i < getNumLayers(); i++){
+        // Reset Adam state variables
+        layers_[i].resetAdamState();
+    }
+}
+
 /**
  * Online backpropagation - separete inp out matrices
  */
