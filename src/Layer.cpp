@@ -674,4 +674,25 @@ void Layer::resetAdamState(){
     VtForAdam.setZero();
 }
 
+void Layer::setDeltasFromLossGradient(
+    const Eigen::VectorXd &obs,
+    objective_func_type lossType,
+    double alpha,
+    double alpha2,
+    double epsilon
+) {
+    // Compute gradient of the loss w.r.t. output (simulated values)
+    // The gradient becomes our deltas for backpropagation
+    Eigen::VectorXd sim = output;  // Current layer output is the "prediction"
+
+    if (lossType == objective_func_type::MSE) {
+        // Standard MSE gradient: d/d(sim_i) MSE = 2 * (sim_i - obs_i) / n
+        // We use just (sim - obs) as the constant factor doesn't matter for GD
+        deltas = sim - obs;
+    } else {
+        // Use custom loss gradient from ObjectiveFunctions
+        deltas = ObjectiveFunctions::computeGradient(obs, sim, lossType, alpha, alpha2, epsilon);
+    }
+}
+
 

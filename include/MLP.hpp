@@ -175,13 +175,22 @@ class MLP {
         Eigen::VectorXd getFirstLayerDeltaSum(); //!< Sum deltas of first layer neurons to vector of size 1 for preceding networks
         Eigen::VectorXd getFirstLayerInputDelta();
 
+        // Objective function configuration
+        void setObjectiveFunction(objective_func_type func);  //!< Set objective function type
+        void setObjectiveFunction(const std::string& funcName);  //!< Set objective function by name
+        objective_func_type getObjectiveFunction() const;  //!< Get current objective function
+        void setObjectiveAlpha(double alpha);  //!< Set alpha parameter for combined losses
+        void setObjectiveAlpha2(double alpha2);  //!< Set alpha2 parameter for curvature term
+        double getObjectiveAlpha() const;  //!< Get alpha parameter
+        double getObjectiveAlpha2() const;  //!< Get alpha2 parameter
+
     protected:
 
     private:
         std::vector<unsigned> nNeurons;  //!< The vector of number of neurons per layer
         size_t numLayers;  //!< Cache of nNeurons.size()
-        Eigen::VectorXd Inps;  //!< The vector of inputs  
-        std::vector<activ_func_type> activFuncs;  //!< Vector of activation functions for each layer 
+        Eigen::VectorXd Inps;  //!< The vector of inputs
+        std::vector<activ_func_type> activFuncs;  //!< Vector of activation functions for each layer
         std::vector<weight_init_type> wInitTypes;   //!< Vector of weights initialization for each layer
         std::vector<Layer> layers_;  //!< Private member of the class Layer to store each layer’s state
         Eigen::VectorXd output;  //!< The output vector of mlp
@@ -189,7 +198,13 @@ class MLP {
         Eigen::VectorXd weightsVectorMlp;  //!< The weights vector of all layers
         Eigen::MatrixXd calibCrit;  //>! Matrix of all calibration criteria
         Eigen::MatrixXd validCrit;  //>! Matrix of all validation criteria
-        TrainingResult result; 
-}; 
+        TrainingResult result;
+
+        // Objective function settings for training
+        objective_func_type objectiveFunc_ = objective_func_type::LEVEL_SLOPE;
+        double objectiveAlpha_ = 0.5;
+        double objectiveAlpha2_ = 0.33;
+        double objectiveEpsilon_ = 1e-8;
+};
 
 #endif // MLP_H

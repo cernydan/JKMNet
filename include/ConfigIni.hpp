@@ -101,6 +101,11 @@ struct RunConfig {
     int lstm_cells = 10;
     std::string model_type = "mlp";  // mlp, lstm_first, or lstm_past_future
 
+    // objective function for training
+    std::string objective_function = "LEVEL_SLOPE";  // MSE, DIFF_SLOPE, LEVEL_SLOPE, DIFF_CURVATURE, LEVEL_SLOPE_CURVATURE, NORMALIZED_SLOPE, PERSISTENCE_INDEX, DILATE
+    double objective_alpha = 0.5;  // Weighting parameter for combined losses (α in L2)
+    double objective_alpha2 = 0.33;  // Second weighting parameter for curvature term
+
     // transforms
     std::vector<std::string> transform;
     std::vector<double> transform_alpha;
@@ -496,7 +501,17 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     std::string soptim = get("pso_optimize");
     if (!soptim.empty()) cfg.pso_optimize = parseBool(soptim);
-    
+
+    // objective function settings
+    std::string sobjfunc = get("objective_function");
+    if (!sobjfunc.empty()) cfg.objective_function = trimStr(sobjfunc);
+
+    std::string sobjalpha = get("objective_alpha");
+    if (!sobjalpha.empty()) cfg.objective_alpha = std::stod(sobjalpha);
+
+    std::string sobjalpha2 = get("objective_alpha2");
+    if (!sobjalpha2.empty()) cfg.objective_alpha2 = std::stod(sobjalpha2);
+
     // paths (optional)
     std::string sout = get("out_dir");
     if (!sout.empty()) cfg.out_dir = trimStr(sout);

@@ -2,6 +2,7 @@
 #define LAYER_HPP
 
 #include "eigen-3.4/Eigen/Dense"
+#include "ObjectiveFunctions.hpp"
 
 enum class weight_init_type
 {
@@ -98,6 +99,7 @@ public:
     Eigen::VectorXd getOutput(); //!< Getter for output
     Eigen::VectorXd getDeltas(); //!< Getter for deltas
     void setDeltas(const Eigen::VectorXd &newDeltas); //!< Setter for deltas
+    void setDeltasFromLossGradient(const Eigen::VectorXd &obs, objective_func_type lossType, double alpha = 0.5, double alpha2 = 0.33, double epsilon = 1e-8); //!< Set deltas using custom loss gradient
     void resetAdamState();  //!< Reset Adam optimizer state variables
 
     static std::string activationName(activ_func_type f);  //!< Mapping activ_func_type from enum to string

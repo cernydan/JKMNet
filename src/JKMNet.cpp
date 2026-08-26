@@ -1,5 +1,6 @@
 #include "JKMNet.hpp"
 #include "Metrics.hpp"
+#include "ObjectiveFunctions.hpp"
 
 #include <random>
 #include <iostream>
@@ -106,6 +107,17 @@ TrainingResult JKMNet::trainAdamOnlineSplit(
     mlp.setActivations(activations);
     mlp.setWInitType(weightInits);
 
+    // Configure objective function for training (from cfg_)
+    try {
+        mlp.setObjectiveFunction(cfg_.objective_function);
+        mlp.setObjectiveAlpha(cfg_.objective_alpha);
+        mlp.setObjectiveAlpha2(cfg_.objective_alpha2);
+    } catch (const std::exception &ex) {
+        std::cerr << "[Warning] Failed to set objective function: " << ex.what()
+                  << ". Using default LEVEL_SLOPE.\n";
+        mlp.setObjectiveFunction(objective_func_type::LEVEL_SLOPE);
+    }
+
     // Initialize MLP
     int inputSize = static_cast<int>(X.cols()); // each pattern is a row of inputs (flattened)
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
@@ -184,6 +196,17 @@ TrainingResult JKMNet::trainAdamBatchSplit(
     std::vector<weight_init_type> weightInits(mlpArchitecture.size(), weightsInitType);
     mlp.setActivations(activations);
     mlp.setWInitType(weightInits);
+
+    // Configure objective function for training (from cfg_)
+    try {
+        mlp.setObjectiveFunction(cfg_.objective_function);
+        mlp.setObjectiveAlpha(cfg_.objective_alpha);
+        mlp.setObjectiveAlpha2(cfg_.objective_alpha2);
+    } catch (const std::exception &ex) {
+        std::cerr << "[Warning] Failed to set objective function: " << ex.what()
+                  << ". Using default LEVEL_SLOPE.\n";
+        mlp.setObjectiveFunction(objective_func_type::LEVEL_SLOPE);
+    }
 
     // Initialize MLP
     int inputSize = static_cast<int>(X.cols()); // each pattern is a row of inputs (flattened)

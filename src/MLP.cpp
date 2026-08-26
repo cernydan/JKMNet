@@ -1,4 +1,5 @@
 #include "MLP.hpp"
+#include "ObjectiveFunctions.hpp"
 
 #include <iostream>
 #include <chrono>
@@ -1021,7 +1022,9 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
     calcOneOutput(input);
 
     // Output layer BP
-    layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
+    layers_[layers_.size()-1].setDeltasFromLossGradient(
+        obsOut, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+    );
     layers_[layers_.size()-1].calculateOnlineGradient();
 
     // Remaining layers BP
@@ -1046,7 +1049,9 @@ void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsO
     calcOneOutput(input);
 
     // Output layer BP
-    layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
+    layers_[layers_.size()-1].setDeltasFromLossGradient(
+        obsOut, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+    );
     layers_[layers_.size()-1].calculateOnlineGradient();
 
     // Remaining layers BP
@@ -1068,7 +1073,9 @@ void MLP::runAndCalculateBatchGradient(const Eigen::VectorXd& input, const Eigen
     calcOneOutput(input);
 
     // Output layer BP
-    layers_[layers_.size()-1].setDeltas(layers_[layers_.size()-1].getOutput() - obsOut);
+    layers_[layers_.size()-1].setDeltasFromLossGradient(
+        obsOut, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+    );
     layers_[layers_.size()-1].calculateBatchGradient();
 
     // Remaining layers BP
@@ -1160,8 +1167,10 @@ void MLP::onlineBP(int maxIterations, double maxError, double learningRate, cons
             
             calcOneOutput(currentInp);
 
-            // Output layer BP
-            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            // Output layer BP - use custom objective function for deltas
+            layers_[lastLayerIndex].setDeltasFromLossGradient(
+                currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+            );
             layers_[lastLayerIndex].calculateOnlineGradient();
 
             // Remaining layers BP
@@ -1242,8 +1251,10 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
 
             calcOneOutput(currentInp);
 
-            // Output layer BP
-            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            // Output layer BP - use custom objective function for deltas
+            layers_[lastLayerIndex].setDeltasFromLossGradient(
+                currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+            );
             layers_[lastLayerIndex].calculateOnlineGradient();
 
             // Remaining layers BP
@@ -1329,7 +1340,9 @@ void MLP::batchAdam(int maxIterations, double maxError, int batchSize, double le
                 calcOneOutput(currentInp);
 
                 // Output layer gradient
-                layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+                layers_[lastLayerIndex].setDeltasFromLossGradient(
+                    currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+                );
                 layers_[lastLayerIndex].calculateBatchGradient();
 
                 // Remaining layers BP
@@ -1417,7 +1430,9 @@ void MLP::batchBP(int maxIterations, double maxError, int batchSize, double lear
                 calcOneOutput(currentInp);
 
                 // Output layer gradient
-                layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+                layers_[lastLayerIndex].setDeltasFromLossGradient(
+                    currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+                );
                 layers_[lastLayerIndex].calculateBatchGradient();
 
                 // Remaining layers BP
@@ -1500,11 +1515,13 @@ void MLP::onlinePenalizeBP(int maxIterations, double maxError, double learningRa
         for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = X.row(pat);
             Eigen::VectorXd currentObs = Y.row(pat);
-            
+
             calcOneOutput(currentInp);
 
-            // Output layer BP
-            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            // Output layer BP - use custom objective function for deltas
+            layers_[lastLayerIndex].setDeltasFromLossGradient(
+                currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+            );
             layers_[lastLayerIndex].calculateOnlineGradientPenalize(lambda);
 
             // Remaining layers BP
@@ -1588,8 +1605,10 @@ void MLP::onlineMomentumBP(int maxIterations, double maxError, double learningRa
             
             calcOneOutput(currentInp);
 
-            // Output layer BP
-            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            // Output layer BP - use custom objective function for deltas
+            layers_[lastLayerIndex].setDeltasFromLossGradient(
+                currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+            );
             layers_[lastLayerIndex].calculateOnlineGradient();
 
             // Remaining layers BP
@@ -1705,8 +1724,10 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
 
             calcOneOutput(currentInp);
 
-            // Output layer BP
-            layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+            // Output layer BP - use custom objective function for deltas
+            layers_[lastLayerIndex].setDeltasFromLossGradient(
+                currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+            );
             layers_[lastLayerIndex].calculateOnlineGradient();
 
             // Remaining layers BP
@@ -2061,7 +2082,9 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
                 calcOneOutput(currentInp);
 
                 // Output layer gradient
-                layers_[lastLayerIndex].setDeltas(layers_[lastLayerIndex].getOutput() - currentObs);
+                layers_[lastLayerIndex].setDeltasFromLossGradient(
+                    currentObs, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+                );
                 layers_[lastLayerIndex].calculateBatchGradient();
 
                 // Remaining layers BP
@@ -2712,4 +2735,33 @@ Eigen::VectorXd MLP::getFirstLayerInputDelta(){
     delt = layers_[0].getWeights().transpose() * layers_[0].getDeltas();
     delt.conservativeResize(delt.size() - 1);
     return delt;
+}
+
+// Objective function configuration methods
+void MLP::setObjectiveFunction(objective_func_type func) {
+    objectiveFunc_ = func;
+}
+
+void MLP::setObjectiveFunction(const std::string& funcName) {
+    objectiveFunc_ = ObjectiveFunctions::fromString(funcName);
+}
+
+objective_func_type MLP::getObjectiveFunction() const {
+    return objectiveFunc_;
+}
+
+void MLP::setObjectiveAlpha(double alpha) {
+    objectiveAlpha_ = alpha;
+}
+
+void MLP::setObjectiveAlpha2(double alpha2) {
+    objectiveAlpha2_ = alpha2;
+}
+
+double MLP::getObjectiveAlpha() const {
+    return objectiveAlpha_;
+}
+
+double MLP::getObjectiveAlpha2() const {
+    return objectiveAlpha2_;
 }
