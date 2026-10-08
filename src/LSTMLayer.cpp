@@ -163,11 +163,6 @@ void LSTMLayer::calculateGradients(){
     int t = settings.timeSteps - 1;
     int c = settings.cells;
 
-    // Initialize deltas for all time steps
-    deltaGates.setZero();
-    deltaCellState.setZero();
-    deltaOutput.setZero();
-
     for(int i = t ; i >= 0 ; i--){
         Eigen::VectorXd delt = Eigen::VectorXd::Zero(c);
 
@@ -201,11 +196,13 @@ void LSTMLayer::calculateGradients(){
                                          (1.0 - gatesOutputs.col(i).segment(0, c).array().square());
 
         // Forget gate gradient (sigmoid)
-        deltaGates.col(i).segment(c, c) =
+
+        (i > 0) ? deltaGates.col(i).segment(c, c) =                                                                  
                                                     deltaCellState.col(i).array() *
-                                                    cellState.col(i).array() *  // Use current cell state, not previous!
-                                                    gatesOutputs.col(i).segment(c, c).array() *
-                                                    (1.0 - gatesOutputs.col(i).segment(c, c).array());
+                                                    cellState.col(i-1).array() * 
+                                                    gatesOutputs.col(i).segment(c, c).array() * (1.0 - gatesOutputs.col(i).segment(c, c).array()) : 
+                                                    deltaGates.col(0).segment(c, c).setZero();
+        
 
         // Input gate gradient (sigmoid)
         deltaGates.col(i).segment(2 * c, c) =
@@ -326,7 +323,7 @@ Eigen::MatrixXd LSTMLayer::getForwardOutput(){
 
 Eigen::VectorXd LSTMLayer::getForwardOutputVector(){
     // Return flattened output in row-major order (time steps first, then cells)
-    return forwardOutput.reshaped<Eigen::RowMajor>();
+    return forwardOutput.reshaped<Eigen::ColMajor>();
 }
 
 Eigen::VectorXd LSTMLayer::getLastTimeStepOutput(){

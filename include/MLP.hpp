@@ -184,6 +184,14 @@ class MLP {
         double getObjectiveAlpha() const;  //!< Get alpha parameter
         double getObjectiveAlpha2() const;  //!< Get alpha2 parameter
 
+        // Horizon-vector objective support (for LSTM trainers):
+        // Compute the loss gradient w.r.t. the full horizon prediction vector
+        // and backpropagate it through the per-step inputs. Returns per-step
+        // first-layer input deltas (rows = inputs, cols = steps) scaled by the
+        // horizon gradient, for feeding deltas back into a preceding LSTM.
+        Eigen::MatrixXd horizonBackprop(const std::vector<Eigen::VectorXd> &stepInputs,
+                                        const Eigen::VectorXd &obsHorizon);
+
     protected:
 
     private:

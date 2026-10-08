@@ -2765,3 +2765,55 @@ double MLP::getObjectiveAlpha() const {
 double MLP::getObjectiveAlpha2() const {
     return objectiveAlpha2_;
 }
+Eigen::MatrixXd MLP::horizonBackprop(const std::vector<Eigen::VectorXd> &stepInputs,
+                                     const Eigen::VectorXd &obsHorizon) {
+    if (layers_.empty())
+        throw std::logic_error("horizonBackprop called before initMLP");
+    const int n = static_cast<int>(obsHorizon.size());
+    if (static_cast<int>(stepInputs.size()) != n)
+        throw std::invalid_argument("horizonBackprop: stepInputs count must match horizon length");
+
+    // Forward pass per future step; collect the prediction and the
+    // first-layer input delta per unit output (used to scale the horizon
+    // gradient when feeding deltas back to the preceding LSTM)
+    Eigen::VectorXd simHorizon(n);
+    Eigen::MatrixXd unitDeltas(layers_[0].getWeights().cols() - 1, n);
+    Eigen::VectorXd dUnit(1);
+    dUnit(0) = 1.0;
+    for (int s = 0; s < n; ++s) {
+        calcOneOutput(stepInputs[s]);
+        simHorizon(s) = output(0);
+        layers_[layers_.size()-1].setDeltas(dUnit);
+        if (layers_.size() > 1) {
+            for (int i = static_cast<int>(layers_.size()) - 2; i >= 0; --i) {
+                layers_[i].calculateDeltas(layers_[i+1].getWeights(), layers_[i+1].getDeltas(), activFuncs[i]);
+            }
+        }
+        Eigen::VectorXd delt = layers_[0].getWeights().transpose() * layers_[0].getDeltas();
+        unitDeltas.col(s) = delt.head(delt.size() - 1);
+    }
+
+    // Gradient of the objective w.r.t. the full horizon prediction vector
+    Eigen::VectorXd grad = ObjectiveFunctions::computeGradient(
+        obsHorizon, simHorizon, objectiveFunc_, objectiveAlpha_, objectiveAlpha2_, objectiveEpsilon_
+    );
+
+    // Backprop each step with its gradient component; calculateBatchGradient
+    // accumulates, so all steps contribute before a single Adam update
+    Eigen::VectorXd d(1);
+    for (int s = 0; s < n; ++s) {
+        calcOneOutput(stepInputs[s]);
+        d(0) = grad(s);
+        layers_[layers_.size()-1].setDeltas(d);
+        layers_[layers_.size()-1].calculateBatchGradient();
+        if (layers_.size() > 1) {
+            for (int i = static_cast<int>(layers_.size()) - 2; i >= 0; --i) {
+                layers_[i].calculateDeltas(layers_[i+1].getWeights(), layers_[i+1].getDeltas(), activFuncs[i]);
+                layers_[i].calculateBatchGradient();
+            }
+        }
+    }
+
+    // Per-step first-layer input deltas, each scaled by its gradient component
+    return unitDeltas.array().rowwise() * grad.transpose().array();
+}
