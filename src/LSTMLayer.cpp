@@ -1,3 +1,8 @@
+/**
+ * @file LSTMLayer.cpp
+ * @brief Implements LSTMLayer — LSTM forward pass over a time-step segment, BPTT gradient computation, and weight updates.
+ */
+
 #include "LSTMLayer.hpp"
 #include <iostream>
 #include <random>

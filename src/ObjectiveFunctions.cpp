@@ -1,3 +1,7 @@
+/**
+ * @file ObjectiveFunctions.cpp
+ * @brief Implements ObjectiveFunctions — loss functions and their gradients for network training.
+ */
 #include "ObjectiveFunctions.hpp"
 #include <stdexcept>
 #include <cmath>

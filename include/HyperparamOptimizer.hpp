@@ -1,9 +1,13 @@
-#ifndef HYPERPARAM_OPTIM_HPP
-#define HYPERPARAM_OPTIM_HPP
+/**
+ * @file HyperparamOptimizer.hpp
+ * @brief Declares the PSO-based hyperparameter optimizer driver for JKMNet.
+ */
+
+#ifndef HYPERPARAM_OPT_HPP
+#define HYPERPARAM_OPT_HPP
 
 #include "ConfigIni.hpp"
-#include "PSO.hpp"
 
-RunConfig optimizeHyperparams(const RunConfig& cfg_in);  //!< Run PSO optimization and update config accordingly
+RunConfig optimizeHyperparams(const RunConfig &cfg);  //!< Run PSO optimization of MLP hyperparameters and return the updated configuration
 
-#endif // HYPERPARAM_OPTIM_HPP
+#endif // HYPERPARAM_OPT_HPP

@@ -1,3 +1,7 @@
+/**
+ * @file Layer.cpp
+ * @brief Implements Layer — forward pass, backpropagation gradients and weight update rules of one fully-connected layer.
+ */
 #include "Layer.hpp"
 #include <iostream>
 #include <random>
@@ -80,7 +84,10 @@ Layer& Layer::operator=(const Layer& other){
   return *this;
 
 }
- //!< The move copy constructor
+
+/**
+ * The move copy constructor
+ */
 Layer::Layer(Layer&& other) noexcept
     : weights(std::move(other.weights)),
       weightsVector(std::move(other.weightsVector)),
@@ -95,8 +102,10 @@ Layer::Layer(Layer&& other) noexcept
       previousWeights(std::move(other.previousWeights)) {
 
 }
-   
-//!< The move assignment operator
+
+/**
+ * The move assignment operator
+ */
 Layer& Layer::operator=(Layer&& other) noexcept {
      if (this == &other) return *this;
   else {
@@ -399,7 +408,7 @@ void Layer::updateWeightsMomentum(double learningRate, double moment) {
 }
 
 /**
- * Apply a gradient calculation using ADAM algorithm
+ * Apply a gradient calculation using the Adam algorithm (with bias correction of both moment estimates)
  */
 void Layer::updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi) {
     MtForAdam = beta1 * MtForAdam.array() + (1 - beta1) * weightGrad.array();
@@ -669,6 +678,9 @@ void Layer::weightsToVector(){
     weightsVector = weights.reshaped<Eigen::RowMajor>();
 }
 
+/**
+ * Reset the Adam optimizer state variables (MtForAdam and VtForAdam) to zero
+ */
 void Layer::resetAdamState(){
     MtForAdam.setZero();
     VtForAdam.setZero();

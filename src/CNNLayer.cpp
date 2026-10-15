@@ -1,3 +1,8 @@
+/**
+ * @file CNNLayer.cpp
+ * @brief Implements CNNLayer — 1D convolution, pooling, forward pass, and gradient computation with Adam filter updates.
+ */
+
 #include "CNNLayer.hpp"
 #include <iostream>
 #include <random>
@@ -163,7 +168,7 @@ Eigen::MatrixXd CNNLayer::getFilters1D(){
 }
 
  /**
- *  Getter: Returns the current architecture (vector of neurons in each layer)
+ *  Setter for the current 1D input matrix
  */
 void CNNLayer::setCurrentInput1D(const Eigen::MatrixXd& currentInp){
     currentInput1D = currentInp;

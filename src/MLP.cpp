@@ -1,3 +1,11 @@
+/**
+ * @file MLP.cpp
+ * @brief Implements MLP — the multilayer perceptron: forward propagation, backpropagation
+ *        (plain gradient descent, momentum, weight penalization, and Adam), batch and
+ *        online training with per-epoch metrics, weight I/O, and horizon backpropagation
+ *        used to couple the MLP to a preceding LSTM.
+ */
+
 #include "MLP.hpp"
 #include "ObjectiveFunctions.hpp"
 
@@ -15,6 +23,8 @@ using namespace std::chrono;
 /**
  * The constructor
  */
+/// Implements the default constructor. All members are default-constructed;
+/// layers are created later by initMLP or a loadWeigths* call.
 MLP::MLP()
     : nNeurons(),
       numLayers(0),
@@ -43,6 +53,8 @@ MLP::~MLP(){
 /**
  * The copy constructor
  */
+/// Implements the copy constructor. All members are copied; Eigen and
+/// std::vector members are deep-copied automatically.
 MLP::MLP(const MLP& other)
     : nNeurons(other.nNeurons),
       numLayers(other.numLayers),
@@ -63,6 +75,7 @@ MLP::MLP(const MLP& other)
 /**
  * The assignment operator
  */
+/// Implements the copy assignment operator. Guarded against self-assignment.
 MLP& MLP::operator=(const MLP& other){
     if (this == &other) return *this;
   else {
@@ -86,6 +99,7 @@ MLP& MLP::operator=(const MLP& other){
 /**
  *  Move constructor
  */
+/// Implements the move constructor. Steals all Eigen/vector members from @p other.
 MLP::MLP(MLP&& other) noexcept
     : nNeurons(std::move(other.nNeurons)),
       numLayers(other.numLayers),
@@ -105,6 +119,7 @@ MLP::MLP(MLP&& other) noexcept
 /**
  *  Move assignment operator
  */
+/// Implements the move assignment operator. Guarded against self-assignment.
 MLP& MLP::operator=(MLP&& other) noexcept {
     if (this != &other) {
         nNeurons       = std::move(other.nNeurons);
@@ -124,8 +139,9 @@ MLP& MLP::operator=(MLP&& other) noexcept {
 }
 
 /**
- *  Getter: Returns the current architecture (vector of neurons in each layer)
+ *  Getter: Returns the current architecture (vector of neurons per layer, including the input layer)
  */
+/// Implements getArchitecture.
 std::vector<unsigned> MLP::getArchitecture() {
     return nNeurons;
 }
@@ -133,6 +149,9 @@ std::vector<unsigned> MLP::getArchitecture() {
 /**
  *  Setter: Sets the architecture from a vector
  */
+/// Implements setArchitecture. Architectures includes the input layer (nNeurons[0] =
+/// number of inputs). Also caches numLayers and, if activations were not yet
+/// supplied (or their count no longer matches), fills them with the default ReLU.
 void MLP::setArchitecture(const std::vector<unsigned>& architecture) {
     nNeurons = architecture;
     numLayers = nNeurons.size();
@@ -145,6 +164,7 @@ void MLP::setArchitecture(const std::vector<unsigned>& architecture) {
 /**
  *  Print the architecture
  */
+/// Implements printArchitecture. Prints the layer sizes as "n0 -> n1 -> ... -> nL".
 void MLP::printArchitecture() {
     std::cout << "MLP Architecture: ";
     numLayers = nNeurons.size();
@@ -162,6 +182,7 @@ void MLP::printArchitecture() {
 /**
  *  Getter: Returns the current activation functions for each layer
  */
+/// Implements getActivations.
 std::vector<activ_func_type> MLP::getActivations() {
     return activFuncs;
 }
@@ -169,6 +190,8 @@ std::vector<activ_func_type> MLP::getActivations() {
 /**
  *  Setter: Sets the activation functions
  */
+/// Implements setActivations.
+/// @throw std::invalid_argument If @p funcs does not have one entry per entry of nNeurons.
 void MLP::setActivations(const std::vector<activ_func_type>& funcs) {
     if (funcs.size() != nNeurons.size()) {
         throw std::invalid_argument("[MLP] Activation vector length must match number of layers");
@@ -179,6 +202,7 @@ void MLP::setActivations(const std::vector<activ_func_type>& funcs) {
 /**
  *  Print the activation functions
  */
+/// Implements printActivations.
 void MLP::printActivations() {
     if (activFuncs.empty()) {
         std::cout << "No activation functions set.\n";
@@ -196,6 +220,7 @@ void MLP::printActivations() {
 /**
  *  Getter: Returns the weight initialization type for each layer
  */
+/// Implements getWInitType.
 std::vector<weight_init_type> MLP::getWInitType() {
     return wInitTypes;
 }
@@ -203,6 +228,8 @@ std::vector<weight_init_type> MLP::getWInitType() {
 /**
  *  Setter: Sets the weight initialization type
  */
+/// Implements setWInitType.
+/// @throw std::invalid_argument If @p wInits does not have one entry per entry of nNeurons.
 void MLP::setWInitType(const std::vector<weight_init_type>& wInits) {
     if (wInits.size() != nNeurons.size()) {
         throw std::invalid_argument(
@@ -215,6 +242,7 @@ void MLP::setWInitType(const std::vector<weight_init_type>& wInits) {
 /**
  *  Print the weight initialization type
  */
+/// Implements printWInitType.
 void MLP::printWInitType() {
     if (wInitTypes.empty()) {
         std::cout << "No weight init types set.\n";
@@ -232,6 +260,7 @@ void MLP::printWInitType() {
 /**
  * Getter for the number of layers
  */
+/// Implements getNumLayers.
 size_t MLP::getNumLayers() const {
     return numLayers; 
 }
@@ -239,6 +268,8 @@ size_t MLP::getNumLayers() const {
 /**
  * Setter for the number of layers
  */
+/// Implements setNumLayers. Warns on std::cerr if the new count does not match
+/// the size of the already set architecture.
 void MLP::setNumLayers(size_t layers) {
     numLayers = layers; 
   
@@ -255,6 +286,8 @@ void MLP::setNumLayers(size_t layers) {
 /**
  * Getter for the number of inputs
  */
+/// Implements getNumInputs. The number of inputs equals the size of the first
+/// layer (nNeurons[0]); returns 0 when no architecture has been set.
 unsigned MLP::getNumInputs() {
     if (nNeurons.empty()) {
         return 0u;  // an unsigned zero
@@ -266,6 +299,8 @@ unsigned MLP::getNumInputs() {
 /**
  * Setter for the number of inputs
  */
+/// Implements setNumInputs. Creates the first layer if the architecture is still
+/// empty, otherwise overwrites the neuron count of the first layer.
 void MLP::setNumInputs(unsigned inputs) {
     // if no layers are defined yet, we create the first layer and set its size to 'inputs'
     if (nNeurons.empty()) {
@@ -282,6 +317,8 @@ void MLP::setNumInputs(unsigned inputs) {
 /**
  * Get the number of neurons at a specific layer index
  */
+/// Implements getNumNeuronsInLayers.
+/// @throw std::out_of_range If @p index is outside the architecture.
 unsigned MLP::getNumNeuronsInLayers(std::size_t index) {
     if (index >= nNeurons.size()) {
         throw std::out_of_range("[Error]: Layer index out of range");
@@ -292,6 +329,8 @@ unsigned MLP::getNumNeuronsInLayers(std::size_t index) {
 /**
  * Set the number of neurons at a specific layer index
  */
+/// Implements setNumNeuronsInLayers.
+/// @throw std::out_of_range If @p index is outside the architecture.
 void MLP::setNumNeuronsInLayers(std::size_t index, unsigned count) {
     if (index >= nNeurons.size()) {
         throw std::out_of_range("[Error]: Layer index out of range");
@@ -302,6 +341,7 @@ void MLP::setNumNeuronsInLayers(std::size_t index, unsigned count) {
 /**
  * Getter for the inputs
  */
+/// Implements getInps. Returns the stored input vector including the appended bias slot.
 Eigen::VectorXd& MLP::getInps() {
     return Inps;
 }
@@ -309,6 +349,8 @@ Eigen::VectorXd& MLP::getInps() {
 /**
  * Setter for the inputs
  */
+/// Implements setInps. Stores the input vector with an extra element equal to 1.0
+/// appended at the end, i.e. Inps has size inputs.size() + 1 (real inputs + bias).
 void MLP::setInps(Eigen::VectorXd& inputs) {
     // Resize to (real inputs + bias):
     Inps.resize(inputs.size() + 1);
@@ -317,8 +359,10 @@ void MLP::setInps(Eigen::VectorXd& inputs) {
 }
 
 /**
- * Getter for the weights
+ * Getter for the weights of one layer
  */
+/// Implements getWeights.
+/// @throw std::out_of_range If @p idx is not a valid layer index.
 Eigen::MatrixXd MLP::getWeights(size_t idx) const {
     if (idx >= layers_.size())
       throw std::out_of_range("Layer index out of range in getWeights");
@@ -326,8 +370,10 @@ Eigen::MatrixXd MLP::getWeights(size_t idx) const {
 }
 
 /**
- * Setter for the weights
+ * Setter for the weights of one layer
  */
+/// Implements setWeights.
+/// @throw std::out_of_range If @p idx is not a valid layer index.
 void MLP::setWeights(size_t idx, const Eigen::MatrixXd& W) {
     if (idx >= layers_.size())
       throw std::out_of_range("Layer index out of range in setWeights");
@@ -335,15 +381,19 @@ void MLP::setWeights(size_t idx, const Eigen::MatrixXd& W) {
 }
 
 /**
- * Getter for weights vector of MLP
+ * Getter for the flattened weights vector of the whole MLP
  */
+/// Implements getWeightsVectorMlp. Call weightsToVectorMlp first to (re)fill it.
 Eigen::VectorXd MLP::getWeightsVectorMlp(){
     return weightsVectorMlp;
 }
 
 /**
- * Merge weight vectors of all layers
+ * Merge weight vectors of all layers into one flat vector
  */
+/// Implements weightsToVectorMlp. Flattens each layer's weight matrix via
+/// Layer::weightsToVector and concatenates them layer by layer (layer 0 first)
+/// into weightsVectorMlp.
 void MLP::weightsToVectorMlp(){
     int length = 0;
     for(size_t i = 0; i < layers_.size(); i++){
@@ -362,6 +412,10 @@ void MLP::weightsToVectorMlp(){
 /**
  * Save weights in readable CSV text (per-layer blocks)
  */
+/// Implements saveWeightsCsv. Creates parent directories when needed. Each layer
+/// block is introduced by a "#layer,<idx>,<rows>,<cols>" header line followed by
+/// the matrix rows as comma-separated values with a precision of 12 digits.
+/// @return true on success, false (with a message on std::cerr) otherwise.
 bool MLP::saveWeightsCsv(const std::string &path) const {
     namespace fs = std::filesystem;
 
@@ -415,6 +469,9 @@ bool MLP::saveWeightsCsv(const std::string &path) const {
 /**
  * Save weights in compact binary
  */
+/// Implements saveWeightsBinary. Layout: size_t layer count, then for each layer
+/// two uint64_t dimension values followed by the doubles in row-major order.
+/// @return true on success, false (with a message on std::cerr) otherwise.
 bool MLP::saveWeightsBinary(const std::string &path) const {
     try {
         std::filesystem::path p(path);
@@ -446,8 +503,12 @@ bool MLP::saveWeightsBinary(const std::string &path) const {
 }
 
 /**
- * Save vector of weights in readable CSV text (per-layer blocks)
+ * Save the flattened weights vector as readable CSV text
  */
+/// Implements saveWeightsVectorCsv. Writes weightsVectorMlp one value per line
+/// (a column vector); it does NOT refresh weightsVectorMlp, so
+/// weightsToVectorMlp should be called beforehand.
+/// @return true on success, false (with a message on std::cerr) otherwise.
 bool MLP::saveWeightsVectorCsv(const std::string &path) const {
     namespace fs = std::filesystem;
     if (path.empty()) {
@@ -487,8 +548,11 @@ bool MLP::saveWeightsVectorCsv(const std::string &path) const {
 }
 
 /**
- * Save vector of weights in compact binary
+ * Save the flattened weights vector in compact binary
  */
+/// Implements saveWeightsVectorBinary. Layout: int64_t length followed by the
+/// raw doubles of weightsVectorMlp.
+/// @return true on success, false (with a message on std::cerr) otherwise.
 bool MLP::saveWeightsVectorBinary(const std::string &path) const {
     try {
         std::filesystem::path p(path);
@@ -510,8 +574,17 @@ bool MLP::saveWeightsVectorBinary(const std::string &path) const {
 }
 
 /**
- * Save vector of weights inside one file for ensemble run
+ * Save the flattened weights vector inside one shared file for an ensemble run
  */
+/// Implements appendWeightsVectorCsv. Collects the weights of several ensemble
+/// members in a single CSV file where each column is one member:
+/// - on the first run (@p isFirstRun == true) the file is (re)created and the
+///   vector is written as the first column;
+/// - on subsequent runs the existing file is parsed, one column is appended to
+///   each row, and the file is rewritten.
+/// @return true on success, false (with a message on std::cerr) otherwise.
+/// @note Fails if the row count of the existing file does not match
+///       weightsVectorMlp.size().
 bool MLP::appendWeightsVectorCsv(const std::string &path, bool isFirstRun) const {
     namespace fs = std::filesystem;
     if (path.empty()) {
@@ -590,8 +663,15 @@ bool MLP::appendWeightsVectorCsv(const std::string &path, bool isFirstRun) const
 }
 
 /**
- * Load weights from CSV text (per-layer blocks)
+ * Load weights from CSV text (per-layer blocks) and rebuild the MLP
  */
+/// Implements loadWeightsCsv. Parses the "#layer,<idx>,<rows>,<cols>" blocks
+/// written by saveWeightsCsv, then re-creates all layers with
+/// weight_init_type::RANDOM immediately overwritten by the loaded weights.
+/// The architecture (nNeurons) is derived from the stored matrix dimensions;
+/// @p confPath (an .ini config) provides the activation function name,
+/// defaulting to LINEAR when unavailable.
+/// @return true on success, false (with a message on std::cerr) otherwise.
 bool MLP::loadWeightsCsv(const std::string &wPath, const std::string &confPath) {
     if (wPath.empty()) {
         std::cerr << "[MLP::loadWeightsCsv] wPath is empty\n";
@@ -705,8 +785,15 @@ bool MLP::loadWeightsCsv(const std::string &wPath, const std::string &confPath) 
 }
 
 /**
- * Load weights in compact binary
+ * Load weights in compact binary and rebuild the MLP
  */
+/// Implements loadWeightsBinary. Reads the layout written by saveWeightsBinary.
+/// @p confPath (an .ini config) is required and provides the activation function
+/// name for the rebuilt layers.
+/// @note Unlike loadWeightsCsv this does not rebuild nNeurons/numLayers.
+/// @todo check semantics: comment claims nNeurons is not rebuilt here; verify
+///       this is intended (the layer count L from the file drives layers_ only).
+/// @return true on success, false (with a message on std::cerr) otherwise.
 bool MLP::loadWeightsBinary(const std::string &wPath, const std::string &confPath) {
     try {
         std::ifstream ifs(wPath, std::ios::binary);
@@ -783,8 +870,17 @@ bool MLP::loadWeightsBinary(const std::string &wPath, const std::string &confPat
 }
 
 /**
- * Load weights vector from CSV text
+ * Load the flattened weights vector from CSV text and rebuild the MLP
  */
+/// Implements loadWeightsVectorCsv. The architecture and activation function are
+/// taken from the .ini config at @p confPath; the flat vector @p wPath is then
+/// split into per-layer weight matrices by walking the architecture backwards
+/// (layers are stored in order 0..L-1, each matrix is rows=nNeurons[l],
+/// cols=nNeurons[l-1]+1 including the bias column, row-major). Layer 0 takes the
+/// remainder of the vector, so its column count (real inputs + 1 bias) is
+/// inferred from the data.
+/// @throw std::runtime_error If the vector is too short for the architecture or
+///        its remainder is not divisible by nNeurons[0].
 bool MLP::loadWeightsVectorCsv(const std::string &wPath, const std::string &confPath) {
     if (wPath.empty()) {
         std::cerr << "[MLP::loadWeightsVectorCsv] wPath is empty\n";
@@ -886,6 +982,7 @@ bool MLP::loadWeightsVectorCsv(const std::string &wPath, const std::string &conf
 /**
  * Getter for output
  */
+/// Implements getOutput. Returns the last output produced by calcOneOutput.
 Eigen::VectorXd& MLP::getOutput(){
     return output;
 }
@@ -893,6 +990,9 @@ Eigen::VectorXd& MLP::getOutput(){
 /**
  * Validate the size of the inputs compared to nNeurons[0]
  */
+/// Implements validateInputSize. Fails (returns false, message on std::cerr) when
+/// no architecture is set, when Inps is empty, or when Inps.size() - 1 (inputs
+/// excluding the bias slot) does not equal nNeurons[0].
 bool MLP::validateInputSize() {
     // There has to be an input layer
     if (nNeurons.empty()) {
@@ -921,8 +1021,17 @@ bool MLP::validateInputSize() {
 }
 
 /**
- * Forward pass through all layers
+ * Initialize all layers (with freshly randomized weights) and run a forward pass
  */
+/// Implements initMLP. (Re)creates every Layer according to nNeurons, activFuncs
+/// and wInitTypes, initializing each layer's weights with @p rngSeed, then
+/// propagates @p input layer by layer: layer 0 consumes the raw input, every
+/// later layer consumes the previous layer's output.
+/// @note Weight matrix of layer l has shape nNeurons[l] x (numInputs + 1); the
+///       extra column is the bias, added internally by Layer::setInputs.
+/// @throw std::logic_error If architecture/activations/weight-init vectors are
+///        empty or of mismatched sizes.
+/// @return Output of the last layer (length nNeurons.back()).
 Eigen::VectorXd MLP::initMLP(const Eigen::VectorXd& input, int rngSeed) {
     if (nNeurons.empty() || activFuncs.size() != nNeurons.size() || wInitTypes.size() != nNeurons.size())
         throw std::logic_error("MLP not fully configured (architecture/activ/weight init mismatch)");
@@ -964,6 +1073,10 @@ Eigen::VectorXd MLP::initMLP(const Eigen::VectorXd& input, int rngSeed) {
 /**
  * Forward pass reusing existing weights
  */
+/// Implements runMLP. Same layer-by-layer propagation as initMLP but keeps the
+/// current weights. Also refreshes the member Inps (with bias) inside each layer.
+/// @throw std::logic_error If called before initMLP (layers_ is empty).
+/// @return Output of the last layer (length nNeurons.back()).
 Eigen::VectorXd MLP::runMLP(const Eigen::VectorXd& input) {
     if (layers_.empty())
         throw std::logic_error("runMLP called before initMLP");
@@ -985,6 +1098,9 @@ Eigen::VectorXd MLP::runMLP(const Eigen::VectorXd& input) {
 /**
  * Compare if 'initMLP' and 'runMLP' produce the same output
  */
+/// Implements compareInitAndRun. Works on a local copy so the object's state is
+/// left untouched: initMLP re-initializes weights with @p rngSeed, runMLP then
+/// reuses them; outputs compared elementwise with tolerance @p tol.
 bool MLP::compareInitAndRun(const Eigen::VectorXd& input, double tol, int rngSeed) const {
     // Make a local copy of *this* so we can init on the copy
     MLP tmp = *this;
@@ -997,6 +1113,10 @@ bool MLP::compareInitAndRun(const Eigen::VectorXd& input, double tol, int rngSee
 /**
  * Test that 'runMLP' produces the same results over times
  */
+/// Implements testRepeatable. Works on a local copy: after one initMLP (baseline
+/// output), runMLP is executed @p repeats times; each output must match the
+/// baseline within @p tol (runMLP must be deterministic and side-effect free
+/// with respect to the weights).
 bool MLP::testRepeatable(const Eigen::VectorXd& input, int repeats, double tol, int rngSeed) const {
     // Initialize once to get the baseline output
     MLP tmp = *this;
@@ -1015,6 +1135,14 @@ bool MLP::testRepeatable(const Eigen::VectorXd& input, int repeats, double tol, 
 /**
  * Forward pass and update weights with backpropagation (one input)
  */
+/// Implements runAndBP — one online (single-pattern) SGD step:
+/// 1. forward pass via calcOneOutput,
+/// 2. output-layer deltas from the configured loss gradient
+///    (Layer::setDeltasFromLossGradient), then its online gradient,
+/// 3. deltas chain-ruled backwards: delta_l = (W_{l+1}^T delta_{l+1}) odot f'(z_l),
+///    each hidden layer's online gradient computed on the way,
+/// 4. plain weight updates W -= learningRate * grad in every layer.
+/// @throw std::logic_error If called before initMLP.
 void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate) {
     if (layers_.empty())
         throw std::logic_error("runMLP called before initMLP");
@@ -1042,6 +1170,11 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
 /**
  * Forward pass and update weights with Adam algorithm (one input)
  */
+/// Implements runAndBPadam. Same forward + backpropagation order as runAndBP,
+/// but the weight update uses Adam (Layer::updateAdam) with fixed hyperparameters
+/// beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8.
+/// @param iterationNum 1-based step counter passed to Adam for the bias
+///        correction of the first and second moment estimates.
 void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate, int iterationNum) {
     if (layers_.empty())
         throw std::logic_error("runMLP called before initMLP");
@@ -1066,6 +1199,12 @@ void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsO
     }
 }
 
+/// Implements runAndCalculateBatchGradient. Same forward + backpropagation order
+/// as runAndBP, but gradients are only accumulated per layer
+/// (Layer::calculateBatchGradient sums dE/dW over the batch) — no weight update
+/// happens here; call updateWeights / updateWeightsAdam afterwards to apply and
+/// clear the accumulated gradient.
+/// @throw std::logic_error If called before initMLP.
 void MLP::runAndCalculateBatchGradient(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut) {
     if (layers_.empty())
         throw std::logic_error("runMLP called before initMLP");
@@ -1087,6 +1226,10 @@ void MLP::runAndCalculateBatchGradient(const Eigen::VectorXd& input, const Eigen
     }
 }
 
+/// Implements updateWeights. Applies one plain SGD step per layer from the
+/// accumulated gradient (W -= learningRate * grad) and then zeroes the gradient
+/// so the next batch accumulates from scratch.
+/// @throw std::logic_error If called before initMLP.
 void MLP::updateWeights(double learningRate){
     if (layers_.empty())
         throw std::logic_error("updateWeights called before initMLP");
@@ -1097,6 +1240,11 @@ void MLP::updateWeights(double learningRate){
     }
 }
 
+/// Implements updateWeightsAdam. Applies one Adam step per layer (Layer::updateAdam
+/// with beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8) from the accumulated gradient
+/// and then zeroes the gradient so the next batch accumulates from scratch.
+/// @param iterationNum 1-based step counter for Adam's bias correction.
+/// @throw std::logic_error If called before initMLP.
 void MLP::updateWeightsAdam(double learningRate, int iterationNum){
     if (layers_.empty())
         throw std::logic_error("updateWeights called before initMLP");
@@ -1107,6 +1255,11 @@ void MLP::updateWeightsAdam(double learningRate, int iterationNum){
     }
 }
 
+/// Implements updateWeightsAdamNoClear. Applies one Adam step per layer but
+/// intentionally leaves the accumulated gradients in place so further patterns
+/// keep accumulating (used by the LSTM horizon training).
+/// @param iterationNum 1-based step counter for Adam's bias correction.
+/// @throw std::logic_error If called before initMLP.
 void MLP::updateWeightsAdamNoClear(double learningRate, int iterationNum){
     if (layers_.empty())
         throw std::logic_error("updateWeightsAdamNoClear called before initMLP");
@@ -1117,6 +1270,9 @@ void MLP::updateWeightsAdamNoClear(double learningRate, int iterationNum){
     }
 }
 
+/// Implements resetGradientsForLSTM. Resets the Adam moment state (first/second
+/// moment accumulators) of every layer; used when the MLP is trained as part of
+/// a coupled LSTM->MLP model so a fresh Adam trajectory starts for each window.
 void MLP::resetGradientsForLSTM(){
     if (layers_.empty())
         return;
@@ -1130,6 +1286,18 @@ void MLP::resetGradientsForLSTM(){
 /**
  * Online backpropagation - separete inp out matrices
  */
+/// Implements onlineBP. Stochastic gradient descent: each epoch processes all
+/// patterns (rows of @p X = inputs, rows of @p Y = target outputs) one by one —
+/// forward pass, backpropagation, immediate weight update per pattern.
+/// The epoch error is the mean over patterns of the squared norm of the
+/// output-layer delta vector; training stops early when it drops below
+/// @p maxError. Iteration count, final error, wall-clock time and the convergence
+/// flag are stored in `result`.
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument On empty/mismatched matrices or non-positive
+///        maxIterations / negative maxError / learningRate outside (0, 1].
+/// @throw std::runtime_error If X.cols()/Y.cols() do not match the initialized
+///        input/output sizes.
 void MLP::onlineBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y) {
     if (layers_.empty())
         throw std::logic_error("onlineBP called before initMLP");
@@ -1214,6 +1382,12 @@ void MLP::onlineBP(int maxIterations, double maxError, double learningRate, cons
 /**
  * Online backpropagation using Adam algorithm - separete inp out matrices
  */
+/// Implements onlineAdam. Same per-pattern online training loop as onlineBP, but
+/// weights are updated with Adam (beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8);
+/// the epoch counter is used as Adam's step for the bias correction.
+/// Early stopping and the `result` bookkeeping follow onlineBP.
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP.
 void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y) {
     if (layers_.empty())
         throw std::logic_error("onlineAdam called before initMLP");
@@ -1298,6 +1472,16 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
 /**
  * Batch backpropagation using Adam algorithm  - separete inp out matrices
  */
+/// Implements batchAdam. Each epoch splits the patterns into mini-batches of
+/// @p batchSize (the last batch may be smaller); for every pattern in a batch
+/// the forward pass and backpropagation only accumulate gradients
+/// (calculateBatchGradient), and one Adam update is applied per batch, after
+/// which the gradients are zeroed. Adam's bias-correction step is the epoch
+/// counter (not the batch counter).
+/// Early stopping and the `result` bookkeeping follow onlineBP.
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP,
+///        plus batchSize must be positive.
 void MLP::batchAdam(int maxIterations, double maxError, int batchSize, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y) {
     if (layers_.empty())
         throw std::logic_error("batchAdam called before initMLP");
@@ -1388,6 +1572,12 @@ void MLP::batchAdam(int maxIterations, double maxError, int batchSize, double le
 /**
  * Batch backpropagation - separete inp out matrices
  */
+/// Implements batchBP. Mini-batch gradient descent: like batchAdam but the
+/// batched gradients are applied with a plain SGD step (updateWeights) instead
+/// of Adam. Early stopping and the `result` bookkeeping follow onlineBP.
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP,
+///        plus batchSize must be positive.
 void MLP::batchBP(int maxIterations, double maxError, int batchSize, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y) {
     if (layers_.empty())
         throw std::logic_error("batchBP called before initMLP");
@@ -1476,8 +1666,16 @@ void MLP::batchBP(int maxIterations, double maxError, int batchSize, double lear
 }
 
 /**
- * Online backpropagation - separete inp out matrices
+ * Online backpropagation with high weights penalization (L2 regularization)
  */
+/// Implements onlinePenalizeBP. Online (per-pattern) gradient descent like
+/// onlineBP, but gradients are computed by calculateOnlineGradientPenalize,
+/// which adds the L2 penalty term 2*lambda*W to dE/dW to discourage large
+/// weights (bias column excluded inside Layer).
+/// @param lambda Regularization strength, must be in (0, 1].
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP,
+///        plus lambda range check.
 void MLP::onlinePenalizeBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y, double lambda) {
     if (layers_.empty())
         throw std::logic_error("onlineBP called before initMLP");
@@ -1565,6 +1763,14 @@ void MLP::onlinePenalizeBP(int maxIterations, double maxError, double learningRa
 /**
  * Online backpropagation with momentum
  */
+/// Implements onlineMomentumBP. Online (per-pattern) gradient descent like
+/// onlineBP, but weight updates carry momentum: updateWeightsMomentum applies
+/// W -= learningRate * grad + moment * (previous update), which smooths
+/// oscillations and accelerates consistent descent directions.
+/// @param moment Momentum coefficient, must be in (0, 1].
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP,
+///        plus moment range check.
 void MLP::onlineMomentumBP(int maxIterations, double maxError, double learningRate, const Eigen::MatrixXd& X, const Eigen::MatrixXd& Y, double moment) {
     if (layers_.empty())
         throw std::logic_error("onlineBP called before initMLP");
@@ -1649,6 +1855,26 @@ void MLP::onlineMomentumBP(int maxIterations, double maxError, double learningRa
     }
 }
 
+/// Implements onlineAdamEpochVal — online (per-pattern) Adam training with
+/// periodic evaluation of performance metrics on the training and validation
+/// sets. Every epoch updates weights per pattern (same loop as onlineAdam),
+/// then the seven metrics MSE, RMSE, PI, NS, KGE, PBIAS, RSR are computed:
+/// - entry 0..6 of the returned vector are metric matrices for the training
+///   set, entry 7..13 for the validation set;
+/// - with metricsAfterXEpochs == 1 every epoch produces one row, otherwise one
+///   row per metricsAfterXEpochs epochs (the second-to-last epoch is also
+///   recorded when the interval does not divide maxIterations).
+/// Early stopping below maxError and `result` bookkeeping follow onlineAdam.
+/// @param Xtrain Patterns x input-size training inputs.
+/// @param Ytrain Patterns x output-size training targets.
+/// @param Xval   Validation inputs.
+/// @param Yval   Validation targets.
+/// @param metricsAfterXEpochs Interval (in epochs) between metric evaluations.
+/// @return Vector of 14 matrices (7 train + 7 validation metrics); each matrix
+///         has one row per evaluation and one column per output variable.
+/// @throw std::logic_error / std::invalid_argument / std::runtime_error Same
+///        checks as onlineAdam, plus metricsAfterXEpochs must be in
+///        [1, maxIterations].
 std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
@@ -1681,6 +1907,10 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
         throw std::invalid_argument("metricsAfterXEpochs can't be bigger than maxIterations");
 
     std::vector<Eigen::MatrixXd> resultMetrics;
+    // Pre-allocate 14 metric matrices (7 train + 7 validation). Number of rows
+    // = number of evaluations: every epoch when metricsAfterXEpochs == 1,
+    // otherwise one row per metricsAfterXEpochs epochs (+1 for the extra
+    // evaluation when the interval does not divide maxIterations).
     int rowControl;
     if(metricsAfterXEpochs == 1){
         Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
@@ -1716,7 +1946,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     auto start = high_resolution_clock::now();
     double Error;
     for(int epoch = 1; epoch <= maxIterations; epoch++){
-        // Run online Adam
+        // Run one epoch of online Adam: per-pattern forward + backprop + Adam update
         Error = 0.0;
         for (int pat = 0; pat < numOfPatterns; pat++){
             Eigen::VectorXd currentInp = Xtrain.row(pat);
@@ -1743,6 +1973,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
             }
         }
         Error = Error / numOfPatterns;
+        // Evaluate metrics either every epoch or every metricsAfterXEpochs epochs.
+        // Train set first (entries 0..6), then validation set (entries 7..13).
         if(metricsAfterXEpochs == 1){
             calculateOutputs(Xtrain);
             for (int c = 0; c < Ytrain.cols(); ++c) {
@@ -1790,6 +2022,9 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
                     resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
                 }
             }
+            // Extra evaluation before the final epoch so the series always ends
+            // with a measurement even when metricsAfterXEpochs does not divide
+            // maxIterations (uses the pre-allocated +1 row in that case).
             if(epoch == maxIterations - 1){
                 int row;
                 if(maxIterations % metricsAfterXEpochs == 0){
@@ -1845,6 +2080,14 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     return resultMetrics;  
 }
 
+/// Implements onlineBpEpochVal — online (per-pattern) SGD training with
+/// periodic train/validation metric evaluation. Each epoch delegates the weight
+/// updates to onlineBP (one iteration per epoch) and stops early when it reports
+/// convergence. Metric matrices follow the same 14-entry layout as
+/// onlineAdamEpochVal (7 train + 7 validation metrics).
+/// @return Vector of 14 metric matrices.
+/// @throw std::logic_error / std::invalid_argument / std::runtime_error Same
+///        checks as onlineAdamEpochVal.
 std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
@@ -1900,7 +2143,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
-        // Run online BP
+        // Run one epoch of online SGD (this also refreshes `result` and may
+        // set result.converged)
         try {
             onlineBP(1, maxError, learningRate, Xtrain, Ytrain);
         } catch (const std::exception &ex) {
@@ -1908,6 +2152,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
             throw;
         }
 
+        // Evaluate metrics either every epoch or every metricsAfterXEpochs epochs
         if(metricsAfterXEpochs == 1){
             calculateOutputs(Xtrain);
             for (int c = 0; c < Ytrain.cols(); ++c) {
@@ -2001,6 +2246,17 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
     return resultMetrics;
 }
 
+/// Implements batchAdamEpochVal — mini-batch Adam training with periodic
+/// train/validation metric evaluation. Each epoch splits the training patterns
+/// into mini-batches; gradients are accumulated per batch
+/// (calculateBatchGradient) and applied with one Adam step per batch, with the
+/// epoch counter used as Adam's bias-correction step. Early stopping below
+/// maxError and `result` bookkeeping follow onlineAdam; metric matrices follow
+/// the same 14-entry layout as onlineAdamEpochVal.
+/// @param batchSize Number of patterns per mini-batch (last batch may be smaller).
+/// @return Vector of 14 metric matrices.
+/// @throw std::logic_error / std::invalid_argument / std::runtime_error Same
+///        checks as onlineAdamEpochVal, plus batchSize must be positive.
 std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
@@ -2206,6 +2462,15 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     return resultMetrics;
 }
 
+/// Implements batchBpEpochVal — mini-batch SGD training with periodic
+/// train/validation metric evaluation. Each epoch delegates the weight updates
+/// to batchBP (one iteration per epoch) and stops early when it reports
+/// convergence. Metric matrices follow the same 14-entry layout as
+/// onlineAdamEpochVal (7 train + 7 validation metrics).
+/// @param batchSize Number of patterns per mini-batch (last batch may be smaller).
+/// @return Vector of 14 metric matrices.
+/// @throw std::logic_error / std::invalid_argument / std::runtime_error Same
+///        checks as batchAdamEpochVal.
 std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
@@ -2262,7 +2527,8 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
-        // Run batch Adam
+        // Run one epoch of mini-batch SGD (this also refreshes `result` and may
+        // set result.converged)
         try {
             batchBP(1, maxError, batchSize, learningRate, Xtrain, Ytrain);
         } catch (const std::exception &ex) {
@@ -2363,6 +2629,15 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     return resultMetrics;
 }
 
+/// Implements onlinePenalizeBpEpochVal — online SGD with L2 weight penalization
+/// plus periodic train/validation metric evaluation. Each epoch delegates the
+/// weight updates to onlinePenalizeBP (one iteration per epoch) and stops early
+/// when it reports convergence. Metric matrices follow the same 14-entry layout
+/// as onlineAdamEpochVal (7 train + 7 validation metrics).
+/// @param lambda Regularization strength, must be in (0, 1].
+/// @return Vector of 14 metric matrices.
+/// @throw std::logic_error / std::invalid_argument / std::runtime_error Same
+///        checks as onlineAdamEpochVal, plus lambda range check.
 std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
@@ -2422,7 +2697,7 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
-        // Run online BP
+        // Run one epoch of online SGD with L2 penalization (may set result.converged)
         try {
             onlinePenalizeBP(1, maxError, learningRate, Xtrain, Ytrain,lambda);
         } catch (const std::exception &ex) {
@@ -2523,6 +2798,15 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
     return resultMetrics;
 }
 
+/// Implements onlineMomentumBpEpochVal — online SGD with momentum plus periodic
+/// train/validation metric evaluation. Each epoch delegates the weight updates
+/// to onlineMomentumBP (one iteration per epoch) and stops early when it reports
+/// convergence. Metric matrices follow the same 14-entry layout as
+/// onlineAdamEpochVal (7 train + 7 validation metrics).
+/// @param moment Momentum coefficient, must be in (0, 1].
+/// @return Vector of 14 metric matrices.
+/// @throw std::logic_error / std::invalid_argument / std::runtime_error Same
+///        checks as onlineAdamEpochVal, plus moment range check.
 std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
     const Eigen::MatrixXd &Xtrain,
     const Eigen::MatrixXd &Ytrain,
@@ -2582,7 +2866,7 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
-        // Run online BP
+        // Run one epoch of online SGD with momentum (may set result.converged)
         try {
             onlineMomentumBP(1, maxError, learningRate, Xtrain, Ytrain, moment);
         } catch (const std::exception &ex) {
@@ -2686,6 +2970,11 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
 /**
  * Forward pass reusing existing weights
  */
+/// Implements calcOneOutput. Propagates one input vector through all layers
+/// (each layer consumes the previous layer's output) and stores the last
+/// layer's output in the member `output`. Unlike runMLP this does not return
+/// the output and uses Layer::calculateOutput, which keeps the current
+/// activations inside the layers.
 void MLP::calcOneOutput(const Eigen::VectorXd& inputVec){      
     // First layer
     layers_[0].setInputs(inputVec);
@@ -2702,6 +2991,12 @@ void MLP::calcOneOutput(const Eigen::VectorXd& inputVec){
 /**
  * Calculate outputs for given matrix of inputs
  */
+/// Implements calculateOutputs. Runs calcOneOutput for every row of
+/// @p inputMat and stores the results in the member `outputMat`
+/// (rows = patterns, cols = output neurons).
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument If inputMat is empty or its row length does not
+///        match the initialized input size (bias excluded).
 void MLP::calculateOutputs(const Eigen::MatrixXd& inputMat){
     if (layers_.empty())
         throw std::logic_error("calculateOutputs called before initMLP");
@@ -2720,16 +3015,26 @@ void MLP::calculateOutputs(const Eigen::MatrixXd& inputMat){
     }
 }
 
+/// Implements getOutputs. Returns the output matrix filled by the last
+/// calculateOutputs call.
 Eigen::MatrixXd MLP::getOutputs() const{
     return outputMat;
 }
 
+/// Implements getFirstLayerDeltaSum. Collapses the first layer's delta vector
+/// into a 1-element vector holding its sum; used as the error signal passed to
+/// a preceding network (e.g. an LSTM feeding this MLP).
 Eigen::VectorXd MLP::getFirstLayerDeltaSum(){
     Eigen::VectorXd delt(1);
     delt(0) = layers_[0].getDeltas().sum();
     return delt;
 }
 
+/// Implements getFirstLayerInputDelta. Propagates the first layer's deltas back
+/// to the MLP's inputs: W_0^T * delta_0, with the bias row dropped
+/// (conservativeResize removes the last element). Used to feed the gradient
+/// into a preceding network (e.g. an LSTM feeding this MLP).
+/// @return Vector of length nNeurons[0] (one entry per MLP input, bias excluded).
 Eigen::VectorXd MLP::getFirstLayerInputDelta(){
     Eigen::VectorXd delt;
     delt = layers_[0].getWeights().transpose() * layers_[0].getDeltas();
@@ -2738,33 +3043,66 @@ Eigen::VectorXd MLP::getFirstLayerInputDelta(){
 }
 
 // Objective function configuration methods
+/// Implements setObjectiveFunction. Sets the loss used for the output-layer
+/// deltas in all training routines (default LEVEL_SLOPE).
 void MLP::setObjectiveFunction(objective_func_type func) {
     objectiveFunc_ = func;
 }
 
+/// Implements setObjectiveFunction. Converts the name via
+/// ObjectiveFunctions::fromString.
 void MLP::setObjectiveFunction(const std::string& funcName) {
     objectiveFunc_ = ObjectiveFunctions::fromString(funcName);
 }
 
+/// Implements getObjectiveFunction.
 objective_func_type MLP::getObjectiveFunction() const {
     return objectiveFunc_;
 }
 
+/// Implements setObjectiveAlpha. First blending/weighting coefficient of the
+/// objective function (meaning depends on the selected objective).
 void MLP::setObjectiveAlpha(double alpha) {
     objectiveAlpha_ = alpha;
 }
 
+/// Implements setObjectiveAlpha2. Coefficient of the curvature term of the
+/// objective function.
 void MLP::setObjectiveAlpha2(double alpha2) {
     objectiveAlpha2_ = alpha2;
 }
 
+/// Implements getObjectiveAlpha.
 double MLP::getObjectiveAlpha() const {
     return objectiveAlpha_;
 }
 
+/// Implements getObjectiveAlpha2.
 double MLP::getObjectiveAlpha2() const {
     return objectiveAlpha2_;
 }
+/// Implements horizonBackprop — multi-step-ahead support for a coupled
+/// LSTM->MLP model, assuming a single scalar output per step (output(0)).
+/// Algorithm:
+/// 1. For every horizon step s: forward pass on stepInputs[s], record the
+///    prediction simHorizon(s), then backpropagate a unit output delta to
+///    obtain the per-unit-output first-layer input delta dE/dInput for that
+///    step (collected in unitDeltas — the Jacobian of the input w.r.t. the
+///    output).
+/// 2. Compute the gradient of the configured objective function w.r.t. the
+///    whole horizon prediction vector (ObjectiveFunctions::computeGradient).
+/// 3. For every step again: backpropagate the step's gradient component and
+///    ACCUMULATE the per-layer gradients via calculateBatchGradient, so a
+///    single subsequent Adam update (usually updateWeightsAdamNoClear)
+///    accounts for the whole horizon.
+/// @param stepInputs One input vector per horizon step.
+/// @param obsHorizon Observed values for the horizon (one per step).
+/// @return Matrix (inputs x steps): each step's first-layer input delta scaled
+///         by that step's gradient component, for feeding into the preceding
+///         LSTM.
+/// @throw std::logic_error If called before initMLP.
+/// @throw std::invalid_argument If the number of step inputs differs from the
+///        horizon length.
 Eigen::MatrixXd MLP::horizonBackprop(const std::vector<Eigen::VectorXd> &stepInputs,
                                      const Eigen::VectorXd &obsHorizon) {
     if (layers_.empty())

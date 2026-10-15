@@ -21,11 +21,25 @@
 // TODO: Create .sh file for running qsub job on MetaCentrum
 // *******************************
 
+/**
+ * @file main_ensemble.cpp
+ * @brief Entry point: run a JKMNet ensemble from the configuration file via EnsembleRunner.
+ */
+
 #include "ConfigIni.hpp"
 #include "Data.hpp"
 #include "EnsembleRunner.hpp"
 #include <iostream>
 
+/**
+ * Entry point of the ensemble runner application.
+ * Parses an optional thread-count argument, loads the configuration from
+ * settings/config_model.ini, cleans the output directory, and runs the
+ * ensemble via EnsembleRunner.
+ * @param argc Number of command-line arguments.
+ * @param argv Arguments: "[threads]".
+ * @return 0 on success.
+ */
 int main(int argc, char** argv) {
     unsigned nthreads = 1;
     if (argc > 1) {

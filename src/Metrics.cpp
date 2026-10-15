@@ -1,3 +1,11 @@
+/**
+ * @file Metrics.cpp
+ * @brief Implements Metrics — evaluation metrics (MSE, RMSE, PI, NSE, KGE, PBIAS, RSR) and CSV export helpers.
+ */
+/**
+ * @file Metrics.cpp
+ * @brief Implements Metrics — evaluation metrics (MSE, RMSE, PI, NSE, KGE, PBIAS, RSR) and CSV export helpers.
+ */
 #include "Metrics.hpp"
 
 #include <cmath>
@@ -13,8 +21,9 @@
 #include <map>
 #include <algorithm>
 
+/// Mean squared error between two vectors.
 /**
- * Mean squared error between two vectors
+ * @throw std::invalid_argument If the vector sizes differ.
  */
 double Metrics::mse(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
     if (y_true.size() != y_pred.size())
@@ -28,8 +37,9 @@ double Metrics::mse(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred
     return mse_result;
 }
 
+/// Mean squared error between two matrices.
 /**
- * Mean squared error between two matrices
+ * @throw std::invalid_argument If the matrix dimensions differ.
  */
 double Metrics::mse(const Eigen::MatrixXd& Y_true, const Eigen::MatrixXd& Y_pred) {
     if (Y_true.rows() != Y_pred.rows() || Y_true.cols() != Y_pred.cols())
@@ -43,24 +53,24 @@ double Metrics::mse(const Eigen::MatrixXd& Y_true, const Eigen::MatrixXd& Y_pred
     return mse_result;
 }
 
-/**
- * Root mean squared error between two vectors
- */
+/// Root mean squared error between two vectors (delegates to mse()).
 double Metrics::rmse(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
     double rmse_result = std::sqrt(mse(y_true, y_pred));
 
     return rmse_result;
 }
 
-/**
- * Root mean squared error between two matrices
- */
+/// Root mean squared error between two matrices (delegates to mse()).
 double Metrics::rmse(const Eigen::MatrixXd& Y_true, const Eigen::MatrixXd& Y_pred) {
     double rmse_result = std::sqrt(mse(Y_true, Y_pred));
 
     return rmse_result;
 }
 
+/// Persistence index between two vectors (uses a one-step-back persistence baseline).
+/**
+ * @throw std::invalid_argument If the vector sizes differ.
+ */
 double Metrics::pi(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
     if (y_true.size() != y_pred.size())
         throw std::invalid_argument("Metrics::pi: vector sizes differ");
@@ -77,6 +87,10 @@ double Metrics::pi(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred)
     return 1.0 - (mse_model / mse_persist);
 }
 
+/// Nash–Sutcliffe efficiency between two vectors.
+/**
+ * @throw std::invalid_argument If the vector sizes differ.
+ */
 double Metrics::ns(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
     if (y_true.size() != y_pred.size())
         throw std::invalid_argument("Metrics::ns: vector sizes differ");
@@ -92,6 +106,10 @@ double Metrics::ns(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred)
     return 1.0 - (numerator / denominator);
 }
 
+/// Kling–Gupta efficiency between two vectors (sample statistics, n-1 denominators).
+/**
+ * @throw std::invalid_argument If the vector sizes differ.
+ */
 double Metrics::kge(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
     if (y_true.size() != y_pred.size())
         throw std::invalid_argument("Metrics::kge: vector sizes differ");
@@ -112,6 +130,10 @@ double Metrics::kge(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred
     return 1.0 - std::sqrt(std::pow(r - 1.0, 2) + std::pow(alpha - 1.0, 2) + std::pow(beta - 1.0, 2));
 }
 
+/// Percent bias between two vectors; returns NaN when the observed sum is (near) zero.
+/**
+ * @throw std::invalid_argument If the vector sizes differ.
+ */
 double Metrics::pbias(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
     if (y_true.size() != y_pred.size()) {
         throw std::invalid_argument("Metrics::pbias: vector sizes differ");
@@ -127,6 +149,11 @@ double Metrics::pbias(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pr
     return 100.0 * (num / den);
 }
 
+/// Ratio of RMSE to the sample standard deviation of the observations.
+/**
+ * Returns NaN for fewer than 2 samples or (near) zero standard deviation.
+ * @throw std::invalid_argument If the vector sizes differ.
+ */
 double Metrics::rsr(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred) {
     if (y_true.size() != y_pred.size()) {
         throw std::invalid_argument("Metrics::rsr: vector sizes differ");
@@ -154,9 +181,7 @@ double Metrics::rsr(const Eigen::VectorXd& y_true, const Eigen::VectorXd& y_pred
     return rmse_val / sd_true;
 }
 
-/**
- * Append a labeled row of metrics into CSV file
- */
+/// Append a labeled row of metrics into a CSV file (header written on first use).
 bool Metrics::appendMetricsCsv(const std::string &path,
                                const std::vector<std::pair<std::string,double>> &metrics,
                                const std::string &id,
@@ -211,9 +236,7 @@ bool Metrics::appendMetricsCsv(const std::string &path,
     return ok;
 }
 
-/**
- * Append a labeled row of metrics into CSV file - each metric in a separate file 
- */
+/// Append a labeled row of metrics into CSV files — each metric type in a separate file.
 bool Metrics::appendMetricsCsvSplit(const std::string &basePath,
                                     const std::vector<std::pair<std::string,double>> &metrics,
                                     const std::string &id,
@@ -276,9 +299,7 @@ bool Metrics::appendMetricsCsvSplit(const std::string &basePath,
     return true;
 }
 
-/**
- * Compute final metrics for matrix pair and append a single row into CSV oputput file
- */
+/// Compute per-column metrics for a matrix pair and append a single row into a CSV output file.
 bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
                                            const Eigen::MatrixXd &Y_pred,
                                            const std::string &outCsv,
@@ -365,9 +386,7 @@ bool Metrics::computeAndAppendFinalMetrics(const Eigen::MatrixXd &Y_true,
     return true;
 }
 
-/**
- * Save run information into CSV file
- */
+/// Save run information into a CSV file (header written on first use).
 bool Metrics::appendRunInfoCsv(const std::string &path,
                                int iterations,
                                double loss,
@@ -437,9 +456,7 @@ bool Metrics::appendRunInfoCsv(const std::string &path,
     return ok;
 }
 
-/**
- * Save MSEs from training and validation into CSV file 
- */
+/// Save MSEs from training and validation into a CSV file.
 bool Metrics::saveErrorsCsv(const std::string &path,
                             const Eigen::MatrixXd &errors,
                             bool verbose) {
@@ -466,9 +483,7 @@ bool Metrics::saveErrorsCsv(const std::string &path,
     return true;
 }
 
-/**
- * Save matrix of metric into CSV file 
- */
+/// Save a matrix of metric values into a CSV file.
 bool Metrics::saveMetricsCsv(const std::string &path,
                             const Eigen::MatrixXd &errors,
                             bool verbose) {
@@ -502,9 +517,7 @@ bool Metrics::saveMetricsCsv(const std::string &path,
     return true;
 }
 
-/**
- * Helper function for adding run ID into filename
- */
+/// Helper function for adding a run ID into a filename.
 std::string Metrics::addRunIdToFilename(const std::string &path, const std::string &run_id) {
     std::filesystem::path p(path);
     std::string stem = p.stem().string();
@@ -512,9 +525,7 @@ std::string Metrics::addRunIdToFilename(const std::string &path, const std::stri
     return (p.parent_path() / (stem + "_" + run_id + ext)).string();
 }
 
-/**
- * Buffer a set of metrics into a thread-safe in-memory structure for later export
- */
+/// Buffer a set of metrics into a thread-safe in-memory structure for later export.
 void Metrics::bufferMetrics(MetricBuffer &buffer,
                             const std::vector<std::pair<std::string,double>> &metrics,
                             const std::string &id,
@@ -528,9 +539,7 @@ void Metrics::bufferMetrics(MetricBuffer &buffer,
         buffer.data[kv.first].push_back({id, kv.second});
     }
 }
-/**
- * Flush the contents of a MetricBuffer to one or more CSV files
- */
+/// Flush the contents of a MetricBuffer to one or more CSV files (grouped by metric type).
 bool Metrics::flushMetricsBufferToCsv(const MetricBuffer &buffer,
                                       const std::string &basePath,
                                       bool verbose)
@@ -587,9 +596,7 @@ bool Metrics::flushMetricsBufferToCsv(const MetricBuffer &buffer,
     return true;
 }
 
-/**
- * 
- */
+/// Build a per-run metric filename ("<stem>_run<run>_<metricName><ext>") from a base path.
 std::string Metrics::makeMetricFilename(const std::string &basePath,
                                         int run,
                                         const std::string &metricName)
@@ -607,8 +614,9 @@ std::string Metrics::makeMetricFilename(const std::string &basePath,
     return newPath.string();
 }
 
+/// Append one row of values to a CSV file, optionally writing the header first.
 /**
- * 
+ * Creates parent directories if needed.
  */
 void Metrics::saveMetricRow(const std::string &path,
                             const std::vector<std::string> &colNames,
@@ -641,9 +649,7 @@ void Metrics::saveMetricRow(const std::string &path,
     ofs << "\n";
 }
 
-/**
- * Calculate all metrics
- */
+/// Calculate all metrics (currently disabled).
 //Eigen::VectorXd Metrics::calcMetricsAll() {
     // Eigen::VectorXd allCriteria = Eigen::VectorXd(5);
 

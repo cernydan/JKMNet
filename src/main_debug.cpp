@@ -21,6 +21,11 @@
 // TODO: Create .sh file for running qsub job on MetaCentrum
 // *******************************
 
+/**
+ * @file main_debug.cpp
+ * @brief Entry point: interactive test driver exercising MLP, Layer, Data, Metrics, and JKMNet functionality on artificial and real data.
+ */
+
 #include <ctime>
 #include <iostream>
 #include <algorithm>
@@ -40,6 +45,15 @@
 
 using namespace std;
 
+/**
+ * Entry point of the interactive debug/test driver.
+ * Sequentially exercises library functionality and prints results to stdout:
+ * MLP architecture setup and forward passes, single-layer initialization and
+ * activations, metrics on artificial data, NA detection/removal with timeline
+ * expansion, online and batch Adam training on real data, and a full
+ * config-file-driven calibration/validation workflow.
+ * @return 0 on success, 1 on error.
+ */
 int main() {
 
   std::cout << "-------------------------------------------" << std::endl;

@@ -1,3 +1,8 @@
+/**
+ * @file Data.cpp
+ * @brief Implements Data — dataset loading, transforms, and calibration matrix construction.
+ */
+
 #include "Data.hpp"
 #include "ConfigIni.hpp"
 
@@ -13,8 +18,10 @@
 #include <tuple>
 #include <filesystem>
 
+/// Trim leading and trailing whitespace from a string.
 /**
- * Trim helper function
+ * @param s Input string.
+ * @return Copy of the input with surrounding whitespace removed.
  */
 static inline std::string trim(const std::string& s) {
     size_t a = 0, b = s.size();
@@ -23,8 +30,11 @@ static inline std::string trim(const std::string& s) {
     return s.substr(a, b-a);
 }
 
+/// Split a CSV line into comma-separated fields, honoring double quotes.
 /**
- * Helper function to parse a CSV line into fields (handles quotes)
+ * Handles quoted fields and escaped double quotes ("") inside quoted fields.
+ * @param line The CSV line to parse.
+ * @param outFields Cleared and filled with the parsed fields.
  */
 void Data::splitCSVLine(const std::string& line, std::vector<std::string>& outFields) {
     outFields.clear();
@@ -52,8 +62,12 @@ void Data::splitCSVLine(const std::string& line, std::vector<std::string>& outFi
     outFields.push_back(cur);
 }
 
+/// Build the index vector [0..N-1], optionally shuffled.
 /**
- * Helper function to build index vector [0..N-1] and optionally shuffle it with seed
+ * @param N Number of indices.
+ * @param shuffle If true and N > 1, shuffle the permutation.
+ * @param seed Random seed; seed == 0 uses a non-deterministic random_device seed.
+ * @return Vector of indices 0..N-1 (permuted if shuffle is set).
  */
 static std::vector<int> buildIndicesInt(int N, bool shuffle, unsigned seed) {
     std::vector<int> idx(N);
@@ -65,8 +79,13 @@ static std::vector<int> buildIndicesInt(int N, bool shuffle, unsigned seed) {
     return idx;
 }
 
+/// Build the mapping filtered_index -> original_index for a row-filtered dataset.
 /**
- * Helper function to build mapping filtered_index -> original_index (used when rows were removed)
+ * Used when rows containing NaN were removed: walks the original row indices,
+ * skipping (sorted) removed indices, and collects the originals that survive.
+ * @param na_row_indices Sorted indices of removed rows (in original coordinates).
+ * @param origRows Number of rows of the original (unfiltered) data.
+ * @return Vector of original indices of the kept rows, in filtered order.
  */
 static std::vector<Eigen::Index> buildFilteredToOriginalMap(const std::vector<size_t>& na_row_indices, Eigen::Index origRows) {
     std::vector<Eigen::Index> filt2orig;
@@ -82,8 +101,17 @@ static std::vector<Eigen::Index> buildFilteredToOriginalMap(const std::vector<si
     return filt2orig;
 }
 
+/// Write a matrix into a CSV file, one row per line.
 /**
- * Helper function to save matrix to CSV
+ * Optionally inverts the global output transform before writing. Creating
+ * parent directories as needed, writes an optional header line of column
+ * names, then numeric values with 12 significant digits; non-finite values
+ * are written as "NaN".
+ * @param path Path of the CSV file.
+ * @param M Matrix to write (row = sample, col = feature).
+ * @param colNames Column names for the header; no header is written if empty.
+ * @param inverseOutputs If true, the global output transform is inverted before writing.
+ * @return True if the file was written successfully (false on failure, with a diagnostic on stderr).
  */
 bool Data::saveMatrixCsv(const std::string &path,
     const Eigen::MatrixXd &M,
@@ -145,8 +173,20 @@ bool Data::saveMatrixCsv(const std::string &path,
     }
 }
 
+/// Load and filter a CSV file, filling m_data, m_timestamps and m_colNames.
 /**
- * Loads and filters the CSV file and returns number of loaded rows
+ * Parses the header, keeps only rows whose ID column value belongs to the
+ * filter set (all rows when the filter is empty), and extracts the requested
+ * numeric columns. Empty or unparseable numeric cells become NaN.
+ * The resulting matrix has row = sample (time step) and col = variable, in
+ * the order given by keepColumns. Also resets the global scaler.
+ * @param path Path of the CSV file.
+ * @param idFilter Set of accepted IDs; empty means "accept all rows".
+ * @param keepColumns Names of numeric columns to extract (e.g. "T1","T2","T3","moisture").
+ * @param timestampCol Name of the timestamp column (e.g. "hour_start", "date").
+ * @param idCol Name of the column containing the sensor/series ID.
+ * @return Number of loaded rows.
+ * @throw std::runtime_error When the file cannot be opened, is empty, or a required column is missing.
  */
 size_t Data::loadFilteredCSV(const std::string& path,
   const std::unordered_set<std::string>& idFilter,
@@ -283,8 +323,9 @@ size_t Data::loadFilteredCSV(const std::string& path,
     return nrows;
 }
 
+/// Remove a directory with its contents and recreate it empty.
 /**
- * Clean all files in a directory 
+ * @param path Path of the directory to clean; failures are reported to stderr.
  */
 void Data::cleanDirectory(const std::string &path) {
     namespace fs = std::filesystem;
@@ -299,8 +340,9 @@ void Data::cleanDirectory(const std::string &path) {
     }
 }
 
+/// Empty all subdirectories of an outputs directory and remove stray files.
 /**
- * Clean all files in output directory 
+ * @param outDir Path of the outputs directory; created if it does not exist.
  */
 void Data::cleanAllOutputs(const std::string &outDir) {
     namespace fs = std::filesystem;
@@ -325,8 +367,13 @@ void Data::cleanAllOutputs(const std::string &outDir) {
     }
 }
 
+/// Write the model run settings into a log stream.
 /**
- * Write model settings into a log file
+ * Logs data, model architecture, training, transform, optimization and path
+ * sections of the run configuration.
+ * @param os Output stream to write into.
+ * @param cfg Run configuration whose settings are logged.
+ * @param run_id Identifier of the current run.
  */
 void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_id) const {
     os << "================ Run " << run_id << " Settings ================\n";
@@ -402,36 +449,29 @@ void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_i
     os << "===========================================================\n";
 }
 
-/**
- * Getter for the timestamps
- */
+/// Getter for the timestamps (one string per data row).
 std::vector<std::string> Data::timestamps() const {
   return m_timestamps;
 } 
 
-/**
- *  Getter for the data numeric matrix
- */
+/// Getter for the numeric data matrix (row = sample, col = variable).
 Eigen::MatrixXd Data::numericData() const {
   return m_data;
 } 
 
-/**
- *  Setter for the data numeric matrix
- */
+/// Setter for the numeric data matrix.
 void Data::setNumericData(const Eigen::MatrixXd &newData){
     m_data = newData;
 }
 
-/**
- * Getter for the names of numeric columns
- */
+/// Getter for the names of the numeric columns.
 std::vector<std::string> Data::numericColNames() const {
   return m_colNames;
 } 
 
+/// Print the header line: timestamp column name followed by numeric column names.
 /**
- * Print header line, i.e. timestamp + numeric column names
+ * @param timestampColName Display name of the timestamp column.
  */
 void Data::printHeader(const std::string& timestampColName) const {
     std::cout << "Header: " << timestampColName;
@@ -446,8 +486,11 @@ void Data::printHeader(const std::string& timestampColName) const {
     std::cout << "\n";
 }
 
+/// Return a copy of the values of a selected column by name.
 /**
- * Return a copy of the values in a selected column by name
+ * @param name Name of the numeric column.
+ * @return Copy of the column values.
+ * @throw std::out_of_range When no column with that name exists.
  */
 std::vector<double> Data::getColumnValues(const std::string& name) const {
     const auto& cols = numericColNames();
@@ -465,8 +508,12 @@ std::vector<double> Data::getColumnValues(const std::string& name) const {
     return out;
 }
 
+/// Set which transform to apply for each column and its nonlinear alpha.
 /**
- * Set which transform to apply for each column
+ * @param transforms Transform type per numeric column.
+ * @param alpha Alpha parameter per column (used by NONLINEAR/MINMAXNONLIN).
+ * @param excludeLastCol If true, the last column (typically the output) is left untransformed.
+ * @throw std::runtime_error When the vector sizes do not match the number of data columns.
  */
 void Data::setTransform(const std::vector<transform_type>& transforms,
                         std::vector<double> alpha,
@@ -499,8 +546,14 @@ void Data::setTransform(const std::vector<transform_type>& transforms,
     }
 }
 
+/// Apply the previously configured transform in place to m_data.
 /**
- * Apply the previously configured transform to m_data
+ * Per-column transform selected by m_transforms: NONE is a no-op, MINMAX
+ * scales finite values to [0,1] (storing per-column min/max into m_scaler),
+ * NONLINEAR applies t = 1 - exp(-alpha * x), and ZSCORE standardizes to
+ * zero mean/unit variance (storing mean/stddev into m_scaler min/max).
+ * Non-finite (NaN/Inf) values are preserved. If m_excludeLastCol is set,
+ * the last column (typically the output) is skipped.
  */
 void Data::applyTransform()
 {
@@ -637,8 +690,11 @@ void Data::applyTransform()
     }
 }
 
+/// Invert the global transform in place (to bring predictions back to original scale).
 /**
- * Inverse the global transform (to bring predictions back)
+ * Reverses per-column transforms using the statistics fitted by applyTransform().
+ * @throw std::runtime_error When an inverse MINMAX/ZSCORE is requested before the scaler was fitted,
+ * or a NONLINEAR value is out of the domain of the inverse.
  */
 void Data::inverseTransform()
 {
@@ -728,8 +784,13 @@ void Data::inverseTransform()
     }
 }
 
+/// Invert the global transform for output columns of a matrix.
 /**
- * Inverse the global transform for outputs
+ * Applies the inverse of the transform configured for the last (target)
+ * column of m_data to every element of M.
+ * @param M Matrix whose columns hold transformed outputs.
+ * @return Copy of M with the transform inverted.
+ * @throw std::runtime_error When the scaler is not fitted or a transformed value is invalid for inversion.
  */
 Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M) const
 {
@@ -816,6 +877,22 @@ Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M) const
     }
 }
 
+/// Transform input/output matrices in place and return fitted per-variable scalers.
+/**
+ * Input columns are grouped by variable: consecutive blocks of
+ * input_numbers[i].size() columns form variable i. The last variable is
+ * special: its block plus all columns of `out` share one scaler so that
+ * lagged target inputs and horizons use the same statistics (statistics are
+ * pooled across all cells of a variable). NaN/Inf cells are skipped.
+ * @param in Input matrix (row = pattern, col = feature).
+ * @param out Output matrix (row = pattern, col = horizon step).
+ * @param transforms Transform type per variable.
+ * @param alpha Alpha parameter per variable (used by NONLINEAR/MINMAXNONLIN).
+ * @param excludeLastCol If true, the last variable is left untransformed.
+ * @param input_numbers Lag offsets per variable; only their sizes are used to delimit column blocks.
+ * @return Tuple of (transformed inputs, transformed outputs, fitted scalers).
+ * @throw std::runtime_error When the variable count or implied total of input columns is inconsistent.
+ */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<VarScaler>>
 Data::transformMatsGetScalers(Eigen::MatrixXd in,
                      Eigen::MatrixXd out,
@@ -1101,6 +1178,19 @@ Data::transformMatsGetScalers(Eigen::MatrixXd in,
     return std::make_tuple(in, out, scalers);
 }
 
+/// Transform input/output matrices in place using previously fitted scalers.
+/**
+ * Uses the same variable-to-column-block mapping as transformMatsGetScalers()
+ * so the matrices must have the same column layout the scalers were fitted on.
+ * @param in Input matrix (row = pattern, col = feature).
+ * @param out Output matrix (row = pattern, col = horizon step).
+ * @param transforms Transform type per variable.
+ * @param excludeLastCol If true, the last variable is left untransformed.
+ * @param input_numbers Lag offsets per variable; only their sizes are used to delimit column blocks.
+ * @param scalers Scalers previously fitted by transformMatsGetScalers().
+ * @return Pair of (transformed inputs, transformed outputs).
+ * @throw std::runtime_error When sizes are inconsistent or a scaler holds an unknown transform type.
+ */
 std::pair<Eigen::MatrixXd, Eigen::MatrixXd>
 Data::transformMatsApplyScalers(Eigen::MatrixXd in,
                                 Eigen::MatrixXd out,
@@ -1300,6 +1390,15 @@ Data::transformMatsApplyScalers(Eigen::MatrixXd in,
     return {in, out};
 }
 
+/// Invert the transform of output columns using an explicit output scaler.
+/**
+ * Reverses single- and two-step transforms (MINMAXNONLIN undoes NONLINEAR
+ * first, then MINMAX).
+ * @param M Matrix whose columns hold transformed outputs.
+ * @param outScaler Scaler fitted on the outputs.
+ * @return Copy of M with the transform inverted.
+ * @throw std::runtime_error When the scaler is not fitted or a transformed value is invalid for inversion.
+ */
 Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M, const VarScaler& outScaler)
 {
     if (M.size() == 0)
@@ -1419,8 +1518,19 @@ Eigen::MatrixXd Data::inverseTransformOutputs(const Eigen::MatrixXd& M, const Va
     }
 }
 
+/// Create the calibration matrix (inputs and outputs) for backpropagation from m_data.
 /**
- * Create matrix for backpropagation from data matrix (with NA removal)
+ * Builds one pattern per candidate start index i: per variable j, the last
+ * inpNumsOfVars[j] rows ending at i + max(inpNumsOfVars) form the inputs, and
+ * the next outRows rows of the last (target) column form the outputs.
+ * Patterns containing any NaN are skipped. The combined matrix calibMat has
+ * columns = [sum(inpNumsOfVars) inputs | outRows outputs], and is also split
+ * into calibInpsMat/calibOutsMat. Pattern reference rows (first output row)
+ * are recorded in both filtered and original coordinates.
+ * @param inpNumsOfVars Number of lagged rows used per input variable (one entry per column).
+ * @param outRows Number of output (horizon) rows.
+ * @throw std::invalid_argument On non-positive values or a size mismatch with data columns.
+ * @throw std::runtime_error When there are not enough rows to build any pattern.
  */
 void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows) {
     if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
@@ -1434,9 +1544,11 @@ void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows) {
     if (DC < 1) throw std::runtime_error("Data has no columns");
     if (inpNumsOfVars.size() != DC) throw std::invalid_argument("inpNumsOfVars size does not match data columns");
 
+    // candidate pattern start indices: rows i + maxR .. i + maxR + outRows - 1 must fit
     const int CRcand = static_cast<int>(m_data.rows()) - static_cast<int>(maxR) - outRows + 1;
     if (CRcand <= 0) throw std::runtime_error("Not enough rows to build calibration matrices with given inpNumsOfVars/outRows");
 
+    // total pattern width: all lagged input values followed by the horizon of the target column
     const int CC = static_cast<int>(std::accumulate(inpNumsOfVars.begin(), inpNumsOfVars.end(), 0)) + outRows;
 
     std::vector<std::vector<double>> rows;
@@ -1476,6 +1588,7 @@ void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows) {
 
         rows.push_back(std::move(row));
 
+        // reference row of the pattern = first output row (in filtered coordinates)
         int filtered_ref = i + static_cast<int>(maxR);
         m_calib_pattern_filtered_indices.push_back(filtered_ref);
         if (m_has_filtered_rows) {
@@ -1501,8 +1614,15 @@ void Data::makeCalibMat(std::vector<int> inpNumsOfVars, int outRows) {
     }
 }
 
+/// Create separate calibration input and output matrices (with NaN removal).
 /**
- * Create separate calibration inps and outs matrices for backpropagation from data matrix (with NA removal)
+ * Same pattern construction as makeCalibMat(), but fills calibInpsMat and
+ * calibOutsMat directly and also assembles the combined calibMat
+ * (columns = [inputs | outputs]).
+ * @param inpNumsOfVars Number of lagged rows used per input variable (one entry per column).
+ * @param outRows Number of output (horizon) rows.
+ * @throw std::invalid_argument On non-positive values or a size mismatch with data columns.
+ * @throw std::runtime_error When there are not enough rows to build any pattern.
  */
 void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows) {
     if (outRows <= 0 || std::any_of(inpNumsOfVars.begin(), inpNumsOfVars.end(), [](int x){ return x < 0; }))
@@ -1596,8 +1716,11 @@ void Data::makeCalibMatsSplit(std::vector<int> inpNumsOfVars, int outRows) {
     }
 }
 
+/// Split the combined calibration matrix into input and output matrices.
 /**
- * Split created calibration matrix into separate inps and outs matrices
+ * @param inpLength Number of leading columns of calibMat that are inputs;
+ * the remaining columns form the outputs.
+ * @throw std::invalid_argument When inpLength is not in (0, calibMat.cols()).
  */
 void Data::splitCalibMat(int inpLength){
     if (inpLength <= 0 || inpLength >= calibMat.cols())
@@ -1607,8 +1730,13 @@ void Data::splitCalibMat(int inpLength){
     calibOutsMat = calibMat.rightCols(calibMat.cols() - inpLength);
 }
 
+/// Split a matrix horizontally into input and output parts.
 /**
- * Split calib and valid dataset
+ * @param mat Matrix to split (columns = [inputs | outputs]).
+ * @param inpSize Number of input columns.
+ * @param outSize Number of output columns.
+ * @return Pair of (inputs matrix, outputs matrix).
+ * @throw std::runtime_error When inpSize + outSize does not equal mat.cols().
  */
 std::pair<Eigen::MatrixXd, Eigen::MatrixXd>
 Data::splitInputsOutputs(const Eigen::MatrixXd &mat, int inpSize, int outSize) const {
@@ -1623,8 +1751,13 @@ Data::splitInputsOutputs(const Eigen::MatrixXd &mat, int inpSize, int outSize) c
     return {X, Y};
 }
 
+/// Split the calibration matrix into train/validation parts and also return row indices.
 /**
- * Split calibration matrix into train/validation and also return indices
+ * @param trainFraction Fraction of rows used for training (clamped to keep >= 1 row on both sides).
+ * @param shuffle Whether to shuffle rows before splitting.
+ * @param seed Random seed used for shuffling; 0 means random_device.
+ * @return Tuple of (train matrix, validation matrix, train row indices, validation row indices).
+ * @throw std::invalid_argument When trainFraction is not in (0,1).
  */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
 Data::splitCalibMatWithIdx(double trainFraction, bool shuffle, unsigned seed) const {
@@ -1663,8 +1796,13 @@ Data::splitCalibMatWithIdx(double trainFraction, bool shuffle, unsigned seed) co
     return { trainMat, validMat, trainIdx, validIdx };
 }
 
+/// Split the raw data rows (m_data) into train/validation and return row indices.
 /**
- * Split raw data rows (m_data) into train/validation and return indices
+ * @param trainFraction Fraction of rows used for training (clamped to keep >= 1 row on both sides).
+ * @param shuffle Whether to shuffle rows before splitting.
+ * @param seed Random seed used for shuffling; 0 means random_device.
+ * @return Tuple of (train matrix, validation matrix, train row indices, validation row indices).
+ * @throw std::invalid_argument When trainFraction is not in (0,1).
  */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
 Data::splitDataRowsWithIdx(double trainFraction, bool shuffle, unsigned seed) const {
@@ -1703,50 +1841,42 @@ Data::splitDataRowsWithIdx(double trainFraction, bool shuffle, unsigned seed) co
 }
 
 
-/**
- * Getter for calibration matrix
- */
+/// Getter for the calibration matrix (columns = [inputs | outputs]).
 Eigen::MatrixXd Data::getCalibMat(){
     return calibMat;
 }
 
-/**
- * Setter for calibration matrix
- */
+/// Setter for the calibration matrix.
 void Data::setCalibMat(const Eigen::MatrixXd &newMat){
     calibMat = newMat;
 }
 
-/**
- * Getter for calibration inputs matrix
- */
+/// Getter for the calibration inputs matrix.
 Eigen::MatrixXd Data::getCalibInpsMat(){
     return calibInpsMat;
 }
 
-/**
- * Setter for calibration inputs matrix
- */
+/// Setter for the calibration inputs matrix.
 void Data::setCalibInpsMat(const Eigen::MatrixXd &newMat){
     calibInpsMat = newMat;
 }
 
-/**
- * Getter for calibration outputs matrix
- */
+/// Getter for the calibration outputs matrix.
 Eigen::MatrixXd Data::getCalibOutsMat(){
     return calibOutsMat;
 }
 
-/**
- * Setter for calibration outputs matrix
- */
+/// Setter for the calibration outputs matrix.
 void Data::setCalibOutsMat(const Eigen::MatrixXd &newMat){
     calibOutsMat = newMat;
 }
 
+/// Create a random permutation vector for shuffling.
 /**
- * Create random permutation vector for shuffling
+ * Uses a function-static RNG, so successive calls yield different permutations.
+ * @param length Length of the permutation (must be positive).
+ * @return Random permutation of the indices 0 .. length-1.
+ * @throw std::invalid_argument When length is not positive.
  */
 std::vector<int> Data::permutationVector(int length){
     if (length <= 0)
@@ -1762,8 +1892,12 @@ std::vector<int> Data::permutationVector(int length){
     return permVec;
 }
 
+/// Shuffle matrix rows: result row i takes matrix row permVec[i].
 /**
- * Shuffle matrix rows
+ * @param matrix Matrix whose rows are shuffled.
+ * @param permVec Permutation produced by permutationVector().
+ * @return Row-permuted matrix.
+ * @throw std::invalid_argument When matrix rows and permVec length do not match.
  */
 Eigen::MatrixXd Data::shuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec){
     size_t rows = matrix.rows();
@@ -1777,8 +1911,13 @@ Eigen::MatrixXd Data::shuffleMatrix(const Eigen::MatrixXd &matrix, const std::ve
     return newmat;
 }
 
+/// Restore the original row order of a matrix shuffled with permVec.
 /**
- * Unshuffle matrix rows
+ * Inverse of shuffleMatrix(): result row permVec[i] takes matrix row i.
+ * @param matrix Row-shuffled matrix.
+ * @param permVec Permutation that was used for shuffling.
+ * @return Matrix with the original row order restored.
+ * @throw std::invalid_argument When matrix rows and permVec length do not match.
  */
 Eigen::MatrixXd Data::unshuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec) {
     size_t rows = matrix.rows();
@@ -1793,8 +1932,9 @@ Eigen::MatrixXd Data::unshuffleMatrix(const Eigen::MatrixXd &matrix, const std::
 }
 
 
+/// Find indices of rows that contain any NaN (non-finite value) in the numeric data.
 /**
- * Find indices of rows that contain any NaN in numeric data
+ * @return Sorted vector of row indices that contain at least one non-finite value.
  */
 std::vector<size_t> Data::findRowsWithNa() const {
     std::vector<size_t> out;
@@ -1812,8 +1952,13 @@ std::vector<size_t> Data::findRowsWithNa() const {
     return out;
 }
 
+/// Remove rows that contain any NaN from m_data and m_timestamps.
 /**
- * Remove rows that contain any NaN from m_data and m_timestamps, but keep backups and record removed indices so they can be restored later
+ * Keeps backups of the original data/timestamps and records the removed row
+ * indices (in original coordinates, sorted) so they can be restored later.
+ * Calling twice is a no-op; calling with no NaNs present just clears the state.
+ * @note After this call, m_data rows no longer align with the original row indices;
+ * use m_na_row_indices or buildFilteredToOriginalMap() for the mapping.
  */
 void Data::removeRowsWithNa() {
     if (m_has_filtered_rows) {
@@ -1872,8 +2017,9 @@ void Data::removeRowsWithNa() {
     m_has_filtered_rows = true;
 }
 
+/// Restore the original (unfiltered) data/timestamps and clear the backups.
 /**
- * Restore the original (unfiltered) data/timestamps and clear backups
+ * No-op if removeRowsWithNa() was not applied beforehand.
  */
 void Data::restoreOriginalData() {
     if (!m_has_filtered_rows) return;
@@ -1885,8 +2031,13 @@ void Data::restoreOriginalData() {
     m_has_filtered_rows = false;
 }
 
+/// Expand predictions computed on the filtered dataset back to a full-length matrix.
 /**
- * Expand predictions on the filtered dataset back to full-length matrix
+ * Rows removed by removeRowsWithNa() are reinserted as NaN so the result
+ * again matches the original number of rows and aligns with original timestamps.
+ * @param preds Predictions for the filtered rows.
+ * @return Full-length prediction matrix (origRows x preds.cols()).
+ * @throw std::invalid_argument When preds.rows() does not match the current (filtered) row count.
  */
 Eigen::MatrixXd Data::expandPredictionsToFull(const Eigen::MatrixXd& preds) const {
     if (!m_has_filtered_rows) {
@@ -1918,8 +2069,18 @@ Eigen::MatrixXd Data::expandPredictionsToFull(const Eigen::MatrixXd& preds) cons
     return full;
 }
 
+/// Expand predictions produced from the calibration matrix back to a full-length matrix.
 /**
- * Expand predictions produced from calibration matrix
+ * For calibration pattern i, preds(i, j) is placed at the original row
+ * corresponding to filtered row (i + inpRows + j), i.e. the j-th output
+ * horizon of that pattern; unmapped rows stay NaN.
+ * @param preds Predictions for calibration patterns (row = pattern, col = horizon step).
+ * @param inpRows Number of input (lag) rows per pattern; used for index alignment.
+ * @return Full-length prediction matrix (original rows x horizon).
+ * @throw std::invalid_argument When inpRows is negative.
+ * @throw std::runtime_error On an internal mapping size mismatch.
+ * @note Assumes removeRowsWithNa() was applied before pattern building, so the
+ * backup holds the original row count; without filtering the mapping is identity.
  */
 Eigen::MatrixXd Data::expandPredictionsFromCalib(const Eigen::MatrixXd& preds, int inpRows) const {
     if (inpRows < 0) throw std::invalid_argument("expandPredictionsFromCalib: inpRows must be >= 0");
@@ -1975,10 +2136,24 @@ Eigen::MatrixXd Data::expandPredictionsFromCalib(const Eigen::MatrixXd& preds, i
     return full;
 }
 
+/// Build calibration and validation input/output matrices for the current k-fold split.
 /**
- * Make cal + val matrices for current fold in k-fold 
+ * Builds all valid lagged patterns from m_data (same construction as
+ * makeCalibMatsSplit()), then assigns fold [foldIdx] as one part and the rest
+ * as the other; largerPieceCalib decides which part is calibration. Only the
+ * calibration indices are shuffled (when shuffle is set).
+ * @param inpNumsOfVars Number of lagged rows used per input variable.
+ * @param outRows Number of output (horizon) rows.
+ * @param kFolds Total number of folds (>= 2).
+ * @param foldIdx Index of the current fold (0-based).
+ * @param shuffle Whether to shuffle the calibration patterns.
+ * @param largerPieceCalib If true, the complement of the fold is calibration; otherwise the fold itself.
+ * @param seed Random seed used for shuffling; 0 means random_device.
+ * @return Tuple of (calibration inputs, calibration outputs, validation inputs, validation outputs).
+ * @throw std::invalid_argument On invalid fold parameters.
+ * @throw std::runtime_error When no valid patterns can be built.
  */
-std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> 
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>
 Data::makeKFoldMats(
     std::vector<int> inpNumsOfVars,
     int outRows,
@@ -2050,6 +2225,7 @@ Data::makeKFoldMats(
     std::vector<int> allIdx(N);
     std::iota(allIdx.begin(), allIdx.end(), 0);
 
+    // contiguous fold ranges; the last fold also absorbs any remainder patterns
     int foldSize  = N / kFolds;
     int foldStart = foldIdx * foldSize;
     int foldEnd   = (foldIdx == kFolds - 1) ? N : (foldStart + foldSize);
@@ -2091,6 +2267,23 @@ Data::makeKFoldMats(
     return { trainInps, trainOuts, validInps, validOuts };
 }
 
+/// Build train/validation input and output matrices with per-variable lag offsets.
+/**
+ * Pattern i gathers m_data(i - minOff + off, j) for every offset off of
+ * variable j as inputs, and the target column at rows i - minOff .. + (outRows-1)
+ * as outputs; patterns containing NaN are skipped. The first nTrain patterns
+ * (optionally shuffled within that prefix) form the training set.
+ * @param inpOffsets Lag offsets used for each input variable (one vector per column).
+ * @param outRows Number of output (horizon) rows.
+ * @param trainFraction Fraction of patterns used for training (clamped to keep >= 1 pattern on both sides).
+ * @param shuffleCalib Whether to shuffle the calibration (training) patterns.
+ * @param seed Random seed used for shuffling; 0 means random_device.
+ * @return Tuple of (train inputs, train outputs, validation inputs, validation outputs,
+ * global pattern start indices, calibration pattern indices).
+ * @throw std::invalid_argument On invalid arguments.
+ * @throw std::runtime_error When no valid patterns can be built.
+ * @note Offsets may be negative/positive; -minOff shifts indices so they stay in range.
+ */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
 Data::makeMats(
     const std::vector<std::vector<int>>& inpOffsets,
@@ -2129,6 +2322,7 @@ Data::makeMats(
     }
 
     const int nRows = static_cast<int>(m_data.rows());
+    // row range needed per pattern: [i + minOff .. i + max(maxOff, outRows-1)]
     const int lastNeeded = std::max(maxOff, outRows - 1);
     const int CRcand = nRows - lastNeeded + minOff;
 
@@ -2147,7 +2341,7 @@ Data::makeMats(
     for (int i = 0; i < CRcand; ++i) {
         bool ok = true;
 
-        // --- vstupy ---
+        // --- inputs ---
         std::vector<double> inrow;
         inrow.reserve(inpC);
 
@@ -2226,6 +2420,12 @@ Data::makeMats(
     return {trainIn, trainOut, validIn, validOut, globalIdx, calIdx};
 }
 
+/// Save a vector of integers to a text file, one value per line.
+/**
+ * @param v Vector to save.
+ * @param path Path of the output file.
+ * @return True if the file was written successfully.
+ */
 bool Data::saveVector(const std::vector<int>& v, const std::string& path) {
     std::ofstream ofs(path);
     if (!ofs.is_open()) {
@@ -2240,6 +2440,22 @@ bool Data::saveVector(const std::vector<int>& v, const std::string& path) {
     return true;
 }
 
+/// Build LSTM train/validation datasets from past time steps only.
+/**
+ * Each input pattern is a (timeSteps x nCols) block of consecutive rows of
+ * m_data (row = time step, col = variable); the output is the target column
+ * at the outRows rows immediately following the block. Patterns containing
+ * NaN are skipped; the training prefix is optionally shuffled.
+ * @param timeSteps Number of past time steps per input sequence.
+ * @param outRows Number of output (horizon) rows.
+ * @param trainFraction Fraction of patterns used for training (clamped to keep >= 1 pattern on both sides).
+ * @param shuffleCalib Whether to shuffle the calibration (training) patterns.
+ * @param seed Random seed used for shuffling; 0 means random_device.
+ * @return Tuple of (train input sequences, train outputs, validation input sequences,
+ * validation outputs, global pattern start indices, calibration pattern indices).
+ * @throw std::invalid_argument On invalid arguments.
+ * @throw std::runtime_error When no valid patterns can be built.
+ */
 std::tuple<std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
 Data::makeLstmPastData(int timeSteps,
                      int outRows,
@@ -2275,7 +2491,7 @@ Data::makeLstmPastData(int timeSteps,
     for (int i = 0; i < CRcand; ++i) {
         bool ok = true;
 
-        // --- vstupy ---
+        // --- inputs ---
         Eigen::MatrixXd inBlock = m_data.block(i,0,timeSteps,DC);
 
         if (!(inBlock.array().isFinite().all())) {
@@ -2342,6 +2558,23 @@ Data::makeLstmPastData(int timeSteps,
     return {trainIn, trainOut, validIn, validOut, globalIdx, calIdx};
 }
 
+/// Build LSTM train/validation datasets from past and future time steps.
+/**
+ * Each past input is a (pastTimeSteps x nCols) block of m_data; each future
+ * input is the (futureTimeSteps x nCols-1) block of the known input variables
+ * (all columns except the target) right after it; the output is the target
+ * column over the future horizon. Patterns containing NaN are skipped.
+ * @param pastTimeSteps Number of past time steps per input sequence.
+ * @param futureTimeSteps Number of future time steps per input sequence (also the output horizon).
+ * @param trainFraction Fraction of patterns used for training (clamped to keep >= 1 pattern on both sides).
+ * @param shuffleCalib Whether to shuffle the calibration (training) patterns.
+ * @param seed Random seed used for shuffling; 0 means random_device.
+ * @return Tuple of (train past sequences, train future sequences, train outputs,
+ * validation past sequences, validation future sequences, validation outputs,
+ * global pattern start indices, calibration pattern indices).
+ * @throw std::invalid_argument On invalid arguments.
+ * @throw std::runtime_error When the data has fewer than 2 columns or no valid patterns can be built.
+ */
 std::tuple<std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>, Eigen::MatrixXd, std::vector<int>, std::vector<int>>
 Data::makeLstmPastFutureData(int pastTimeSteps,
                     int futureTimeSteps,
@@ -2379,7 +2612,7 @@ Data::makeLstmPastFutureData(int pastTimeSteps,
     for (int i = 0; i < CRcand; ++i) {
         bool ok = true;
 
-        // --- vstupy ---
+        // --- inputs ---
         Eigen::MatrixXd inPastBlock = m_data.block(i,0,pastTimeSteps,DC);
         Eigen::MatrixXd inFutureBlock = m_data.block(i + pastTimeSteps,0,futureTimeSteps,DC - 1);
 
@@ -2457,6 +2690,15 @@ Data::makeLstmPastFutureData(int pastTimeSteps,
     return {trainPastIn, trainFutureIn, trainOut, validPastIn, validFutureIn, validOut, globalIdx, calIdx};
 }
 
+/// Load a previously prepared (e.g. transformed) matrix from a binary file.
+/**
+ * File layout: int32 row count, int32 column count, then rows*cols doubles
+ * in column-major order (Eigen's default storage of MatrixXd).
+ * Despite the header name, the expected format is binary rather than plain-text CSV.
+ * @param path Path of the binary file.
+ * @return Loaded matrix; on open failure an error is printed to stderr and
+ * the result is undefined (uninitialized data).
+ */
 Eigen::MatrixXd Data::loadPreparedMatrix(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {

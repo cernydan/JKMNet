@@ -1,3 +1,9 @@
+/**
+ * @file JKMNet.cpp
+ * @brief Implements JKMNet — the top-level orchestration class of the library,
+ *        driving data loading, single-MLP Adam training, K-fold validation,
+ *        and parallel ensemble runs (MLP-only and LSTM-MLP hybrids) from a RunConfig.
+ */
 #include "JKMNet.hpp"
 #include "Metrics.hpp"
 #include "ObjectiveFunctions.hpp"
@@ -11,45 +17,42 @@
 
 using namespace std;
 
-/**
- * The constructor
- */
+/// Default constructor; leaves the object unconfigured.
 JKMNet::JKMNet(){
 
 }
 
+/// Constructor storing the run configuration and the OpenMP thread count
+/// used by the parallel ensemble loops.
 JKMNet::JKMNet(const RunConfig& cfg, unsigned nthreads)
     : cfg_(cfg), nthreads_(nthreads) {
     }
 
-/**
- * The destructor
- */
+/// Destructor.
 JKMNet::~JKMNet(){
 
 }
 
-/**
- * The copy constructor
- */
+/// Copy constructor.
+/// @todo Empty implementation — does not copy any state; verify intended semantics.
 JKMNet::JKMNet(const JKMNet& other) {
-   
+
 }
 
-/**
- * The assignment operator
- */
+/// Assignment operator.
+/// @todo Guard against self-assignment only — no members are copied; verify intended semantics.
 JKMNet& JKMNet::operator=(const JKMNet& other){
     if (this == &other) return *this;
   else {
-        
+
   }
   return *this;
 
 }
 
 /**
- * Helper function for schuffle
+ * Helper function for shuffling matrix rows by a permutation vector.
+ * @note Superseded by Data::shuffleMatrix; kept commented out for reference.
  */
 // static Eigen::MatrixXd shuffleMatrix(const Eigen::MatrixXd &mat, const std::vector<int> &perm) {
 //     Eigen::MatrixXd shuffled(mat.rows(), mat.cols());
@@ -59,8 +62,19 @@ JKMNet& JKMNet::operator=(const JKMNet& other){
 //     return shuffled;
 // }
 
+/// Implements JKMNet::trainAdamOnlineSplit — single-MLP online (SGD-style) Adam training
+/// on calibration matrices built on the fly from a Data object.
 /**
- * Train an MLP with online Adam using calibrated matrices built from Data
+ * Orchestration flow:
+ * 1. Validate the architecture/hyperparameter inputs.
+ * 2. Build the calibration input/output matrices inside @p data.
+ * 3. Optionally shuffle pattern rows (same permutation for X and Y).
+ * 4. Configure the MLP (architecture, activations, weight init) and attach the
+ *    objective function from cfg_, falling back to LEVEL_SLOPE on failure.
+ * 5. Initialize weights with input size taken from the matrix column count
+ *    (each pattern is a flattened row of inputs).
+ * 6. Train via MLP::onlineAdam, then re-run the forward pass over the training
+ *    set and compute the final MSE to fill the TrainingResult.
  */
 TrainingResult JKMNet::trainAdamOnlineSplit(
   MLP &mlp,
@@ -123,7 +137,7 @@ TrainingResult JKMNet::trainAdamOnlineSplit(
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
     mlp.initMLP(zeroIn, rngSeed);
 
-    // Run training with onlineAdam method
+    // Train with the online Adam method; any failure is logged and rethrown
     try {
         mlp.onlineAdam(maxIterations, maxError, learningRate, X, Y);
     } catch (const std::exception &ex) {
@@ -131,7 +145,9 @@ TrainingResult JKMNet::trainAdamOnlineSplit(
         throw;
     }
 
-    // Compute final loss on training set (simple MSE)
+    // Compute the final loss on the training set as plain MSE:
+    // run the forward pass for every pattern row and average the squared
+    // error over all outputs and patterns.
     Eigen::MatrixXd preds(X.rows(), Y.cols());
     for (int r = 0; r < X.rows(); ++r) {
         Eigen::VectorXd xcol = X.row(r).transpose();
@@ -148,8 +164,12 @@ TrainingResult JKMNet::trainAdamOnlineSplit(
     return result;
 }
 
+/// Implements JKMNet::trainAdamBatchSplit — single-MLP mini-batch Adam training
+/// on calibration matrices built on the fly from a Data object.
 /**
- * Train an MLP with batch Adam using calibrated matrices built from Data
+ * Same orchestration as trainAdamOnlineSplit, except training runs through
+ * MLP::batchAdam with the given @p batchSize instead of pattern-by-pattern
+ * online updates.
  */
 TrainingResult JKMNet::trainAdamBatchSplit(
   MLP &mlp,
@@ -221,7 +241,7 @@ TrainingResult JKMNet::trainAdamBatchSplit(
         throw;
     }
 
-    // Compute final loss on training set (simple MSE)
+    // Compute the final loss on the training set as plain MSE
     Eigen::MatrixXd preds(X.rows(), Y.cols());
     for (int r = 0; r < X.rows(); ++r) {
         Eigen::VectorXd xcol = X.row(r).transpose();
@@ -238,8 +258,17 @@ TrainingResult JKMNet::trainAdamBatchSplit(
     return result;
 }
 
+/// Implements JKMNet::KFold — K-fold cross-validation of an MLP trained with online Adam.
 /**
- * K-fold validation (online Adam) 
+ * For each fold, the train/validation matrices are rebuilt by
+ * Data::makeKFoldMats (honoring the shuffle and largerPieceCalib options),
+ * then the MLP is freshly initialized and trained runsPerFold times from the
+ * same seed. Validation MSE is computed on inverse-transformed (original
+ * scale) outputs, averaged across runs within the fold, and finally the mean
+ * MSE of every fold is printed to stdout.
+ *
+ * @note The Metrics::mse is computed in the original data units, not in the
+ *       transformed space used for training.
  */
 void JKMNet::KFold(
     Data &data,
@@ -277,6 +306,8 @@ void JKMNet::KFold(
 
     for(int foldIdx = 0; foldIdx < kFolds; foldIdx++){
         double meanFoldMse = 0.0; 
+        // Build this fold's train/validation split; with largerPieceCalib the
+        // calibration set takes the larger fraction of the fold boundaries
         auto [trainInps, trainOuts, validInps, validOuts] = data.makeKFoldMats(numbersOfPastVarsValues,
                                                                     static_cast<int>(mlpArchitecture.back()),
                                                                     kFolds,
@@ -285,12 +316,12 @@ void JKMNet::KFold(
                                                                     largerPieceCalib,
                                                                     seed);
         for(int run = 0; run < runsPerFold; run++){
-            // Initialize MLP
+            // Re-initialize the MLP from the seed each run
             int inputSize = static_cast<int>(trainInps.cols()); // each pattern is a row of inputs (flattened)
             Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
             testMlp.initMLP(zeroIn, seed);
 
-            // Run training with onlineAdam method
+            // Train with online Adam; any failure is logged and rethrown
             try {
                 testMlp.onlineAdam(maxIterations, maxError, learningRate, trainInps, trainOuts);
             } catch (const std::exception &ex) {
@@ -298,34 +329,38 @@ void JKMNet::KFold(
                 throw;
             }
 
-            // Validation
+            // Validate on the held-out fold; metrics are computed after
+            // inverse-transforming back to the original data units
             testMlp.calculateOutputs(validInps);
             meanFoldMse += Metrics::mse(data.inverseTransformOutputs(validOuts),
                                         data.inverseTransformOutputs(testMlp.getOutputs()));
         }
         foldsMse.push_back(meanFoldMse / runsPerFold);
     }
+    // Report the mean validation MSE per fold
     for(int fold = 0; fold < kFolds; fold++){
         std::cout<<"Fold "<<fold<<" validation mean MSE = "<<foldsMse[fold]<<"\n";
     }
 }
 
-/**
- * Setter for number of MLPs
- */
+/// Setter for the number of MLPs in the ensemble.
 void JKMNet::setNmlps(unsigned nmlp){
     Nmlps = nmlp;
 }
 
-/**
- * Getter for number of MLPs
- */
+/// Getter for the number of MLPs in the ensemble.
 unsigned JKMNet::getNmlps(){
     return Nmlps;
 }
 
+/// Implements JKMNet::init_mlps — creates Nmlps MLPs configured from cfg_
+/// and initializes their weights in parallel.
 /**
- * Initialization of MLPs vector
+ * A prototype MLP is built first (architecture, activation and weight-init
+ * types parsed from the config strings, objective function with a LEVEL_SLOPE
+ * fallback), then copied into each slot of mlps_ inside an OpenMP loop.
+ * The input size is the total number of lag values across all configured
+ * input variables (sum of the lengths of cfg_.input_numbers entries).
  */
 void JKMNet::init_mlps(){
     mlps_.clear();
@@ -352,9 +387,9 @@ void JKMNet::init_mlps(){
     }
 }
 
-/**
- * Initialization of MLPs vector for LSTM (custom input size)
- */
+/// Implements JKMNet::init_mlpsForLSTM — same as init_mlps but the MLP input
+/// size is the LSTM output size (number of LSTM cells), because these MLPs act
+/// as readout layers on top of the recurrent part, not on raw time-series inputs.
 void JKMNet::init_mlpsForLSTM(unsigned lstmOutputSize){
     mlps_.clear();
     mlps_ = std::vector<MLP>(Nmlps);
@@ -371,15 +406,34 @@ void JKMNet::init_mlpsForLSTM(unsigned lstmOutputSize){
     }
 }
 
+/// Implements JKMNet::ensembleRunMlpVector — the main config-driven MLP
+/// ensemble workflow: load and preprocess data, then train and evaluate
+/// Nmlps independent MLPs in parallel (OpenMP).
 /**
- * Ensemble run - load settings, read data, train, test
+ * Orchestration overview:
+ * -@Phase 1 (data): The CSV is loaded with the optional station-id filter,
+ *   split into calibration/validation matrices (makeMats), transformed with
+ *   scalers fitted on calibration data only, and the ground-truth outputs are
+ *   saved back in original units along with the pattern indices.
+ * -@Phase 2 (ensemble loop, parallel over runs): each run writes its own log
+ *   file, saves initial weights, trains with the trainer selected by
+ *   cfg_.trainer and, for the *_EPOCH variants, additionally dumps per-epoch
+ *   calibration/validation metric files. After training, calibration and
+ *   validation predictions are produced, inverse-transformed to original
+ *   units, and both the predictions and the per-metric rows (MSE, RMSE, PI,
+ *   NS, KGE, PBIAS, RSR) are saved. Final weights are stored per run.
+ *
+ * @note In *EpochVal trainers the resultMetrics vector is indexed 0..13 as
+ *   [MSE, RMSE, PI, NS, KGE, PBIAS, RSR] for calibration (0-6) and validation
+ *   (7-13) — the order must match MLP::onlineAdamEpochVal and friends.
  */
 void JKMNet::ensembleRunMlpVector(){
     std::cout << "The number of threads is " << nthreads_ << std::endl;
 
     // ------------------------------------------------------
-    // Load & preprocess data
+    // Load & preprocess data (shared by all ensemble runs)
     // ------------------------------------------------------
+    // Build the optional station-id filter set from the config string
     std::unordered_set<std::string> idFilter;
     if (!cfg_.id.empty()) {
         std::vector<std::string> ids = parseStringList(cfg_.id);
@@ -390,6 +444,9 @@ void JKMNet::ensembleRunMlpVector(){
     data_.loadFilteredCSV(cfg_.data_file, idFilter, cfg_.columns, cfg_.timestamp, cfg_.id_col);
     std::cout << "-> Data loaded." << std::endl;
 
+    // Build flattened (inputs, targets) pattern matrices and split them into
+    // calibration and validation parts; calIdxForUnshuffle allows restoring
+    // the original chronological order of the shuffled calibration patterns
     auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeMats(cfg_.input_numbers,
                                                                                 static_cast<int>(cfg_.mlp_architecture.back()),
                                                                                 cfg_.train_fraction,
@@ -400,22 +457,26 @@ void JKMNet::ensembleRunMlpVector(){
 
     std::cout << "-> Transforming data..." << std::endl;
 
+    // Fit the transformation scalers on calibration data only...
     auto [X_train_trans, Y_train_trans, train_scalers] = data_.transformMatsGetScalers(X_train, Y_train, strVecToTransformTypes(cfg_.transform),
                                                                             cfg_.transform_alpha, cfg_.exclude_last_col_from_transform,
                                                                             cfg_.input_numbers);
 
+    // ...and apply the same scalers to validation to avoid data leakage
     auto [X_valid_trans, Y_valid_trans] = data_.transformMatsApplyScalers(X_valid, Y_valid, strVecToTransformTypes(cfg_.transform),
                                                                          cfg_.exclude_last_col_from_transform,
                                                                             cfg_.input_numbers, train_scalers);
 
     std::cout << "-> Data transformed." << std::endl;
 
+    // Output column labels "h1", "h2", ... used as CSV headers everywhere
     std::vector<std::string> colNames;
     for (int c = 0; c < Y_train.cols(); ++c) {
         colNames.push_back("h" + std::to_string(c+1));
     }
 
-    // Save real data
+    // Save ground-truth outputs in original units (inverse-transformed,
+    // calibration set unshuffled back to chronological order)
     Eigen::MatrixXd Y_true_calib_save = data_.unshuffleMatrix(Y_train_trans, calIdxForUnshuffle);
     Eigen::MatrixXd Y_true_valid_save = Y_valid_trans;
     try {
@@ -429,33 +490,35 @@ void JKMNet::ensembleRunMlpVector(){
     data_.saveVector(pat_indices, cfg_.pattern_indices);
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
-    // Configure MLP
+    // Create and initialize the ensemble of MLPs from the config
     setNmlps(cfg_.ensemble_runs);
     init_mlps();
 
     std::cout << "-> Ensemble run starting..." << std::endl;
     // ------------------------------------------------------
-    // Ensemble loop
+    // Ensemble loop — one independent MLP per iteration, run in parallel.
+    // Each run keeps its own log file and per-run output files, so no shared
+    // state is written inside the parallel region.
     // ------------------------------------------------------
     #pragma omp parallel for num_threads(nthreads_)
     for (unsigned run = 0; run < mlps_.size() ; ++run) {
-        std::string run_id = std::to_string(run+1);  // string
-        unsigned run_id_integer = run + 1; // integer
+        std::string run_id = std::to_string(run+1);  // 1-based run id as a string (for filenames)
+        unsigned run_id_integer = run + 1; // 1-based run id as an integer (for the log)
 
-        // Check, if exists folder 'outputs/logs'
+        // Make sure the log directory exists
         if (!std::filesystem::exists(cfg_.log_dir)) {
             std::filesystem::create_directories(cfg_.log_dir);
         }
-        // Set the output file for the log messages        
+        // Open the per-run log file
         std::string filename = cfg_.log_dir + "log_run" + run_id + ".log";
         std::ofstream logFile(filename);
 
-        // Log all settings 
+        // Log all configuration settings for this run
         data_.logRunSettings(logFile, cfg_, run_id_integer);
 
         logFile << "Run " << run_id << " starting...\n";
 
-        // Save init weights
+        // Persist the initial weights (layer-wise CSV and flat vector CSV)
         mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv_init, run_id));
         mlps_[run].weightsToVectorMlp();
         mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv_init, run_id));
@@ -469,6 +532,8 @@ void JKMNet::ensembleRunMlpVector(){
         TrainerType trainerType = strToTrainerType(cfg_.trainer);
         int runIndex = run + 1;
 
+        // Per-epoch metric filenames for the *_EPOCH trainer variants:
+        // one file per (split, metric) pair for this run index
         std::string mseCalFile   = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "MSE_epochs");
         std::string rmseCalFile  = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "RMSE_epochs");
         std::string piCalFile    = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "PI_epochs");
@@ -483,8 +548,9 @@ void JKMNet::ensembleRunMlpVector(){
         std::string kgeValFile   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "KGE_epochs");
         std::string pbiasValFile = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "PBIAS_epochs");
         std::string rsrValFile   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "RSR_epochs");
-        
-        // Switch for trainer type
+
+        // Dispatch on the trainer type selected in the config; the *_EPOCH
+        // variants return per-epoch metric series which are saved to CSV
         switch (trainerType) {
             case TrainerType::ONLINE_ADAM:
                 mlps_[run].onlineAdam(
@@ -666,7 +732,8 @@ void JKMNet::ensembleRunMlpVector(){
 
         logFile << "-> Training finished.\n";
 
-        // Evaluate calibration
+        // Evaluate calibration: forward predictions on the training set,
+        // inverse-transformed back to original units for metric computation
         logFile << "-> Evaluating calibration set...\n";
         mlps_[run].calculateOutputs(X_train_trans);
         Eigen::MatrixXd Y_pred_calib = mlps_[run].getOutputs();
@@ -676,7 +743,8 @@ void JKMNet::ensembleRunMlpVector(){
             Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib, train_scalers.back());
         } catch (...) {}
 
-        // One file for each metrics per each run
+        // Compute all metrics per output column (one row per run,
+        // written into per-metric CSV files)
         std::vector<double> mseVals, rmseVals, piVals, nsVals, kgeVals, pbiasVals, rsrVals;
 
         for (int c = 0; c < Y_true_calib.cols(); ++c) {
@@ -712,15 +780,16 @@ void JKMNet::ensembleRunMlpVector(){
 
         logFile << "-> Calibration metrics and predictions saved.\n";
 
-        // Save final weights
+        // Save final weights (layer-wise CSV and flat vector CSV)
         mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv, run_id));
         mlps_[run].weightsToVectorMlp();
         mlps_[run].saveWeightsVectorCsv(Metrics::addRunIdToFilename(cfg_.weights_vec_csv, run_id));
         // mlps_[run].appendWeightsVectorCsv(cfg_.weights_vec_csv, run == 0);  // all final weights in one file
         logFile << "-> Final weights saved.\n";
 
-        // TODO: predikce, tedy samostatna metoda 
-        // Evaluate validation
+        // TODO: prediction should be a separate method
+        // Evaluate validation on the held-out split, inverse-transformed to
+        // original units, mirroring the calibration evaluation above
         logFile << "-> Evaluating validation set...\n";
         mlps_[run].calculateOutputs(X_valid_trans);
         Eigen::MatrixXd Y_pred_valid = mlps_[run].getOutputs();
@@ -730,7 +799,8 @@ void JKMNet::ensembleRunMlpVector(){
             Y_pred_valid = data_.inverseTransformOutputs(Y_pred_valid, train_scalers.back());
         } catch (...) {}
 
-        // One file for each metrics per each run
+        // Compute all metrics per output column (one row per run,
+        // written into per-metric CSV files)
         std::vector<double> mseValsV, rmseValsV, piValsV, nsValsV, kgeValsV, pbiasValsV, rsrValsV;
 
         for (int c = 0; c < Y_true_valid.cols(); ++c) {
@@ -775,8 +845,16 @@ void JKMNet::ensembleRunMlpVector(){
     std::cout << "===========================================\n";
 }
 
+/// Implements JKMNet::predictFromSavedWeights — reconstructs an MLP from the
+/// config, loads previously saved weights, and produces predictions on the
+/// validation split of the data.
 /**
- * Predict outputs from saved weights
+ * The data pipeline mirrors the training path so the network sees the same
+ * transformations: CSV load with the id filter, transformation fitted on the
+ * whole dataset, and the makeMats split (only the validation part is used).
+ * Predictions are inverse-transformed, saved to cfg_.pred_valid, and per-column
+ * RMSE is written to cfg_.metrics_val.
+ * @throw std::runtime_error If the weights file cannot be loaded.
  */
 void JKMNet::predictFromSavedWeights(const std::string &weightsPath)
 {
@@ -800,6 +878,8 @@ void JKMNet::predictFromSavedWeights(const std::string &weightsPath)
     data_.applyTransform();
     std::cout << "-> Data transformed.\n";
 
+    // Reproduce the same calibration/validation split used during training;
+    // prediction runs on the validation part only
     auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeMats(cfg_.input_numbers,
                                                                                 static_cast<int>(cfg_.mlp_architecture.back()),
                                                                                 cfg_.train_fraction,
@@ -859,6 +939,24 @@ void JKMNet::predictFromSavedWeights(const std::string &weightsPath)
 
 
 
+/// Implements JKMNet::ensembleLstmFirstTest — an early LSTM-MLP hybrid ensemble
+/// in which a single LSTMLayer consumes past observations and an output MLP
+/// maps the LSTM forward output to the target horizon.
+/**
+ * Training alternates per sample: the LSTM runs its time steps, the MLP
+ * computes a batch gradient from the LSTM output, the gradient is handed back
+ * to the LSTM (setDeltaFromNextLayer), and both parts are updated with Adam.
+ * After each sample the LSTM memory is reset (eraseMemory) so samples are
+ * treated independently. Calibration/validation evaluation, inverse
+ * transformation, and metric saving follow the same flow as in
+ * ensembleRunMlpVector.
+ *
+ * @note The output MLPs are initialized with init_mlps(), i.e. with a
+ *       time-series-flattened input size, even though the LSTM output size
+ *       (cfg_.lstm_cells) is what actually feeds them — see init_mlpsForLSTM
+ *       for the matching variant.
+ * @todo check semantics: init_mlps() vs init_mlpsForLSTM(cfg_.lstm_cells) mismatch.
+ */
 void JKMNet::ensembleLstmFirstTest(){
     std::cout << "The number of threads is " << nthreads_ << std::endl;
 
@@ -882,6 +980,8 @@ void JKMNet::ensembleLstmFirstTest(){
     data_.applyTransform();
     std::cout << "-> Data transformed." << std::endl;
 
+    // Build the LSTM windowed dataset: one input segment per pattern of
+    // lstm_past_time_steps rows, target = the next outputs
     auto [X_train, Y_train, X_valid, Y_valid, pat_indices, calIdxForUnshuffle] = data_.makeLstmPastData(cfg_.lstm_past_time_steps,
                                                                                 cfg_.mlp_architecture.back(),
                                                                                 cfg_.train_fraction,
@@ -909,34 +1009,35 @@ void JKMNet::ensembleLstmFirstTest(){
     data_.saveVector(pat_indices, cfg_.pattern_indices);
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
-    // Configure LSTMLayer
+    // Configure one LSTM layer per ensemble run
     std::vector<LSTMLayer> lstm_vec(cfg_.ensemble_runs);
     #pragma omp parallel for num_threads(nthreads_)
     for(int i = 0; i < cfg_.ensemble_runs; i++){
         lstm_vec[i].initLSTMLayer(cfg_.columns.size(),cfg_.lstm_cells,cfg_.lstm_past_time_steps,cfg_.lstm_future_time_steps,true,"XG",cfg_.seed);
     }
-        // Configure MLP
+        // Configure the output MLPs (one per ensemble run)
     setNmlps(cfg_.ensemble_runs);
     init_mlps();
 
     std::cout << "-> Ensemble run starting..." << std::endl;
     // ------------------------------------------------------
-    // Ensemble loop
+    // Ensemble loop — one independent LSTM+MLP pair per iteration,
+    // runs executed in parallel over OpenMP threads
     // ------------------------------------------------------
     #pragma omp parallel for num_threads(nthreads_)
     for (unsigned run = 0; run < lstm_vec.size() ; ++run) {
-        std::string run_id = std::to_string(run+1);  // string
-        unsigned run_id_integer = run + 1; // integer
+        std::string run_id = std::to_string(run+1);  // 1-based run id as a string (for filenames)
+        unsigned run_id_integer = run + 1; // 1-based run id as an integer (for the log)
 
-        // Check, if exists folder 'outputs/logs'
+        // Make sure the log directory exists
         if (!std::filesystem::exists(cfg_.log_dir)) {
             std::filesystem::create_directories(cfg_.log_dir);
         }
-        // Set the output file for the log messages        
+        // Open the per-run log file
         std::string filename = cfg_.log_dir + "log_run" + run_id + ".log";
         std::ofstream logFile(filename);
 
-        // Log all settings 
+        // Log all configuration settings for this run
         data_.logRunSettings(logFile, cfg_, run_id_integer);
 
         logFile << "Run " << run_id << " starting...\n";
@@ -946,6 +1047,10 @@ void JKMNet::ensembleLstmFirstTest(){
 
         int runIndex = run + 1;
 
+        // Online training loop over epochs and windowed samples:
+        // forward through the LSTM, gradient through the output MLP,
+        // backpropagate the MLP's first-layer delta into the LSTM, then
+        // Adam-update both parts; the LSTM memory is cleared per sample
         for(int iter = 1; iter <= cfg_.max_iterations ; iter++){
             std::cout<<"\n"<< iter<< "\n";
             for(size_t i = 0; i < X_train.size() ; i++){
@@ -962,7 +1067,7 @@ void JKMNet::ensembleLstmFirstTest(){
 
         logFile << "-> Training finished.\n";
 
-        // Evaluate calibration
+        // Evaluate calibration: forward-only passes through LSTM + MLP
         logFile << "-> Evaluating calibration set...\n";
         Eigen::MatrixXd Y_pred_calib = Eigen::MatrixXd(Y_train.rows(),Y_train.cols());
         Eigen::MatrixXd Y_true_calib = Y_train;
@@ -1016,7 +1121,8 @@ void JKMNet::ensembleLstmFirstTest(){
 
         logFile << "-> Calibration metrics and predictions saved.\n";
 
-        // Evaluate validation
+        // Evaluate validation: forward-only passes through LSTM + MLP on the
+        // held-out split
         logFile << "-> Evaluating validation set...\n";
         Eigen::MatrixXd Y_pred_valid = Eigen::MatrixXd(Y_valid.rows(),Y_valid.cols());
         Eigen::MatrixXd Y_true_valid = Y_valid;
@@ -1079,6 +1185,27 @@ void JKMNet::ensembleLstmFirstTest(){
     std::cout << "===========================================\n";
 }
 
+/// Implements JKMNet::ensembleLstmPastFutureTest — a three-LSTM encoder-decoder
+/// style ensemble for direct multi-horizon forecasting.
+/**
+ * Architecture per ensemble run:
+ * - lstm_past_vec    encodes the past observation window,
+ * - lstm_future_vec  encodes known future forcings (all columns except the
+ *                    observed one),
+ * - lstm_together_vec merges the two encodings over the combined past+future
+ *   time axis, and the output MLP predicts every horizon step.
+ *
+ * Training runs the horizon-wise objective through MLP::horizonBackprop so
+ * losses that need the whole forecast vector (slope/curvature/DTW/PI) see all
+ * future steps at once; the resulting delta is then propagated backwards
+ * through lstm_together_vec and split back into the past/future encoders.
+ * All three LSTMs and the MLP are Adam-updated per sample and the LSTM
+ * memories are cleared between samples.
+ *
+ * @note The between_lstm buffer stacks past encodings in the first rows and
+ *   future encodings below, matching the input layout expected by
+ *   lstm_together_vec.
+ */
 void JKMNet::ensembleLstmPastFutureTest(){
     std::cout << "The number of threads is " << nthreads_ << std::endl;
 
@@ -1102,6 +1229,8 @@ void JKMNet::ensembleLstmPastFutureTest(){
     data_.applyTransform();
     std::cout << "-> Data transformed." << std::endl;
 
+    // Build the windowed dataset: separate past-observation and
+    // future-forcing input segments plus the horizon targets
     auto [X_trainPast, X_trainFuture, Y_train, X_validPast, X_validFuture, Y_valid, pat_indices, calIdxForUnshuffle] = 
                                                     data_.makeLstmPastFutureData(cfg_.lstm_past_time_steps,
                                                                                 cfg_.lstm_future_time_steps,
@@ -1130,7 +1259,11 @@ void JKMNet::ensembleLstmPastFutureTest(){
     data_.saveVector(pat_indices, cfg_.pattern_indices);
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
-    // Configure LSTMLayer
+    // Configure the three LSTMLayers per run, plus per-run scratch buffers:
+    // between_lstm  — stacked past|future encodings fed to the "together" LSTM,
+    // lstm_to_mlp   — per-horizon-step inputs to the output MLP,
+    // delta_mlp_to_lstm — MLP input deltas propagated back into the LSTMs,
+    // separate_obs  — the observed horizon row reshaped as a single sample
     std::vector<LSTMLayer> lstm_past_vec(cfg_.ensemble_runs);
     std::vector<LSTMLayer> lstm_future_vec(cfg_.ensemble_runs);
     std::vector<LSTMLayer> lstm_together_vec(cfg_.ensemble_runs);
@@ -1148,7 +1281,7 @@ void JKMNet::ensembleLstmPastFutureTest(){
         delta_mlp_to_lstm[i] = Eigen::MatrixXd(cfg_.lstm_cells,cfg_.lstm_future_time_steps);
         separate_obs[i] = Eigen::MatrixXd(1,cfg_.lstm_future_time_steps);
     }
-        // Configure MLP
+        // Configure the output MLPs (one per ensemble run)
     setNmlps(cfg_.ensemble_runs);
     init_mlps();
 
@@ -1179,12 +1312,15 @@ void JKMNet::ensembleLstmPastFutureTest(){
 
         int runIndex = run + 1;
 
+        // Online training loop over epochs and windowed samples
         for(int iter = 1; iter <= cfg_.max_iterations ; iter++){
             for(size_t i = 0; i < X_trainPast.size() ; i++){
+                // Forward: encode past observations and future forcings...
                 lstm_past_vec[run].setInputTSSegment(X_trainPast[i]);
                 lstm_future_vec[run].setInputTSSegment(X_trainFuture[i]);
                 lstm_past_vec[run].calculateTimeSteps();
                 lstm_future_vec[run].calculateTimeSteps();
+                // ...stack both encodings into the "together" LSTM input and merge
                 between_lstm[run].block(0,0,cfg_.lstm_past_time_steps,between_lstm[run].cols()) = lstm_past_vec[run].getForwardOutput();
                 between_lstm[run].block(cfg_.lstm_past_time_steps,0,cfg_.lstm_future_time_steps,between_lstm[run].cols()) = lstm_future_vec[run].getForwardOutput();
                 lstm_together_vec[run].setInputTSSegment(between_lstm[run]);
@@ -1201,12 +1337,16 @@ void JKMNet::ensembleLstmPastFutureTest(){
                     delta_mlp_to_lstm[run] = mlps_[run].horizonBackprop(stepInputs, separate_obs[run].row(0).transpose());
                     mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
                 }
+                // Backward: push the MLP delta into the "together" LSTM and
+                // split its input deltas back between the past/future encoders
                 lstm_together_vec[run].setDeltaFromNextLayer(delta_mlp_to_lstm[run]);
                 lstm_together_vec[run].calculateGradients();
                 lstm_past_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,0,cfg_.lstm_cells,cfg_.lstm_past_time_steps)));
                 lstm_future_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,cfg_.lstm_past_time_steps,cfg_.lstm_cells,cfg_.lstm_future_time_steps)));
                 lstm_past_vec[run].calculateGradients();
                 lstm_future_vec[run].calculateGradients();
+                // Adam-update all three LSTMs; MLP was already updated above;
+                // memories are cleared per sample so samples stay independent
                 lstm_past_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
                 lstm_future_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
                 lstm_together_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
@@ -1218,7 +1358,8 @@ void JKMNet::ensembleLstmPastFutureTest(){
 
         logFile << "-> Training finished.\n";
 
-        // Evaluate calibration
+        // Evaluate calibration: forward-only passes through the three LSTMs,
+        // predicting each horizon step separately with the output MLP
         logFile << "-> Evaluating calibration set...\n";
         Eigen::MatrixXd Y_pred_calib = Eigen::MatrixXd(Y_train.rows(),Y_train.cols());
         Eigen::MatrixXd Y_true_calib = Y_train;
@@ -1283,7 +1424,8 @@ void JKMNet::ensembleLstmPastFutureTest(){
 
         logFile << "-> Calibration metrics and predictions saved.\n";
 
-        // Evaluate validation
+        // Evaluate validation on the held-out split (same forward flow as
+        // the calibration evaluation above)
         logFile << "-> Evaluating validation set...\n";
         Eigen::MatrixXd Y_pred_valid = Eigen::MatrixXd(Y_valid.rows(),Y_valid.cols());
         Eigen::MatrixXd Y_true_valid = Y_valid;

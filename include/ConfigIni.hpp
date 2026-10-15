@@ -1,4 +1,7 @@
-
+/**
+ * @file ConfigIni.hpp
+ * @brief Declares the RunConfig struct and the helpers that parse the JKMNet .ini configuration file.
+ */
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
 
@@ -20,6 +23,12 @@
 /**
  * Helper functions
  */
+
+/// Strip leading and trailing whitespace from a string.
+/**
+ * @param s Input string.
+ * @return Copy of @p s without leading/trailing whitespace characters.
+ */
 static inline std::string trimStr(const std::string &s) {
     size_t a = 0, b = s.size();
     while (a < b && std::isspace((unsigned char)s[a])) ++a;
@@ -36,6 +45,11 @@ static inline std::string trimStr(const std::string &s) {
 //     return out;
 // }
 
+/// Split a comma-separated config value into trimmed, non-empty tokens.
+/**
+ * @param s Raw value string, e.g. "8, 6, 2".
+ * @return Vector of trimmed tokens; empty entries are dropped.
+ */
 static inline std::vector<std::string> splitCommaList(const std::string &s) {
     std::vector<std::string> out;
     std::string cur;
@@ -47,6 +61,12 @@ static inline std::vector<std::string> splitCommaList(const std::string &s) {
     return out;
 }
 
+/// Split a string by a single delimiter, trimming each resulting token.
+/**
+ * @param s Input string.
+ * @param delim Delimiter character.
+ * @return Vector of trimmed tokens (empty tokens are kept, unlike splitCommaList).
+ */
 static inline std::vector<std::string>
 splitList(const std::string& s, char delim)
 {
@@ -66,6 +86,13 @@ splitList(const std::string& s, char delim)
     return out;
 }
 
+/// Parse a boolean from a config string.
+/**
+ * Accepts (case-insensitive): 1/TRUE/YES/ON and 0/FALSE/NO/OFF.
+ * @param s Value string from the ini file.
+ * @return The parsed boolean value.
+ * @throw std::runtime_error If the string matches none of the accepted forms.
+ */
 static inline bool parseBool(const std::string &s) {
     std::string x; x.reserve(s.size());
     for (char c : s) x.push_back(static_cast<char>(std::toupper((unsigned char)c)));
@@ -74,79 +101,93 @@ static inline bool parseBool(const std::string &s) {
     throw std::runtime_error("parseBool: cannot parse boolean from '" + s + "'");
 }
 
+/// Configuration of one program run, parsed from the .ini file by parseConfigIni().
 /**
- * Run the configuration
+ * Every member corresponds to a user-facing ini key of the same name.
+ * Members with default values are optional in the ini file; the ones checked
+ * at the end of parseConfigIni() (data_file, architecture, input_numbers) are
+ * required.
+ * @note A single-element per-column list (activation, transform,
+ *       transform_alpha) is broadcast to the number of layers/columns.
  */
 struct RunConfig {
     // model / training
-    std::string trainer = "online";                 // "online" or "batch"
-    std::vector<unsigned> mlp_architecture;         // e.g. [8,6,2]
-    std::vector<std::vector<int>> input_numbers;                 // e.g. [-2,-1 0; -1,0,1,2 ; ; -2,-1 ]
-    std::vector<std::string> activation = {"RELU"};
-    std::string weight_init = "RANDOM";
+    std::string trainer = "online";                 ///< Training variant ("online" or "batch"); selects the MLP trainer used by the ensemble run
+    std::vector<unsigned> mlp_architecture;         ///< Number of neurons per MLP layer, e.g. [8,6,2] (required, ini key: architecture)
+    std::vector<std::vector<int>> input_numbers;    ///< Time offsets used as inputs per data column, one |-separated list per column, e.g. "-2,-1,0 | -1,0,1,2 | | -2,-1" (required, ini key: input_numbers)
+    std::vector<std::string> activation = {"RELU"}; ///< Activation function name(s) per layer; a single value is broadcast to all layers (see activ_func_type in Layer.hpp)
+    std::string weight_init = "RANDOM";             ///< Weight initialization scheme for all layers (RANDOM, LHS, LHS2, HE, XG)
 
-    int ensemble_runs = 25;
-    int max_iterations = 500;
-    int max_metrics_step = 99;
-    double max_error = 0.002;
-    double learning_rate = 0.001;
-    bool shuffle = true;
-    unsigned seed = 42;
-    int batch_size = 30;
-    double train_fraction = 0.8;
-    bool split_shuffle = true;
+    int ensemble_runs = 25;      ///< Number of independent MLPs trained in the ensemble run
+    int max_iterations = 500;    ///< Maximum number of training iterations (epochs/pattern passes, trainer-dependent)
+    int max_metrics_step = 99;   ///< Compute and save metrics every n-th epoch in the *_EPOCH trainers
+    double max_error = 0.002;    ///< Target mean error; training stops early once the epoch error falls below it
+    double learning_rate = 0.001;///< Step size of the weight updates (Adam / backpropagation)
+    bool shuffle = true;         ///< Whether to shuffle pattern order during training
+    unsigned seed = 42;          ///< RNG seed for weight initialization and shuffling (0 means non-deterministic where supported)
+    int batch_size = 30;         ///< Number of patterns per batch in the batch trainers
+    double train_fraction = 0.8; ///< Fraction of patterns used for calibration; the rest forms the validation set
+    bool split_shuffle = true;   ///< Whether the calibration/validation split shuffles the pattern order
 
-    int lstm_past_time_steps = 30;
-    int lstm_future_time_steps = 10;
-    int lstm_cells = 10;
-    std::string model_type = "mlp";  // mlp, lstm_first, or lstm_past_future
+    int lstm_past_time_steps = 30;   ///< Length of the past observation window fed to the LSTM encoder
+    int lstm_future_time_steps = 10; ///< Length of the known future forcing window (lstm_past_future model)
+    int lstm_cells = 10;             ///< Number of LSTM cells (hidden state size) per LSTM layer
+    std::string model_type = "mlp";  ///< Model type selection: "mlp", "lstm_first", or "lstm_past_future"
 
     // objective function for training
-    std::string objective_function = "LEVEL_SLOPE";  // MSE, DIFF_SLOPE, LEVEL_SLOPE, DIFF_CURVATURE, LEVEL_SLOPE_CURVATURE, NORMALIZED_SLOPE, PERSISTENCE_INDEX, DILATE
-    double objective_alpha = 0.5;  // Weighting parameter for combined losses (α in L2)
-    double objective_alpha2 = 0.33;  // Second weighting parameter for curvature term
+    std::string objective_function = "LEVEL_SLOPE";  ///< Objective (loss) function: MSE, DIFF_SLOPE, LEVEL_SLOPE, DIFF_CURVATURE, LEVEL_SLOPE_CURVATURE, NORMALIZED_SLOPE, PERSISTENCE_INDEX, DILATE
+    double objective_alpha = 0.5;    ///< Weighting parameter for combined losses (alpha in L2)
+    double objective_alpha2 = 0.33;  ///< Second weighting parameter for the curvature term
 
     // transforms
-    std::vector<std::string> transform;
-    std::vector<double> transform_alpha;
-    bool exclude_last_col_from_transform = false;
-    bool remove_na_before_calib = true;
+    std::vector<std::string> transform;      ///< Data transform per column (NONE, MINMAX, NONLINEAR, MINMAXNONLIN, ZSCORE); a single value is broadcast to all columns
+    std::vector<double> transform_alpha;     ///< Transform parameter (alpha) per column; must match the number of columns
+    bool exclude_last_col_from_transform = false; ///< If true, the last data column is left untransformed
+    bool remove_na_before_calib = true;      ///< If true, rows containing NaN are dropped before building the calibration matrices
 
     // data selection
-    std::string data_file;
-    std::string id = "";
-    std::string id_col = "ID";
-    std::string timestamp = "date";
-    std::vector<std::string> columns;
+    std::string data_file;              ///< Path to the input CSV data file (required)
+    std::string id = "";                ///< Optional station id filter (comma-separated list); empty means use all ids
+    std::string id_col = "ID";          ///< Name of the CSV column holding the station id
+    std::string timestamp = "date";     ///< Name of the CSV column holding the timestamp
+    std::vector<std::string> columns;   ///< Names of the CSV columns used as model inputs/target; the last one is the modeled variable
 
     // optimization
-    bool pso_optimize = true;
+    bool pso_optimize = true;           ///< Whether hyperparameters are optimized with particle swarm optimization (PSO)
 
     // output paths (parsed from [paths] section)
-    std::string out_dir = "";
-    std::string log_dir = "";
-    std::string calib_mat = "";
-    std::string weights_csv_init = "";
-    std::string weights_bin_init = "";
-    std::string weights_vec_csv_init = "";
-    std::string weights_vec_bin_init = "";
-    std::string weights_csv = "";
-    std::string weights_bin = "";
-    std::string weights_vec_csv = "";
-    std::string weights_vec_bin = "";
-    std::string real_calib = "";
-    std::string pred_calib = "";
-    std::string real_valid = "";
-    std::string pred_valid = "";
-    std::string metrics_cal = "";
-    std::string metrics_val = "";
-    std::string run_info = "";
-    std::string errors_csv;
-    std::string pattern_indices = "";
+    std::string out_dir = "";            ///< Output directory for the run results
+    std::string log_dir = "";            ///< Directory for per-run log files
+    std::string calib_mat = "";          ///< Path to save the calibration input matrix
+    std::string weights_csv_init = "";   ///< Path for initial weights in readable CSV text (per-layer blocks)
+    std::string weights_bin_init = "";   ///< Path for initial weights in compact binary format
+    std::string weights_vec_csv_init = "";///< Path for initial flattened weight vector in readable CSV text
+    std::string weights_vec_bin_init = "";///< Path for initial flattened weight vector in compact binary format
+    std::string weights_csv = "";        ///< Path for final weights in readable CSV text (per-layer blocks)
+    std::string weights_bin = "";        ///< Path for final weights in compact binary format
+    std::string weights_vec_csv = "";    ///< Path for final flattened weight vector in readable CSV text
+    std::string weights_vec_bin = "";    ///< Path for final flattened weight vector in compact binary format
+    std::string real_calib = "";         ///< Path to save real (observed) calibration outputs in original units
+    std::string pred_calib = "";         ///< Path to save predicted calibration outputs in original units
+    std::string real_valid = "";         ///< Path to save real (observed) validation outputs in original units
+    std::string pred_valid = "";         ///< Path to save predicted validation outputs in original units
+    std::string metrics_cal = "";        ///< Path to the calibration metrics file (one row per metric)
+    std::string metrics_val = "";        ///< Path to the validation metrics file (one row per metric)
+    std::string run_info = "";           ///< Path for the run info/summary file
+    std::string errors_csv;              ///< Path for the per-iteration error history
+    std::string pattern_indices = "";    ///< Path to save the indices of the patterns used
 };
 
 /**
- * Mapping the helpers
+ * Mapping helpers: string -> enum conversions used while reading the config.
+ */
+
+/// Convert an activation function name (case-insensitive) to activ_func_type.
+/**
+ * @param s Name such as "RELU", "TANH", "SIGMOID" (see activ_func_type in Layer.hpp).
+ * @return The matching enum value.
+ * @throw std::runtime_error For an unrecognized name.
+ * @see activ_func_type
  */
 inline activ_func_type strToActivation(const std::string &s) {
     std::string u;
@@ -169,6 +210,13 @@ inline activ_func_type strToActivation(const std::string &s) {
     throw std::runtime_error("Unknown activation: " + s);
 }
 
+/// Convert a weight initialization name (case-insensitive) to weight_init_type.
+/**
+ * @param s One of "RANDOM", "LHS", "LHS2", "HE", "XG".
+ * @return The matching enum value.
+ * @throw std::runtime_error For an unrecognized name.
+ * @see weight_init_type
+ */
 inline weight_init_type strToWeightInit(const std::string &s) {
     std::string u;
     for (char c : s) u.push_back(static_cast<char>(std::toupper((unsigned char)c)));
@@ -181,6 +229,13 @@ inline weight_init_type strToWeightInit(const std::string &s) {
     throw std::runtime_error("Unknown weight_init: " + s);
 }
 
+/// Convert a data transform name (case-insensitive) to transform_type.
+/**
+ * @param s One of "NONE", "MINMAX", "NONLINEAR", "MINMAXNONLIN", "ZSCORE".
+ * @return The matching enum value.
+ * @throw std::runtime_error For an unrecognized name.
+ * @see transform_type (declared in Data.hpp)
+ */
 inline transform_type strToTransformType(const std::string &s) {
     std::string u;
     for (char c : s) u.push_back(static_cast<char>(std::toupper((unsigned char)c)));
@@ -193,6 +248,12 @@ inline transform_type strToTransformType(const std::string &s) {
     throw std::runtime_error("Unknown transform: " + s);
 }
 
+/// Convert a list of transform names to transform_type values.
+/**
+ * @param strs Vector of transform names (one per data column).
+ * @return Vector of matching enum values, same order and length as @p strs.
+ * @throw std::runtime_error If any entry is invalid; the message includes its index.
+ */
 inline std::vector<transform_type>
 strVecToTransformTypes(const std::vector<std::string>& strs)
 {
@@ -211,6 +272,12 @@ strVecToTransformTypes(const std::vector<std::string>& strs)
     return out;
 }
 
+/// Convert a list of activation names to activ_func_type values.
+/**
+ * @param strs Vector of activation names (one per layer).
+ * @return Vector of matching enum values, same order and length as @p strs.
+ * @throw std::runtime_error If any entry is invalid; the message includes its index.
+ */
 inline std::vector<activ_func_type>
 strVecToActivationTypes(const std::vector<std::string>& strs)
 {
@@ -230,21 +297,33 @@ strVecToActivationTypes(const std::vector<std::string>& strs)
 }
 
 
+/// Training algorithm variants selectable through the RunConfig::trainer key.
+/**
+ * Suffix "_EPOCH" marks the variants that additionally evaluate and save
+ * calibration/validation metrics every RunConfig::max_metrics_step epochs.
+ */
 enum class TrainerType {
-    ONLINE_ADAM,
-    BATCH_ADAM,
-    ONLINE_ADAM_EPOCH,
-    BATCH_ADAM_EPOCH,
-    ONLINE_BP,
-    BATCH_BP,
-    ONLINE_BP_EPOCH,
-    BATCH_BP_EPOCH,
-    ONLINE_BP_MOMENTUM,
-    ONLINE_BP_PENALIZE,
-    ONLINE_BP_MOMENTUM_EPOCH,
-    ONLINE_BP_PENALIZE_EPOCH
+    ONLINE_ADAM,              ///< Adam with per-pattern (online) updates
+    BATCH_ADAM,               ///< Adam with per-batch updates
+    ONLINE_ADAM_EPOCH,        ///< Online Adam with periodic epoch-level metric evaluation
+    BATCH_ADAM_EPOCH,         ///< Batch Adam with periodic epoch-level metric evaluation
+    ONLINE_BP,                ///< Plain backpropagation with per-pattern updates
+    BATCH_BP,                 ///< Plain backpropagation with per-batch updates
+    ONLINE_BP_EPOCH,          ///< Online backpropagation with periodic epoch-level metric evaluation
+    BATCH_BP_EPOCH,           ///< Batch backpropagation with periodic epoch-level metric evaluation
+    ONLINE_BP_MOMENTUM,       ///< Online backpropagation with a momentum term
+    ONLINE_BP_PENALIZE,       ///< Online backpropagation penalizing large weights
+    ONLINE_BP_MOMENTUM_EPOCH, ///< Online momentum backpropagation with epoch-level metric evaluation
+    ONLINE_BP_PENALIZE_EPOCH  ///< Online penalized backpropagation with epoch-level metric evaluation
 };
 
+/// Convert a lowercase trainer string to TrainerType.
+/**
+ * @param s Trainer name, e.g. "online_adam", "batch_bp_epoch"
+ *          (must be lowercase).
+ * @return The matching enum value.
+ * @throw std::invalid_argument For an unrecognized name.
+ */
 inline TrainerType strToTrainerType(const std::string& s) {
     if (s == "online_adam")       return TrainerType::ONLINE_ADAM;
     if (s == "batch_adam")        return TrainerType::BATCH_ADAM;
@@ -261,8 +340,14 @@ inline TrainerType strToTrainerType(const std::string& s) {
     throw std::invalid_argument("Unknown trainer type: " + s);
 }
 
+/// Parse an ini file into a flat key->value map.
 /**
- * Parse the ini to map
+ * Blank lines and ';'/'#' comment lines are skipped, [section] headers are
+ * ignored, inline comments after a value are stripped, and keys are
+ * lowercased.
+ * @param path Path to the ini file.
+ * @return Map from lowercase key to trimmed value.
+ * @throw std::runtime_error If the file cannot be opened.
  */
 inline std::unordered_map<std::string, std::string> parseIniToMap(const std::string &path) {
     std::ifstream ifs(path);
@@ -294,7 +379,14 @@ inline std::unordered_map<std::string, std::string> parseIniToMap(const std::str
 }
 
 /**
- * Convert string list to numeric lists
+ * Convert string lists to numeric lists.
+ */
+
+/// Parse a comma-separated list into non-negative integers.
+/**
+ * @param s String like "8, 6, 2".
+ * @return Vector of unsigned values, one per token.
+ * @throw std::runtime_error On a negative or non-numeric token.
  */
 inline std::vector<unsigned> parseUnsignedList(const std::string &s) {
     std::vector<unsigned> out;
@@ -310,6 +402,12 @@ inline std::vector<unsigned> parseUnsignedList(const std::string &s) {
     return out;
 }
 
+/// Parse a comma-separated list into non-negative doubles.
+/**
+ * @param s String like "0.5, 0.33".
+ * @return Vector of double values, one per token.
+ * @throw std::runtime_error On a negative or non-numeric token.
+ */
 inline std::vector<double> parseUnsignedListDouble(const std::string &s) {
     std::vector<double> out;
     for (auto &tok : splitCommaList(s)) {
@@ -324,6 +422,15 @@ inline std::vector<double> parseUnsignedListDouble(const std::string &s) {
     return out;
 }
 
+/// Parse one integer range token into the expanded list of offsets.
+/**
+ * Accepts "a" (single value), "a:b" (inclusive range, step 1), or
+ * "a:b:step" (inclusive range with explicit step); descending ranges are
+ * supported when a > b.
+ * @param tok Token such as "-2", "-2:0", or "0:10:2".
+ * @return Expanded vector of offsets.
+ * @throw std::runtime_error On a malformed token or non-positive step.
+ */
 inline std::vector<int> parseRangeToken(const std::string& tok)
 {
     auto parts = splitList(tok, ':');
@@ -354,6 +461,11 @@ inline std::vector<int> parseRangeToken(const std::string& tok)
     throw std::runtime_error("Invalid range token '" + tok + "'");
 }
 
+/// Parse a comma-separated expression of offset ranges into a sorted, unique list.
+/**
+ * @param s Expression like "-2,-1,0:2".
+ * @return Sorted vector of distinct time offsets.
+ */
 inline std::vector<int> parseOffsetExpr(const std::string& s)
 {
     std::vector<int> out;
@@ -370,6 +482,14 @@ inline std::vector<int> parseOffsetExpr(const std::string& s)
     return out;
 }
 
+/// Parse the '|'-separated input_numbers value into one offset list per data column.
+/**
+ * Blocks separated by '|' correspond to the data columns; an empty block
+ * yields an empty offset list for that column.
+ * @param s String like "-2,-1,0 | -1,0,1,2 | | -2,-1".
+ * @return Vector of offset vectors, one per column.
+ * @see RunConfig::input_numbers
+ */
 inline std::vector<std::vector<int>>
 parseOffsetLists(const std::string& s)
 {
@@ -385,12 +505,25 @@ parseOffsetLists(const std::string& s)
     return out;
 }
 
+/// Parse a comma-separated list of strings (trimmed, empty tokens dropped).
+/**
+ * @param s String like "P, Q, h".
+ * @return Vector of trimmed tokens.
+ */
 inline std::vector<std::string> parseStringList(const std::string &s) {
     return splitCommaList(s);
 }
 
+/// Read an ini file and build the validated RunConfig.
 /**
- * Parse config from ini 
+ * Missing keys fall back to the RunConfig default values. A single-element
+ * activation/transform/transform_alpha list is broadcast to the number of
+ * layers/columns respectively.
+ * @param path Path to the ini configuration file.
+ * @return Populated and validated RunConfig.
+ * @throw std::runtime_error If the file is missing/unreadable, a required key
+ *        (data_file, architecture, input_numbers) is absent, list lengths
+ *        mismatch, or a value cannot be parsed.
  */
 inline RunConfig parseConfigIni(const std::string &path) {
     auto kv = parseIniToMap(path);

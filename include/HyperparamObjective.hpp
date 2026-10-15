@@ -1,3 +1,8 @@
+/**
+ * @file HyperparamObjective.hpp
+ * @brief Declares the objective helpers used by the PSO hyperparameter optimizer.
+ */
+
 #ifndef HYPERPARAM_OBJ_HPP
 #define HYPERPARAM_OBJ_HPP
 

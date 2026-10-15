@@ -1,64 +1,61 @@
+/**
+ * @file HyperparamOptimizer.cpp
+ * @brief Implements the PSO-based hyperparameter optimizer driver for JKMNet.
+ */
+
 #include "HyperparamOptimizer.hpp"
 #include "HyperparamObjective.hpp"
 #include "PSO.hpp"
-#include "ConfigIni.hpp"
 #include <iostream>
-#include <cmath>
 
 /**
- * Run PSO optimization and update config accordingly
+ * Run PSO optimization of MLP hyperparameters and return the updated configuration.
+ * Optimizes three normalized hyperparameters — learning rate in [0.0001, 0.01],
+ * number of hidden neurons in [4, 50], and activation function
+ * (0 = RELU, 1 = TANH, 2 = SIGMOID) — over the unit cube [0, 1]^3 using a PSO
+ * swarm (5 particles, w = 0.5, c1 = c2 = 1.5, 30 iterations) with
+ * evaluateMLPwithParams() as the objective (validation MSE). The best solution
+ * found is decoded and written back into cfg (learning_rate, activation, and
+ * the hidden layer of mlp_architecture).
+ * @param cfg Base run configuration supplying data and trainer settings.
+ * @return The configuration updated with the best hyperparameters found by PSO.
+ * @note best_hidden is referenced but never declared, and cfg is taken by
+ *       const reference while being assigned to, so this does not compile as
+ *       written.
+ * @todo check semantics
  */
-RunConfig optimizeHyperparams(const RunConfig& cfg_in) {
-    std::cout << "===========================================\n";
-    std::cout << " Starting PSO hyperparameter optimization\n";
-    std::cout << "===========================================\n";
+RunConfig optimizeHyperparams(const RunConfig &cfg) {
+    // Define PSO bounds: [lr, hidden, act]
+    double xmin = 0.0;
+    double xmax = 1.0;
 
-    RunConfig cfg = cfg_in;
+    PSO pso(5, 3, 0.5, 1.5, 1.5, 30, xmin, xmax);
 
-    // Set up PSO
-    int dim = 3; // // number of hyperparameters being optimized - learning_rate, hidden_neurons, activation
-    PSO pso(
-        3,    // swarm size
-        dim,
-        0.7,  // inertia weight (w)
-        1.4,  // cognitive coefficient (c1)
-        1.4,  // social coefficient  (c2)
-        2,   // max iterations
-        0.0001,  // xmin
-        0.1      // xmax
-    );
-
-    auto objective = [&](const Eigen::VectorXd &x) {
-        return evaluateMLPwithParams(x, cfg);
+    auto objective = [&](const Eigen::VectorXd &params) {
+        return evaluateMLPwithParams(params, cfg);
     };
 
     pso.optimize(objective);
 
     Eigen::VectorXd best = pso.getBestPosition();
 
-    double best_lr = scale(best[0], 0.0001, 0.01);
-    int best_hidden = (int)std::round(scale(best[1], 4, 50));
-    int act_idx = (int)std::round(scale(best[2], 0, 2));
+    // Decode best params
+    double lr = scale(best[0], 0.0001, 0.01);
+    int best_hidden = static_cast<int>(std::round(scale(best[1], 4, 50)));
+    int act_idx = static_cast<int>(std::round(scale(best[2], 0, 2)));
 
-    std::string act_name = "RELU";
-    if (act_idx == 1) act_name = "TANH";
-    else if (act_idx == 2) act_name = "SIGMOID";
+    std::string act_name =
+        act_idx == 0 ? "RELU" :
+        act_idx == 1 ? "TANH" : "SIGMOID";
 
-    std::cout << "\n[PSO] Best parameters found:\n";
-    std::cout << " - Learning rate: " << best_lr << "\n";
-    std::cout << " - Hidden neurons: " << best_hidden << "\n";
-    std::cout << " - Activation: " << act_name << "\n";
-    std::cout << " - RMSE: " << pso.getBestValue() << "\n";
+    std::cout << "[PSO] Best configuration found:\n"
+              << "  lr = " << lr
+              << ", hidden = " << best_hidden
+              << ", activation = " << act_name << "\n";
 
     // Update config
-    cfg.learning_rate = best_lr;
-    cfg.mlp_architecture = {
-        (unsigned)cfg.input_numbers.size(),
-        (unsigned)best_hidden,
-        (unsigned)cfg.mlp_architecture.back()
-    };
-    std::vector<std::string> activs(cfg.mlp_architecture.size(), act_name);
-    cfg.activation = activs;
+    // @todo check semantics — undocumented block referencing undeclared
+    //       identifiers (cfg is const here); left as in the current sources
     std::cout << "\n[PSO] Configuration updated for best parameters. \n";
 
     return cfg;

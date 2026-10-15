@@ -19,6 +19,10 @@
 // TODO: [PSO] Change randomization in PSO using seed from 'config_model.ini' (?)
 // TODO: [PSO] Increase params of PSO, i.e., swarm size, max iteration, ... (in HyperparamOptimizer.cpp)
 
+/**
+ * @file main.cpp
+ * @brief Entry point: run JKMNet in prediction or ensemble-training mode, with optional PSO hyperparameter optimization.
+ */
 
 #include "ConfigIni.hpp"
 #include "Data.hpp"
@@ -33,6 +37,21 @@
 #include <string>
 #include <filesystem>
 
+/**
+ * Entry point of the JKMNet application.
+ * Parses the command line, loads the configuration from
+ * settings/config_model.ini, and then runs one of two modes:
+ *  - Prediction mode ("predict"): loads saved weights and runs predictions
+ *    via JKMNet::predictFromSavedWeights().
+ *  - Training mode: optionally runs PSO hyperparameter optimization
+ *    (cfg.pso_optimize), cleans previous outputs, and runs the ensemble with
+ *    the model type selected by cfg.model_type ("mlp", "lstm_first", or
+ *    "lstm_past_future").
+ * @param argc Number of command-line arguments.
+ * @param argv Arguments: "[predict [weights_path [threads]]]" or "[threads]".
+ * @return 0 on success, 1 on error (missing weights file, failed prediction,
+ *         or unknown model_type).
+ */
 int main(int argc, char** argv) {
     unsigned nthreads = 1;
     bool predictMode = false;

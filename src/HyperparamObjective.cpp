@@ -1,3 +1,8 @@
+/**
+ * @file HyperparamObjective.cpp
+ * @brief Implements the objective wrapper that evaluates one MLP configuration for the PSO optimizer.
+ */
+
 #include "HyperparamObjective.hpp"
 #include "ConfigIni.hpp"
 #include "Data.hpp"
@@ -10,14 +15,32 @@
 
 
 /**
- * Helper to put values into range
+ * Helper to put values into range.
+ * Performs a linear map of a normalized coordinate x from [0, 1] onto [xmin, xmax].
+ * @param x Normalized coordinate, expected in [0, 1].
+ * @param xmin Lower bound of the target range.
+ * @param xmax Upper bound of the target range.
+ * @return The value xmin + x * (xmax - xmin).
  */
-double scale(double x, double xmin, double xmax) { 
+double scale(double x, double xmin, double xmax) {
     return xmin + x * (xmax - xmin);
 }
 
 /**
- * Evaluate a single MLP configuration defined by PSO params
+ * Evaluate a single MLP configuration defined by PSO params.
+ * Decodes the normalized PSO vector into concrete hyperparameters — learning
+ * rate in [0.0001, 0.01], number of hidden neurons in [4, 50], and activation
+ * function (0 = RELU, 1 = TANH, 2 = SIGMOID) — then loads and transforms the
+ * data according to cfg, builds a three-layer MLP
+ * (inputs - hidden_neurons - outputs), trains it with the trainer selected in
+ * cfg (online or batch Adam), and returns the validation MSE as the objective
+ * value to minimize.
+ * @param params Normalized PSO position of size 3 with components in [0, 1].
+ * @param cfg Run configuration supplying the data file, transforms, trainer
+ *        settings, and the input/output architecture.
+ * @return Validation MSE of the trained MLP; returns +infinity if evaluation fails.
+ * @note Uses cfg.learning_rate rather than the decoded learning rate
+ *       @todo check semantics
  */
 double evaluateMLPwithParams(const Eigen::VectorXd &params, const RunConfig &cfg) {
     try {
@@ -88,7 +111,7 @@ double evaluateMLPwithParams(const Eigen::VectorXd &params, const RunConfig &cfg
                 cfg.batch_size, cfg.learning_rate,
                 X_train, Y_train
             );
-                        
+
         }
 
         // ------------------------------------------------------------
@@ -97,19 +120,12 @@ double evaluateMLPwithParams(const Eigen::VectorXd &params, const RunConfig &cfg
         mlp.calculateOutputs(X_valid);
         Eigen::MatrixXd Y_pred = mlp.getOutputs();
 
-        double rmse = Metrics::rmse(Y_valid, Y_pred);
+        double mse = Metrics::mse(Y_valid, Y_pred);
 
-        if (!std::isfinite(rmse))
-            rmse = 1e6; // penalize invalid runs
+        return mse;
 
-        std::cout << "[evaluateMLPwithParams] Particle: lr = " << lr
-                  << ", hidden = " << hidden_neurons
-                  << ", act = " << act_idx
-                  << ", RMSE = " << rmse << "\n";
-
-        return rmse;
     } catch (const std::exception &e) {
-        std::cerr << "[evaluateMLPwithParams] Error: " << e.what() << std::endl;
-        return 1e6;
+        std::cerr << "[PSO] Evaluation failed: " << e.what() << "\n";
+        return std::numeric_limits<double>::infinity(); // penalize invalid configs
     }
 }

@@ -1,3 +1,8 @@
+/**
+ * @file CNN.cpp
+ * @brief Implements CNN — construction, 1D forward pass, and Adam backpropagation for a stack of CNNLayer objects.
+ */
+
 #include "CNN.hpp"
 #include <iostream>
 #include <random>
