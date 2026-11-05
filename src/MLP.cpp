@@ -1883,7 +1883,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     int maxIterations,
     double maxError,
     double learningRate,
-    int metricsAfterXEpochs)
+    int metricsAfterXEpochs,
+    const EpochMetricContext *epochCtx)
 {
     if (layers_.empty())
         throw std::logic_error("onlineAdamEpochVal called before initMLP");
@@ -1897,8 +1898,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     if (Xval.rows() != Yval.rows())
         throw std::invalid_argument("validation matrices have different number of rows");
 
-    if (maxIterations <= 0 || metricsAfterXEpochs <= 0)
-        throw std::invalid_argument("maxIterations and metricsAfterXEpochs must be positive");
+    if (maxIterations <= 0 || metricsAfterXEpochs < 0)
+        throw std::invalid_argument("maxIterations must be positive and metricsAfterXEpochs non-negative (0 = epoch-metric recording disabled)");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -1906,31 +1907,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     if (metricsAfterXEpochs > maxIterations)
         throw std::invalid_argument("metricsAfterXEpochs can't be bigger than maxIterations");
 
-    std::vector<Eigen::MatrixXd> resultMetrics;
-    // Pre-allocate 14 metric matrices (7 train + 7 validation). Number of rows
-    // = number of evaluations: every epoch when metricsAfterXEpochs == 1,
-    // otherwise one row per metricsAfterXEpochs epochs (+1 for the extra
-    // evaluation when the interval does not divide maxIterations).
-    int rowControl;
-    if(metricsAfterXEpochs == 1){
-        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
-        for(int i = 0; i < 14; i++){
-            resultMetrics.push_back(prepMat);
-        }
-    } else {
-        rowControl = maxIterations / metricsAfterXEpochs;
-        if(maxIterations % metricsAfterXEpochs == 0){
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        } else {
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        }
-    }
+    std::vector<Eigen::MatrixXd> resultMetrics =
+        Metrics::initEpochMetrics(maxIterations, metricsAfterXEpochs, static_cast<int>(Ytrain.cols()));
 
     int numOfPatterns = Xtrain.rows();                  // number of patterns in calibration matrix
     int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
@@ -1973,87 +1951,26 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
             }
         }
         Error = Error / numOfPatterns;
-        // Evaluate metrics either every epoch or every metricsAfterXEpochs epochs.
-        // Train set first (entries 0..6), then validation set (entries 7..13).
-        if(metricsAfterXEpochs == 1){
-            calculateOutputs(Xtrain);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch - 1,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch - 1,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch - 1,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch - 1,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch - 1,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch - 1,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch - 1,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
+        // in original units with chronological (unshuffled) calibration order when epochCtx is given
+        if (Metrics::isEpochMetricRecord(epoch, metricsAfterXEpochs, maxIterations)) {
+            size_t row = Metrics::epochMetricRowIndex(epoch, metricsAfterXEpochs, maxIterations);
+            const Eigen::MatrixXd *YcalTrue = &Ytrain;
+            const Eigen::MatrixXd *YvalTrue = &Yval;
+            if (epochCtx != nullptr) {
+                if (epochCtx->YtrueCalOrig.size() > 0) YcalTrue = &epochCtx->YtrueCalOrig;
+                if (epochCtx->YtrueValOrig.size() > 0) YvalTrue = &epochCtx->YtrueValOrig;
             }
+
+            calculateOutputs(Xtrain);
+            Eigen::MatrixXd YpredCal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepCalPreds) YpredCal = epochCtx->prepCalPreds(YpredCal);
 
             calculateOutputs(Xval);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch - 1,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch - 1,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch - 1,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch - 1,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch - 1,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch - 1,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch - 1,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-            }
-        } else {
-            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
-                int row = epoch / metricsAfterXEpochs - 1;
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
+            Eigen::MatrixXd YpredVal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepValPreds) YpredVal = epochCtx->prepValPreds(YpredVal);
 
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
-            // Extra evaluation before the final epoch so the series always ends
-            // with a measurement even when metricsAfterXEpochs does not divide
-            // maxIterations (uses the pre-allocated +1 row in that case).
-            if(epoch == maxIterations - 1){
-                int row;
-                if(maxIterations % metricsAfterXEpochs == 0){
-                    row = rowControl - 1;
-                } else {
-                    row = rowControl;
-                }
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
-
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
+            Metrics::fillEpochMetricRow(resultMetrics, row, *YcalTrue, YpredCal, *YvalTrue, YpredVal);
         }
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
@@ -2096,7 +2013,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
     int maxIterations,
     double maxError,
     double learningRate,
-    int metricsAfterXEpochs)
+    int metricsAfterXEpochs,
+    const EpochMetricContext *epochCtx)
 {
     if (layers_.empty())
         throw std::logic_error("onlineBpEpochVal called before initMLP");
@@ -2110,8 +2028,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
     if (Xval.rows() != Yval.rows())
         throw std::invalid_argument("validation matrices have different number of rows");
 
-    if (maxIterations <= 0 || metricsAfterXEpochs <= 0)
-        throw std::invalid_argument("maxIterations and metricsAfterXEpochs must be positive");
+    if (maxIterations <= 0 || metricsAfterXEpochs < 0)
+        throw std::invalid_argument("maxIterations must be positive and metricsAfterXEpochs non-negative (0 = epoch-metric recording disabled)");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -2119,27 +2037,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
     if (metricsAfterXEpochs > maxIterations)
         throw std::invalid_argument("metricsAfterXEpochs can't be bigger than maxIterations");
 
-    std::vector<Eigen::MatrixXd> resultMetrics;
-    int rowControl;
-    if(metricsAfterXEpochs == 1){
-        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
-        for(int i = 0; i < 14; i++){
-            resultMetrics.push_back(prepMat);
-        }
-    } else {
-        rowControl = maxIterations / metricsAfterXEpochs;
-        if(maxIterations % metricsAfterXEpochs == 0){
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        } else {
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        }
-    }
+    std::vector<Eigen::MatrixXd> resultMetrics =
+        Metrics::initEpochMetrics(maxIterations, metricsAfterXEpochs, static_cast<int>(Ytrain.cols()));
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
@@ -2152,83 +2051,27 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
             throw;
         }
 
-        // Evaluate metrics either every epoch or every metricsAfterXEpochs epochs
-        if(metricsAfterXEpochs == 1){
-            calculateOutputs(Xtrain);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        int epoch1 = epoch + 1;  // 1-based epoch for the metric helpers
+        // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
+        // in original units with chronological (unshuffled) calibration order when epochCtx is given
+        if (Metrics::isEpochMetricRecord(epoch1, metricsAfterXEpochs, maxIterations)) {
+            size_t row = Metrics::epochMetricRowIndex(epoch1, metricsAfterXEpochs, maxIterations);
+            const Eigen::MatrixXd *YcalTrue = &Ytrain;
+            const Eigen::MatrixXd *YvalTrue = &Yval;
+            if (epochCtx != nullptr) {
+                if (epochCtx->YtrueCalOrig.size() > 0) YcalTrue = &epochCtx->YtrueCalOrig;
+                if (epochCtx->YtrueValOrig.size() > 0) YvalTrue = &epochCtx->YtrueValOrig;
             }
+
+            calculateOutputs(Xtrain);
+            Eigen::MatrixXd YpredCal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepCalPreds) YpredCal = epochCtx->prepCalPreds(YpredCal);
 
             calculateOutputs(Xval);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-            }
-        } else {
-            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
-                int row = epoch / metricsAfterXEpochs - 1;
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
+            Eigen::MatrixXd YpredVal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepValPreds) YpredVal = epochCtx->prepValPreds(YpredVal);
 
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
-            if(epoch == maxIterations - 1){
-                int row;
-                if(maxIterations % metricsAfterXEpochs == 0){
-                    row = rowControl - 1;
-                } else {
-                    row = rowControl;
-                }
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
-
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
+            Metrics::fillEpochMetricRow(resultMetrics, row, *YcalTrue, YpredCal, *YvalTrue, YpredVal);
         }
         if(result.converged != false){
             result.iterations = epoch;
@@ -2266,7 +2109,8 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     int maxIterations,
     double maxError,
     double learningRate,
-    int metricsAfterXEpochs)
+    int metricsAfterXEpochs,
+    const EpochMetricContext *epochCtx)
 {
     if (layers_.empty())
         throw std::logic_error("batchAdamEpochVal called before initMLP");
@@ -2280,8 +2124,8 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     if (Xval.rows() != Yval.rows())
         throw std::invalid_argument("validation matrices have different number of rows");
 
-    if (maxIterations <= 0 || batchSize <= 0 || metricsAfterXEpochs <= 0)
-        throw std::invalid_argument("maxIterations, batchSize and metricsAfterXEpochs must be positive");
+    if (maxIterations <= 0 || batchSize <= 0 || metricsAfterXEpochs < 0)
+        throw std::invalid_argument("maxIterations and batchSize must be positive and metricsAfterXEpochs non-negative (0 = epoch-metric recording disabled)");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -2289,27 +2133,8 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     if (metricsAfterXEpochs > maxIterations)
         throw std::invalid_argument("metricsAfterXEpochs can't be bigger than maxIterations");
 
-    std::vector<Eigen::MatrixXd> resultMetrics;
-    int rowControl;
-    if(metricsAfterXEpochs == 1){
-        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
-        for(int i = 0; i < 14; i++){
-            resultMetrics.push_back(prepMat);
-        }
-    } else {
-        rowControl = maxIterations / metricsAfterXEpochs;
-        if(maxIterations % metricsAfterXEpochs == 0){
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        } else {
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        }
-    }
+    std::vector<Eigen::MatrixXd> resultMetrics =
+        Metrics::initEpochMetrics(maxIterations, metricsAfterXEpochs, static_cast<int>(Ytrain.cols()));
 
     int numOfPatterns = Xtrain.rows();                  // number of patterns in calibration matrix
     int inpSize = layers_[0].getWeights().cols()-1;   // number of inputs to first layer (without bias)
@@ -2359,82 +2184,26 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
             }
             Error = Error / numOfPatterns;
 
-        if(metricsAfterXEpochs == 1){
-            calculateOutputs(Xtrain);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch - 1,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch - 1,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch - 1,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch - 1,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch - 1,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch - 1,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch - 1,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
+        // in original units with chronological (unshuffled) calibration order when epochCtx is given
+        if (Metrics::isEpochMetricRecord(epoch, metricsAfterXEpochs, maxIterations)) {
+            size_t row = Metrics::epochMetricRowIndex(epoch, metricsAfterXEpochs, maxIterations);
+            const Eigen::MatrixXd *YcalTrue = &Ytrain;
+            const Eigen::MatrixXd *YvalTrue = &Yval;
+            if (epochCtx != nullptr) {
+                if (epochCtx->YtrueCalOrig.size() > 0) YcalTrue = &epochCtx->YtrueCalOrig;
+                if (epochCtx->YtrueValOrig.size() > 0) YvalTrue = &epochCtx->YtrueValOrig;
             }
+
+            calculateOutputs(Xtrain);
+            Eigen::MatrixXd YpredCal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepCalPreds) YpredCal = epochCtx->prepCalPreds(YpredCal);
 
             calculateOutputs(Xval);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch - 1,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch - 1,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch - 1,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch - 1,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch - 1,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch - 1,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch - 1,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-            }
-        } else {
-            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
-                int row = epoch / metricsAfterXEpochs - 1;
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
+            Eigen::MatrixXd YpredVal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepValPreds) YpredVal = epochCtx->prepValPreds(YpredVal);
 
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
-            if(epoch == maxIterations - 1){
-                int row;
-                if(maxIterations % metricsAfterXEpochs == 0){
-                    row = rowControl - 1;
-                } else {
-                    row = rowControl;
-                }
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
-
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
+            Metrics::fillEpochMetricRow(resultMetrics, row, *YcalTrue, YpredCal, *YvalTrue, YpredVal);
         }
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
@@ -2480,7 +2249,8 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     int maxIterations,
     double maxError,
     double learningRate,
-    int metricsAfterXEpochs)
+    int metricsAfterXEpochs,
+    const EpochMetricContext *epochCtx)
 {
     if (layers_.empty())
         throw std::logic_error("batchBpEpochVal called before initMLP");
@@ -2494,8 +2264,8 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     if (Xval.rows() != Yval.rows())
         throw std::invalid_argument("validation matrices have different number of rows");
 
-    if (maxIterations <= 0 || batchSize <= 0 || metricsAfterXEpochs <= 0)
-        throw std::invalid_argument("maxIterations, batchSize and metricsAfterXEpochs must be positive");
+    if (maxIterations <= 0 || batchSize <= 0 || metricsAfterXEpochs < 0)
+        throw std::invalid_argument("maxIterations and batchSize must be positive and metricsAfterXEpochs non-negative (0 = epoch-metric recording disabled)");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -2503,27 +2273,8 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
     if (metricsAfterXEpochs > maxIterations)
         throw std::invalid_argument("metricsAfterXEpochs can't be bigger than maxIterations");
 
-    std::vector<Eigen::MatrixXd> resultMetrics;
-    int rowControl;
-    if(metricsAfterXEpochs == 1){
-        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
-        for(int i = 0; i < 14; i++){
-            resultMetrics.push_back(prepMat);
-        }
-    } else {
-        rowControl = maxIterations / metricsAfterXEpochs;
-        if(maxIterations % metricsAfterXEpochs == 0){
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        } else {
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        }
-    }
+    std::vector<Eigen::MatrixXd> resultMetrics =
+        Metrics::initEpochMetrics(maxIterations, metricsAfterXEpochs, static_cast<int>(Ytrain.cols()));
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
@@ -2536,82 +2287,27 @@ std::vector<Eigen::MatrixXd> MLP::batchBpEpochVal(
             throw;
         }
 
-        if(metricsAfterXEpochs == 1){
-            calculateOutputs(Xtrain);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        int epoch1 = epoch + 1;  // 1-based epoch for the metric helpers
+        // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
+        // in original units with chronological (unshuffled) calibration order when epochCtx is given
+        if (Metrics::isEpochMetricRecord(epoch1, metricsAfterXEpochs, maxIterations)) {
+            size_t row = Metrics::epochMetricRowIndex(epoch1, metricsAfterXEpochs, maxIterations);
+            const Eigen::MatrixXd *YcalTrue = &Ytrain;
+            const Eigen::MatrixXd *YvalTrue = &Yval;
+            if (epochCtx != nullptr) {
+                if (epochCtx->YtrueCalOrig.size() > 0) YcalTrue = &epochCtx->YtrueCalOrig;
+                if (epochCtx->YtrueValOrig.size() > 0) YvalTrue = &epochCtx->YtrueValOrig;
             }
+
+            calculateOutputs(Xtrain);
+            Eigen::MatrixXd YpredCal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepCalPreds) YpredCal = epochCtx->prepCalPreds(YpredCal);
 
             calculateOutputs(Xval);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-            }
-        } else {
-            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
-                int row = epoch / metricsAfterXEpochs - 1;
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
+            Eigen::MatrixXd YpredVal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepValPreds) YpredVal = epochCtx->prepValPreds(YpredVal);
 
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
-            if(epoch == maxIterations - 1){
-                int row;
-                if(maxIterations % metricsAfterXEpochs == 0){
-                    row = rowControl - 1;
-                } else {
-                    row = rowControl;
-                }
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
-
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
+            Metrics::fillEpochMetricRow(resultMetrics, row, *YcalTrue, YpredCal, *YvalTrue, YpredVal);
         }
         if(result.converged != false){
             result.iterations = epoch;
@@ -2647,7 +2343,8 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
     double maxError,
     double learningRate,
     int metricsAfterXEpochs,
-    double lambda)
+    double lambda,
+    const EpochMetricContext *epochCtx)
 {
     if (layers_.empty())
         throw std::logic_error("onlineBpEpochVal called before initMLP");
@@ -2661,8 +2358,8 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
     if (Xval.rows() != Yval.rows())
         throw std::invalid_argument("validation matrices have different number of rows");
 
-    if (maxIterations <= 0 || metricsAfterXEpochs <= 0)
-        throw std::invalid_argument("maxIterations and metricsAfterXEpochs must be positive");
+    if (maxIterations <= 0 || metricsAfterXEpochs < 0)
+        throw std::invalid_argument("maxIterations must be positive and metricsAfterXEpochs non-negative (0 = epoch-metric recording disabled)");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -2673,27 +2370,8 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
     if (lambda <= 0.0 || lambda > 1.0)
         throw std::invalid_argument("lambda must be between 0 and 1");
 
-    std::vector<Eigen::MatrixXd> resultMetrics;
-    int rowControl;
-    if(metricsAfterXEpochs == 1){
-        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
-        for(int i = 0; i < 14; i++){
-            resultMetrics.push_back(prepMat);
-        }
-    } else {
-        rowControl = maxIterations / metricsAfterXEpochs;
-        if(maxIterations % metricsAfterXEpochs == 0){
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        } else {
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        }
-    }
+    std::vector<Eigen::MatrixXd> resultMetrics =
+        Metrics::initEpochMetrics(maxIterations, metricsAfterXEpochs, static_cast<int>(Ytrain.cols()));
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
@@ -2705,82 +2383,27 @@ std::vector<Eigen::MatrixXd> MLP::onlinePenalizeBpEpochVal(
             throw;
         }
 
-        if(metricsAfterXEpochs == 1){
-            calculateOutputs(Xtrain);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        int epoch1 = epoch + 1;  // 1-based epoch for the metric helpers
+        // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
+        // in original units with chronological (unshuffled) calibration order when epochCtx is given
+        if (Metrics::isEpochMetricRecord(epoch1, metricsAfterXEpochs, maxIterations)) {
+            size_t row = Metrics::epochMetricRowIndex(epoch1, metricsAfterXEpochs, maxIterations);
+            const Eigen::MatrixXd *YcalTrue = &Ytrain;
+            const Eigen::MatrixXd *YvalTrue = &Yval;
+            if (epochCtx != nullptr) {
+                if (epochCtx->YtrueCalOrig.size() > 0) YcalTrue = &epochCtx->YtrueCalOrig;
+                if (epochCtx->YtrueValOrig.size() > 0) YvalTrue = &epochCtx->YtrueValOrig;
             }
+
+            calculateOutputs(Xtrain);
+            Eigen::MatrixXd YpredCal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepCalPreds) YpredCal = epochCtx->prepCalPreds(YpredCal);
 
             calculateOutputs(Xval);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-            }
-        } else {
-            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
-                int row = epoch / metricsAfterXEpochs - 1;
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
+            Eigen::MatrixXd YpredVal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepValPreds) YpredVal = epochCtx->prepValPreds(YpredVal);
 
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
-            if(epoch == maxIterations - 1){
-                int row;
-                if(maxIterations % metricsAfterXEpochs == 0){
-                    row = rowControl - 1;
-                } else {
-                    row = rowControl;
-                }
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
-
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
+            Metrics::fillEpochMetricRow(resultMetrics, row, *YcalTrue, YpredCal, *YvalTrue, YpredVal);
         }
         if(result.converged != false){
             result.iterations = epoch;
@@ -2816,7 +2439,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
     double maxError,
     double learningRate,
     int metricsAfterXEpochs,
-    double moment)
+    double moment,
+    const EpochMetricContext *epochCtx)
 {
     if (layers_.empty())
         throw std::logic_error("onlineBpEpochVal called before initMLP");
@@ -2830,8 +2454,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
     if (Xval.rows() != Yval.rows())
         throw std::invalid_argument("validation matrices have different number of rows");
 
-    if (maxIterations <= 0 || metricsAfterXEpochs <= 0)
-        throw std::invalid_argument("maxIterations and metricsAfterXEpochs must be positive");
+    if (maxIterations <= 0 || metricsAfterXEpochs < 0)
+        throw std::invalid_argument("maxIterations must be positive and metricsAfterXEpochs non-negative (0 = epoch-metric recording disabled)");
     
     if (learningRate <= 0.0 || learningRate > 1.0)
         throw std::invalid_argument("learningRate must be between 0 and 1");
@@ -2842,27 +2466,8 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
     if (moment <= 0.0 || moment > 1.0)
         throw std::invalid_argument("lambda must be between 0 and 1");
 
-    std::vector<Eigen::MatrixXd> resultMetrics;
-    int rowControl;
-    if(metricsAfterXEpochs == 1){
-        Eigen::MatrixXd prepMat = Eigen::MatrixXd(maxIterations,Ytrain.cols());   
-        for(int i = 0; i < 14; i++){
-            resultMetrics.push_back(prepMat);
-        }
-    } else {
-        rowControl = maxIterations / metricsAfterXEpochs;
-        if(maxIterations % metricsAfterXEpochs == 0){
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        } else {
-            Eigen::MatrixXd prepMat = Eigen::MatrixXd(rowControl + 1, Ytrain.cols());   
-            for(int i = 0; i < 14; i++){
-                resultMetrics.push_back(prepMat);
-            }
-        }
-    }
+    std::vector<Eigen::MatrixXd> resultMetrics =
+        Metrics::initEpochMetrics(maxIterations, metricsAfterXEpochs, static_cast<int>(Ytrain.cols()));
 
     auto start = high_resolution_clock::now();
     for(int epoch = 0; epoch < maxIterations; epoch++){
@@ -2874,82 +2479,27 @@ std::vector<Eigen::MatrixXd> MLP::onlineMomentumBpEpochVal(
             throw;
         }
 
-        if(metricsAfterXEpochs == 1){
-            calculateOutputs(Xtrain);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[0](epoch,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[1](epoch,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[2](epoch,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[3](epoch,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[4](epoch,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[5](epoch,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[6](epoch,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
+        int epoch1 = epoch + 1;  // 1-based epoch for the metric helpers
+        // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
+        // in original units with chronological (unshuffled) calibration order when epochCtx is given
+        if (Metrics::isEpochMetricRecord(epoch1, metricsAfterXEpochs, maxIterations)) {
+            size_t row = Metrics::epochMetricRowIndex(epoch1, metricsAfterXEpochs, maxIterations);
+            const Eigen::MatrixXd *YcalTrue = &Ytrain;
+            const Eigen::MatrixXd *YvalTrue = &Yval;
+            if (epochCtx != nullptr) {
+                if (epochCtx->YtrueCalOrig.size() > 0) YcalTrue = &epochCtx->YtrueCalOrig;
+                if (epochCtx->YtrueValOrig.size() > 0) YvalTrue = &epochCtx->YtrueValOrig;
             }
+
+            calculateOutputs(Xtrain);
+            Eigen::MatrixXd YpredCal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepCalPreds) YpredCal = epochCtx->prepCalPreds(YpredCal);
 
             calculateOutputs(Xval);
-            for (int c = 0; c < Ytrain.cols(); ++c) {
-                resultMetrics[7](epoch,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[8](epoch,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[9](epoch,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[10](epoch,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[11](epoch,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[12](epoch,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                resultMetrics[13](epoch,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-            }
-        } else {
-            if(epoch % metricsAfterXEpochs == 0 && epoch != 0){
-                int row = epoch / metricsAfterXEpochs - 1;
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
+            Eigen::MatrixXd YpredVal = outputMat;
+            if (epochCtx != nullptr && epochCtx->prepValPreds) YpredVal = epochCtx->prepValPreds(YpredVal);
 
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
-            if(epoch == maxIterations - 1){
-                int row;
-                if(maxIterations % metricsAfterXEpochs == 0){
-                    row = rowControl - 1;
-                } else {
-                    row = rowControl;
-                }
-                calculateOutputs(Xtrain);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[0](row,c) = Metrics::mse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[1](row,c) = Metrics::rmse(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[2](row,c) = Metrics::pi(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[3](row,c) = Metrics::ns(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[4](row,c) = Metrics::kge(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[5](row,c) = Metrics::pbias(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[6](row,c) = Metrics::rsr(Ytrain.col(c).eval(), outputMat.col(c).eval());
-                }
-
-                calculateOutputs(Xval);
-                for (int c = 0; c < Ytrain.cols(); ++c) {
-                    resultMetrics[7](row,c) = Metrics::mse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[8](row,c) = Metrics::rmse(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[9](row,c) = Metrics::pi(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[10](row,c) = Metrics::ns(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[11](row,c) = Metrics::kge(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[12](row,c) = Metrics::pbias(Yval.col(c).eval(), outputMat.col(c).eval());
-                    resultMetrics[13](row,c) = Metrics::rsr(Yval.col(c).eval(), outputMat.col(c).eval());
-                }
-            }
+            Metrics::fillEpochMetricRow(resultMetrics, row, *YcalTrue, YpredCal, *YvalTrue, YpredVal);
         }
         if(result.converged != false){
             result.iterations = epoch;

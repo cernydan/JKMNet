@@ -133,6 +133,7 @@ struct RunConfig {
     int lstm_future_time_steps = 10; ///< Length of the known future forcing window (lstm_past_future model)
     int lstm_cells = 10;             ///< Number of LSTM cells (hidden state size) per LSTM layer
     std::string model_type = "mlp";  ///< Model type selection: "mlp", "lstm_first", or "lstm_past_future"
+    bool save_epoch_metrics = false; ///< Compute and save per-epoch metrics (MLP *_epoch trainers and LSTM models; also gates the extra forward passes)
 
     // objective function for training
     std::string objective_function = "LEVEL_SLOPE";  ///< Objective (loss) function: MSE, DIFF_SLOPE, LEVEL_SLOPE, DIFF_CURVATURE, LEVEL_SLOPE_CURVATURE, NORMALIZED_SLOPE, PERSISTENCE_INDEX, DILATE
@@ -610,6 +611,9 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     std::string smodeltype = get("model_type");
     if (!smodeltype.empty()) cfg.model_type = trimStr(smodeltype);
+
+    std::string ssaveepmet = get("save_epoch_metrics");
+    if (!ssaveepmet.empty()) cfg.save_epoch_metrics = parseBool(ssaveepmet);
 
     std::string ssplitshuffle = get("split_shuffle");
     if (!ssplitshuffle.empty()) cfg.split_shuffle = parseBool(ssplitshuffle);

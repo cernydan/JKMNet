@@ -490,6 +490,28 @@ void JKMNet::ensembleRunMlpVector(){
     data_.saveVector(pat_indices, cfg_.pattern_indices);
     std::cout << "-> Real calibration and validation data saved." << std::endl;
 
+    // Context for epoch metrics: metrics in original units, calibration side in
+    // chronological (unshuffled) order so order-sensitive metrics (PI) get a
+    // meaningful persistence baseline. Y_true_calib_save/Y_true_valid_save are
+    // already inverse-transformed and the calib one unshuffled.
+    EpochMetricContext epochCtx;
+    epochCtx.YtrueCalOrig = Y_true_calib_save;
+    epochCtx.YtrueValOrig = Y_true_valid_save;
+    epochCtx.prepCalPreds = [this, &train_scalers, &calIdxForUnshuffle](const Eigen::MatrixXd &P) {
+        Eigen::MatrixXd out = P;
+        try {
+            out = data_.inverseTransformOutputs(out, train_scalers.back());
+        } catch (...) {}
+        return data_.unshuffleMatrix(out, calIdxForUnshuffle);
+    };
+    epochCtx.prepValPreds = [this, &train_scalers](const Eigen::MatrixXd &P) {
+        Eigen::MatrixXd out = P;
+        try {
+            out = data_.inverseTransformOutputs(out, train_scalers.back());
+        } catch (...) {}
+        return out;
+    };
+
     // Create and initialize the ensemble of MLPs from the config
     setNmlps(cfg_.ensemble_runs);
     init_mlps();
@@ -531,23 +553,8 @@ void JKMNet::ensembleRunMlpVector(){
         std::vector<Eigen::MatrixXd> resultMetrics;
         TrainerType trainerType = strToTrainerType(cfg_.trainer);
         int runIndex = run + 1;
-
-        // Per-epoch metric filenames for the *_EPOCH trainer variants:
-        // one file per (split, metric) pair for this run index
-        std::string mseCalFile   = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "MSE_epochs");
-        std::string rmseCalFile  = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "RMSE_epochs");
-        std::string piCalFile    = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "PI_epochs");
-        std::string nsCalFile    = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "NS_epochs");
-        std::string kgeCalFile   = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "KGE_epochs");
-        std::string pbiasCalFile = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "PBIAS_epochs");
-        std::string rsrCalFile   = Metrics::makeMetricFilename(cfg_.metrics_cal, runIndex, "RSR_epochs");
-        std::string mseValFile   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "MSE_epochs");
-        std::string rmseValFile  = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "RMSE_epochs");
-        std::string piValFile    = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "PI_epochs");
-        std::string nsValFile    = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "NS_epochs");
-        std::string kgeValFile   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "KGE_epochs");
-        std::string pbiasValFile = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "PBIAS_epochs");
-        std::string rsrValFile   = Metrics::makeMetricFilename(cfg_.metrics_val, runIndex, "RSR_epochs");
+        // Epoch-metric recording cadence; 0 = recording disabled (save_epoch_metrics = false)
+        int metricsStep = cfg_.save_epoch_metrics ? cfg_.max_metrics_step : 0;
 
         // Dispatch on the trainer type selected in the config; the *_EPOCH
         // variants return per-epoch metric series which are saved to CSV
@@ -600,129 +607,63 @@ void JKMNet::ensembleRunMlpVector(){
             case TrainerType::ONLINE_ADAM_EPOCH:
                 resultMetrics = mlps_[run].onlineAdamEpochVal(
                     X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
-                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, metricsStep,
+                    &epochCtx
                 );
-                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
-                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
-                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
-                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
-                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
-                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
-                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
-                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
-                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
-                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
-                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
-                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
-                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
-                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                if (cfg_.save_epoch_metrics)
+                    Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
                 break;
 
             case TrainerType::BATCH_ADAM_EPOCH:
                 resultMetrics = mlps_[run].batchAdamEpochVal(
                     X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.batch_size, cfg_.max_iterations, cfg_.max_error,
-                    cfg_.learning_rate, cfg_.max_metrics_step
+                    cfg_.learning_rate, metricsStep,
+                    &epochCtx
                 );
-                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
-                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
-                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
-                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
-                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
-                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
-                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
-                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
-                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
-                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
-                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
-                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
-                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
-                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                if (cfg_.save_epoch_metrics)
+                    Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
                 break;
 
             case TrainerType::ONLINE_BP_EPOCH:
                 resultMetrics = mlps_[run].onlineBpEpochVal(
                     X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
-                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, metricsStep,
+                    &epochCtx
                 );
-                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
-                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
-                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
-                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
-                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
-                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
-                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
-                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
-                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
-                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
-                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
-                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
-                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
-                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                if (cfg_.save_epoch_metrics)
+                    Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
                 break;
 
             case TrainerType::BATCH_BP_EPOCH:
                 resultMetrics = mlps_[run].batchBpEpochVal(
                     X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
                     cfg_.batch_size, cfg_.max_iterations, cfg_.max_error,
-                    cfg_.learning_rate, cfg_.max_metrics_step
+                    cfg_.learning_rate, metricsStep,
+                    &epochCtx
                 );
-                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
-                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
-                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
-                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
-                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
-                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
-                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
-                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
-                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
-                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
-                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
-                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
-                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
-                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                if (cfg_.save_epoch_metrics)
+                    Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
                 break;
 
             case TrainerType::ONLINE_BP_PENALIZE_EPOCH:
                 resultMetrics = mlps_[run].onlinePenalizeBpEpochVal(
                     X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
-                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step, 0.0001   //Add lambda choice to config
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, metricsStep, 0.0001,   //Add lambda choice to config
+                    &epochCtx
                 );
-                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
-                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
-                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
-                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
-                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
-                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
-                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
-                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
-                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
-                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
-                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
-                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
-                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
-                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                if (cfg_.save_epoch_metrics)
+                    Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
                 break;
 
             case TrainerType::ONLINE_BP_MOMENTUM_EPOCH:
                 resultMetrics = mlps_[run].onlineMomentumBpEpochVal(
                     X_train_trans, Y_train_trans, X_valid_trans, Y_valid_trans,
-                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, cfg_.max_metrics_step, 0.9   //Add moment choice to config
+                    cfg_.max_iterations, cfg_.max_error, cfg_.learning_rate, metricsStep, 0.9,   //Add moment choice to config
+                    &epochCtx
                 );
-                Metrics::saveMetricsCsv(mseCalFile, resultMetrics[0]);
-                Metrics::saveMetricsCsv(rmseCalFile, resultMetrics[1]);
-                Metrics::saveMetricsCsv(piCalFile, resultMetrics[2]);
-                Metrics::saveMetricsCsv(nsCalFile, resultMetrics[3]);
-                Metrics::saveMetricsCsv(kgeCalFile, resultMetrics[4]);
-                Metrics::saveMetricsCsv(pbiasCalFile, resultMetrics[5]);
-                Metrics::saveMetricsCsv(rsrCalFile, resultMetrics[6]);
-                Metrics::saveMetricsCsv(mseValFile, resultMetrics[7]);
-                Metrics::saveMetricsCsv(rmseValFile, resultMetrics[8]);
-                Metrics::saveMetricsCsv(piValFile, resultMetrics[9]);
-                Metrics::saveMetricsCsv(nsValFile, resultMetrics[10]);
-                Metrics::saveMetricsCsv(kgeValFile, resultMetrics[11]);
-                Metrics::saveMetricsCsv(pbiasValFile, resultMetrics[12]);
-                Metrics::saveMetricsCsv(rsrValFile, resultMetrics[13]);
+                if (cfg_.save_epoch_metrics)
+                    Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
                 break;
 
             default:
@@ -738,6 +679,10 @@ void JKMNet::ensembleRunMlpVector(){
         mlps_[run].calculateOutputs(X_train_trans);
         Eigen::MatrixXd Y_pred_calib = mlps_[run].getOutputs();
         Eigen::MatrixXd Y_true_calib = Y_train_trans;
+        // Unshuffle both to chronological order before metrics, so order-sensitive
+        // metrics (PI persistence baseline) are computed on time-consecutive rows
+        Y_pred_calib = data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle);
+        Y_true_calib = data_.unshuffleMatrix(Y_true_calib, calIdxForUnshuffle);
         try {
             Y_true_calib = data_.inverseTransformOutputs(Y_true_calib, train_scalers.back());
             Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib, train_scalers.back());
@@ -774,8 +719,8 @@ void JKMNet::ensembleRunMlpVector(){
         Metrics::saveMetricRow(rsrFile,   colNames, rsrVals,   true);
 
 
-        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), 
-                            data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle), 
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id),
+                            Y_pred_calib,
                             colNames);
 
         logFile << "-> Calibration metrics and predictions saved.\n";
@@ -1047,6 +992,24 @@ void JKMNet::ensembleLstmFirstTest(){
 
         int runIndex = run + 1;
 
+        // Optional per-epoch metrics (same "*_epochs" files as the MLP *_epoch trainers)
+        std::vector<Eigen::MatrixXd> resultMetrics;
+        if (cfg_.save_epoch_metrics) {
+            resultMetrics = Metrics::initEpochMetrics(cfg_.max_iterations, cfg_.max_metrics_step,
+                                                       static_cast<int>(Y_train.cols()));
+        }
+
+        // Predict a full set (shared by epoch recording and final evaluation)
+        auto predictFirst = [this, &lstm_vec, run](const std::vector<Eigen::MatrixXd> &X, Eigen::MatrixXd &Ypred) {
+            for (size_t i = 0; i < X.size(); ++i) {
+                lstm_vec[run].setInputTSSegment(X[i]);
+                lstm_vec[run].calculateTimeSteps();
+                mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
+                Ypred.row(i) = mlps_[run].getOutput();
+                lstm_vec[run].eraseMemory();
+            }
+        };
+
         // Online training loop over epochs and windowed samples:
         // forward through the LSTM, gradient through the output MLP,
         // backpropagate the MLP's first-layer delta into the LSTM, then
@@ -1063,27 +1026,52 @@ void JKMNet::ensembleLstmFirstTest(){
                 mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
                 lstm_vec[run].eraseMemory();
             }
+
+            if (cfg_.save_epoch_metrics && Metrics::isEpochMetricRecord(iter, cfg_.max_metrics_step, cfg_.max_iterations)) {
+                size_t row = Metrics::epochMetricRowIndex(iter, cfg_.max_metrics_step, cfg_.max_iterations);
+
+                Eigen::MatrixXd YpredCal = Eigen::MatrixXd::Zero(Y_train.rows(), Y_train.cols());
+                Eigen::MatrixXd YpredVal = Eigen::MatrixXd::Zero(Y_valid.rows(), Y_valid.cols());
+                predictFirst(X_train, YpredCal);
+                predictFirst(X_valid, YpredVal);
+
+                Eigen::MatrixXd YtCal = Y_train, YtVal = Y_valid;
+                try {
+                    YtCal = data_.inverseTransformOutputs(YtCal);
+                    YpredCal = data_.inverseTransformOutputs(YpredCal);
+                    YtVal = data_.inverseTransformOutputs(YtVal);
+                    YpredVal = data_.inverseTransformOutputs(YpredVal);
+                } catch (...) {}
+                // chronological order for the calibration side (PI persistence baseline)
+                YtCal = data_.unshuffleMatrix(YtCal, calIdxForUnshuffle);
+                YpredCal = data_.unshuffleMatrix(YpredCal, calIdxForUnshuffle);
+
+                Metrics::fillEpochMetricRow(resultMetrics, row, YtCal, YpredCal, YtVal, YpredVal);
+            }
         }
 
         logFile << "-> Training finished.\n";
+
+        if (cfg_.save_epoch_metrics) {
+            Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
+            logFile << "-> Epoch metrics saved.\n";
+        }
 
         // Evaluate calibration: forward-only passes through LSTM + MLP
         logFile << "-> Evaluating calibration set...\n";
         Eigen::MatrixXd Y_pred_calib = Eigen::MatrixXd(Y_train.rows(),Y_train.cols());
         Eigen::MatrixXd Y_true_calib = Y_train;
 
-        for(size_t i = 0; i < X_train.size() ; i++){
-            lstm_vec[run].setInputTSSegment(X_train[i]);
-            lstm_vec[run].calculateTimeSteps();
-            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
-            Y_pred_calib.row(i) = mlps_[run].getOutput();
-            lstm_vec[run].eraseMemory();
-        }
+        predictFirst(X_train, Y_pred_calib);
 
         try {
             Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
             Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
         } catch (...) {}
+
+        // chronological order for metrics (PI persistence baseline)
+        Y_pred_calib = data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle);
+        Y_true_calib = data_.unshuffleMatrix(Y_true_calib, calIdxForUnshuffle);
 
         // One file for each metrics per each run
         std::vector<double> mseVals, rmseVals, piVals, nsVals, kgeVals, pbiasVals, rsrVals;
@@ -1115,8 +1103,8 @@ void JKMNet::ensembleLstmFirstTest(){
         Metrics::saveMetricRow(rsrFile,   colNames, rsrVals,   true);
 
 
-        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), 
-                            data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle), 
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id),
+                            Y_pred_calib,
                             colNames);
 
         logFile << "-> Calibration metrics and predictions saved.\n";
@@ -1127,13 +1115,7 @@ void JKMNet::ensembleLstmFirstTest(){
         Eigen::MatrixXd Y_pred_valid = Eigen::MatrixXd(Y_valid.rows(),Y_valid.cols());
         Eigen::MatrixXd Y_true_valid = Y_valid;
 
-        for(size_t i = 0; i < X_valid.size() ; i++){
-            lstm_vec[run].setInputTSSegment(X_valid[i]);
-            lstm_vec[run].calculateTimeSteps();
-            mlps_[run].calcOneOutput(lstm_vec[run].getForwardOutputVector());
-            Y_pred_valid.row(i) = mlps_[run].getOutput();
-            lstm_vec[run].eraseMemory();
-        }
+        predictFirst(X_valid, Y_pred_valid);
 
         try {
             Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
@@ -1312,6 +1294,39 @@ void JKMNet::ensembleLstmPastFutureTest(){
 
         int runIndex = run + 1;
 
+        // Optional per-epoch metrics (same "*_epochs" files as the MLP *_epoch trainers)
+        std::vector<Eigen::MatrixXd> resultMetrics;
+        if (cfg_.save_epoch_metrics) {
+            resultMetrics = Metrics::initEpochMetrics(cfg_.max_iterations, cfg_.max_metrics_step,
+                                                       static_cast<int>(Y_train.cols()));
+        }
+
+        // Predict a full set (shared by epoch recording and final evaluation)
+        auto predictPastFuture = [this, &lstm_past_vec, &lstm_future_vec, &lstm_together_vec,
+                                  &between_lstm, &lstm_to_mlp, run]
+                                 (const std::vector<Eigen::MatrixXd> &Xpast,
+                                  const std::vector<Eigen::MatrixXd> &Xfuture,
+                                  Eigen::MatrixXd &Ypred) {
+            for (size_t i = 0; i < Xpast.size(); ++i) {
+                lstm_past_vec[run].setInputTSSegment(Xpast[i]);
+                lstm_future_vec[run].setInputTSSegment(Xfuture[i]);
+                lstm_past_vec[run].calculateTimeSteps();
+                lstm_future_vec[run].calculateTimeSteps();
+                between_lstm[run].block(0,0,cfg_.lstm_past_time_steps,between_lstm[run].cols()) = lstm_past_vec[run].getForwardOutput();
+                between_lstm[run].block(cfg_.lstm_past_time_steps,0,cfg_.lstm_future_time_steps,between_lstm[run].cols()) = lstm_future_vec[run].getForwardOutput();
+                lstm_together_vec[run].setInputTSSegment(between_lstm[run]);
+                lstm_together_vec[run].calculateTimeSteps();
+                lstm_to_mlp[run] = lstm_together_vec[run].getForwardOutput().transpose();
+                for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
+                    mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
+                    Ypred(i,s) = mlps_[run].getOutput().value();
+                }
+                lstm_past_vec[run].eraseMemory();
+                lstm_future_vec[run].eraseMemory();
+                lstm_together_vec[run].eraseMemory();
+            }
+        };
+
         // Online training loop over epochs and windowed samples
         for(int iter = 1; iter <= cfg_.max_iterations ; iter++){
             for(size_t i = 0; i < X_trainPast.size() ; i++){
@@ -1354,9 +1369,36 @@ void JKMNet::ensembleLstmPastFutureTest(){
                 lstm_future_vec[run].eraseMemory();
                 lstm_together_vec[run].eraseMemory();
             }
+
+            if (cfg_.save_epoch_metrics && Metrics::isEpochMetricRecord(iter, cfg_.max_metrics_step, cfg_.max_iterations)) {
+                size_t row = Metrics::epochMetricRowIndex(iter, cfg_.max_metrics_step, cfg_.max_iterations);
+
+                Eigen::MatrixXd YpredCal = Eigen::MatrixXd::Zero(Y_train.rows(), Y_train.cols());
+                Eigen::MatrixXd YpredVal = Eigen::MatrixXd::Zero(Y_valid.rows(), Y_valid.cols());
+                predictPastFuture(X_trainPast, X_trainFuture, YpredCal);
+                predictPastFuture(X_validPast, X_validFuture, YpredVal);
+
+                Eigen::MatrixXd YtCal = Y_train, YtVal = Y_valid;
+                try {
+                    YtCal = data_.inverseTransformOutputs(YtCal);
+                    YpredCal = data_.inverseTransformOutputs(YpredCal);
+                    YtVal = data_.inverseTransformOutputs(YtVal);
+                    YpredVal = data_.inverseTransformOutputs(YpredVal);
+                } catch (...) {}
+                // chronological order for the calibration side (PI persistence baseline)
+                YtCal = data_.unshuffleMatrix(YtCal, calIdxForUnshuffle);
+                YpredCal = data_.unshuffleMatrix(YpredCal, calIdxForUnshuffle);
+
+                Metrics::fillEpochMetricRow(resultMetrics, row, YtCal, YpredCal, YtVal, YpredVal);
+            }
         }
 
         logFile << "-> Training finished.\n";
+
+        if (cfg_.save_epoch_metrics) {
+            Metrics::saveEpochMetricFiles(cfg_.metrics_cal, cfg_.metrics_val, runIndex, resultMetrics);
+            logFile << "-> Epoch metrics saved.\n";
+        }
 
         // Evaluate calibration: forward-only passes through the three LSTMs,
         // predicting each horizon step separately with the output MLP
@@ -1364,29 +1406,16 @@ void JKMNet::ensembleLstmPastFutureTest(){
         Eigen::MatrixXd Y_pred_calib = Eigen::MatrixXd(Y_train.rows(),Y_train.cols());
         Eigen::MatrixXd Y_true_calib = Y_train;
 
-        for(size_t i = 0; i < X_trainPast.size() ; i++){
-            lstm_past_vec[run].setInputTSSegment(X_trainPast[i]);
-            lstm_future_vec[run].setInputTSSegment(X_trainFuture[i]);
-            lstm_past_vec[run].calculateTimeSteps();
-            lstm_future_vec[run].calculateTimeSteps();
-            between_lstm[run].block(0,0,cfg_.lstm_past_time_steps,between_lstm[run].cols()) = lstm_past_vec[run].getForwardOutput();
-            between_lstm[run].block(cfg_.lstm_past_time_steps,0,cfg_.lstm_future_time_steps,between_lstm[run].cols()) = lstm_future_vec[run].getForwardOutput();
-            lstm_together_vec[run].setInputTSSegment(between_lstm[run]);
-            lstm_together_vec[run].calculateTimeSteps();
-            lstm_to_mlp[run] = lstm_together_vec[run].getForwardOutput().transpose();
-            for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
-                mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
-                Y_pred_calib(i,s) = mlps_[run].getOutput().value();
-            }
-            lstm_past_vec[run].eraseMemory();
-            lstm_future_vec[run].eraseMemory();
-            lstm_together_vec[run].eraseMemory();
-        }
+        predictPastFuture(X_trainPast, X_trainFuture, Y_pred_calib);
 
         try {
             Y_true_calib = data_.inverseTransformOutputs(Y_true_calib);
             Y_pred_calib = data_.inverseTransformOutputs(Y_pred_calib);
         } catch (...) {}
+
+        // chronological order for metrics (PI persistence baseline)
+        Y_pred_calib = data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle);
+        Y_true_calib = data_.unshuffleMatrix(Y_true_calib, calIdxForUnshuffle);
 
         // One file for each metrics per each run
         std::vector<double> mseVals, rmseVals, piVals, nsVals, kgeVals, pbiasVals, rsrVals;
@@ -1418,8 +1447,8 @@ void JKMNet::ensembleLstmPastFutureTest(){
         Metrics::saveMetricRow(rsrFile,   colNames, rsrVals,   true);
 
 
-        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id), 
-                            data_.unshuffleMatrix(Y_pred_calib, calIdxForUnshuffle), 
+        data_.saveMatrixCsv(Metrics::addRunIdToFilename(cfg_.pred_calib, run_id),
+                            Y_pred_calib,
                             colNames);
 
         logFile << "-> Calibration metrics and predictions saved.\n";
@@ -1430,24 +1459,7 @@ void JKMNet::ensembleLstmPastFutureTest(){
         Eigen::MatrixXd Y_pred_valid = Eigen::MatrixXd(Y_valid.rows(),Y_valid.cols());
         Eigen::MatrixXd Y_true_valid = Y_valid;
 
-        for(size_t i = 0; i < X_validPast.size() ; i++){
-            lstm_past_vec[run].setInputTSSegment(X_validPast[i]);
-            lstm_future_vec[run].setInputTSSegment(X_validFuture[i]);
-            lstm_past_vec[run].calculateTimeSteps();
-            lstm_future_vec[run].calculateTimeSteps();
-            between_lstm[run].block(0,0,cfg_.lstm_past_time_steps,between_lstm[run].cols()) = lstm_past_vec[run].getForwardOutput();
-            between_lstm[run].block(cfg_.lstm_past_time_steps,0,cfg_.lstm_future_time_steps,between_lstm[run].cols()) = lstm_future_vec[run].getForwardOutput();
-            lstm_together_vec[run].setInputTSSegment(between_lstm[run]);
-            lstm_together_vec[run].calculateTimeSteps();
-            lstm_to_mlp[run] = lstm_together_vec[run].getForwardOutput().transpose();
-            for(int s = 0; s < lstm_to_mlp[run].cols(); s++){
-                mlps_[run].calcOneOutput(lstm_to_mlp[run].col(s));
-                Y_pred_valid(i,s) = mlps_[run].getOutput().value();
-            }
-            lstm_past_vec[run].eraseMemory();
-            lstm_future_vec[run].eraseMemory();
-            lstm_together_vec[run].eraseMemory();
-        }
+        predictPastFuture(X_validPast, X_validFuture, Y_pred_valid);
 
         try {
             Y_true_valid = data_.inverseTransformOutputs(Y_true_valid);
