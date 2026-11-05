@@ -6,6 +6,7 @@
 #define MLP_HPP
 
 #include <vector>
+#include <functional>
 #include "eigen-3.4/Eigen/Dense"
 
 #include "Layer.hpp"
@@ -33,6 +34,22 @@ struct TrainingResult {
  * @see activ_func_type, weight_init_type (Layer.hpp), objective_func_type
  *      (ObjectiveFunctions.hpp)
  */
+
+/**
+ * Optional context for the *EpochVal trainers controlling in which space the
+ * epoch metrics are computed. When given, calibration/validation metrics are
+ * computed on original-unit (inverse-transformed) data, with the calibration
+ * side in chronological (unshuffled) order so that order-sensitive metrics
+ * such as PI get a meaningful persistence baseline. When null (default), the
+ * metrics are computed directly on the passed (transformed) matrices as before.
+ */
+struct EpochMetricContext {
+    std::function<Eigen::MatrixXd(const Eigen::MatrixXd&)> prepCalPreds;  //!< Postprocess calibration predictions (inverse transform + unshuffle) before metrics
+    std::function<Eigen::MatrixXd(const Eigen::MatrixXd&)> prepValPreds;  //!< Postprocess validation predictions (inverse transform) before metrics
+    Eigen::MatrixXd YtrueCalOrig;  //!< Calibration ground truth in original units, chronological order; empty = use Ytrain
+    Eigen::MatrixXd YtrueValOrig;  //!< Validation ground truth in original units; empty = use Yval
+};
+
 class MLP {
 
     public:
@@ -378,7 +395,8 @@ class MLP {
             int maxIterations,
             double maxError,
             double learningRate,
-            int metricsAfterXEpochs);
+            int metricsAfterXEpochs,
+            const EpochMetricContext *epochCtx = nullptr);
 
         /// Batch Adam trainer that also evaluates calibration/validation metrics every n-th epoch.
         /**
@@ -402,7 +420,8 @@ class MLP {
             int maxIterations,
             double maxError,
             double learningRate,
-            int metricsAfterXEpochs);
+            int metricsAfterXEpochs,
+            const EpochMetricContext *epochCtx = nullptr);
 
         /// Online backpropagation trainer that also evaluates calibration/validation metrics every n-th epoch.
         /**
@@ -424,7 +443,8 @@ class MLP {
             int maxIterations,
             double maxError,
             double learningRate,
-            int metricsAfterXEpochs);
+            int metricsAfterXEpochs,
+            const EpochMetricContext *epochCtx = nullptr);
 
         /// Batch backpropagation trainer that also evaluates calibration/validation metrics every n-th epoch.
         /**
@@ -448,7 +468,8 @@ class MLP {
             int maxIterations,
             double maxError,
             double learningRate,
-            int metricsAfterXEpochs);
+            int metricsAfterXEpochs,
+            const EpochMetricContext *epochCtx = nullptr);
 
         /// Online penalized backpropagation trainer that also evaluates metrics every n-th epoch.
         /**
@@ -472,7 +493,8 @@ class MLP {
             double maxError,
             double learningRate,
             int metricsAfterXEpochs,
-            double lambda = 0.0001);
+            double lambda = 0.0001,
+            const EpochMetricContext *epochCtx = nullptr);
 
         /// Online momentum backpropagation trainer that also evaluates metrics every n-th epoch.
         /**
@@ -496,7 +518,8 @@ class MLP {
             double maxError,
             double learningRate,
             int metricsAfterXEpochs,
-            double moment = 0.9);
+            double moment = 0.9,
+            const EpochMetricContext *epochCtx = nullptr);
 
         /// Forward pass for one input vector; stores the result in the member `output`.
         /**

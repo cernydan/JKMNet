@@ -487,6 +487,8 @@ bool Metrics::saveErrorsCsv(const std::string &path,
 bool Metrics::saveMetricsCsv(const std::string &path,
                             const Eigen::MatrixXd &errors,
                             bool verbose) {
+    std::filesystem::path p(path);
+    if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
     std::ofstream ofs(path);
     if (!ofs.is_open()) {
         std::cerr << "[Metrics::saveMetricsCsv] Cannot open file: " << path << "\n";
@@ -504,7 +506,12 @@ bool Metrics::saveMetricsCsv(const std::string &path,
         ofs << (i + 1) << ",";        // epoch index (1-based)
 
         for (Eigen::Index j = 0; j < errors.cols(); ++j) {
-            ofs << errors(i, j) << ",";
+            double v = errors(i, j);
+            if (std::isnan(v)) {
+                ofs << "NA" << ",";   // e.g. tail rows after early convergence
+            } else {
+                ofs << v << ",";
+            }
         }
         ofs << "\n";
     }
@@ -659,6 +666,125 @@ void Metrics::saveMetricRow(const std::string &path,
     // allCriteria(2) = pi(yt, yp);
     // allCriteria(3) = ns(yt, yp);
     // allCriteria(4) = kge(yt, yp);
-    
+
     // return allCriteria;
 //}
+
+/**
+ * Number of recorded epoch-metric rows:
+ * every metricsAfterXEpochs-th epoch plus the final epoch when it is not a multiple
+ */
+size_t Metrics::epochMetricRows(int maxIterations, int metricsAfterXEpochs) {
+    if (metricsAfterXEpochs == 0)
+        return 0;  // 0 = epoch-metric recording disabled
+    if (maxIterations <= 0 || metricsAfterXEpochs < 0)
+        throw std::invalid_argument("Metrics::epochMetricRows: maxIterations must be positive and metricsAfterXEpochs non-negative");
+    if (metricsAfterXEpochs > maxIterations)
+        throw std::invalid_argument("Metrics::epochMetricRows: metricsAfterXEpochs can't be bigger than maxIterations");
+    if (metricsAfterXEpochs == 1)
+        return static_cast<size_t>(maxIterations);
+    size_t rows = static_cast<size_t>(maxIterations / metricsAfterXEpochs);
+    if (maxIterations % metricsAfterXEpochs != 0)
+        ++rows;
+    return rows;
+}
+
+/**
+ * Record decision for a 1-based epoch: every metricsAfterXEpochs-th epoch,
+ * and always the final epoch (so the last row reflects the final model)
+ */
+bool Metrics::isEpochMetricRecord(int epoch, int metricsAfterXEpochs, int maxIterations) {
+    if (metricsAfterXEpochs <= 0)
+        return false;  // 0 = epoch-metric recording disabled
+    if (epoch < 1 || epoch > maxIterations)
+        throw std::invalid_argument("Metrics::isEpochMetricRecord: epoch out of range (1-based)");
+    return (epoch % metricsAfterXEpochs == 0) || (epoch == maxIterations);
+}
+
+/**
+ * Row index for a recording epoch: regular records go to epoch/step - 1,
+ * the extra final epoch (non-divisible case) goes to the last row
+ */
+size_t Metrics::epochMetricRowIndex(int epoch, int metricsAfterXEpochs, int maxIterations) {
+    if (!isEpochMetricRecord(epoch, metricsAfterXEpochs, maxIterations))
+        throw std::invalid_argument("Metrics::epochMetricRowIndex: epoch is not a recording epoch");
+    if (epoch % metricsAfterXEpochs == 0)
+        return static_cast<size_t>(epoch / metricsAfterXEpochs - 1);
+    return epochMetricRows(maxIterations, metricsAfterXEpochs) - 1;
+}
+
+/**
+ * Allocate the 14 metric matrices (0-6 calib, 7-13 valid), NaN-prefilled so
+ * that tail rows after an early-converged training read as NA, not garbage
+ */
+std::vector<Eigen::MatrixXd> Metrics::initEpochMetrics(int maxIterations, int metricsAfterXEpochs, int nOutputs) {
+    if (metricsAfterXEpochs <= 0)
+        return {};  // recording disabled
+    size_t rows = epochMetricRows(maxIterations, metricsAfterXEpochs);
+    std::vector<Eigen::MatrixXd> resultMetrics;
+    resultMetrics.reserve(14);
+    for (int i = 0; i < 14; ++i) {
+        Eigen::MatrixXd prepMat = Eigen::MatrixXd::Constant(
+            static_cast<Eigen::Index>(rows), nOutputs,
+            std::numeric_limits<double>::quiet_NaN());
+        resultMetrics.push_back(prepMat);
+    }
+    return resultMetrics;
+}
+
+/**
+ * Compute the 7 metrics (MSE, RMSE, PI, NS, KGE, PBIAS, RSR) per output column
+ * for calibration (matrices 0-6) and validation (7-13) and store them into row `row`
+ */
+void Metrics::fillEpochMetricRow(std::vector<Eigen::MatrixXd> &resultMetrics, size_t row,
+    const Eigen::MatrixXd &YtrueCal, const Eigen::MatrixXd &YpredCal,
+    const Eigen::MatrixXd &YtrueVal, const Eigen::MatrixXd &YpredVal)
+{
+    if (resultMetrics.size() != 14)
+        throw std::invalid_argument("Metrics::fillEpochMetricRow: expected 14 metric matrices");
+    if (YtrueCal.rows() != YpredCal.rows() || YtrueCal.cols() != YpredCal.cols() ||
+        YtrueVal.rows() != YpredVal.rows() || YtrueVal.cols() != YpredVal.cols())
+        throw std::invalid_argument("Metrics::fillEpochMetricRow: matrix dimensions must match");
+    if (YtrueCal.cols() != resultMetrics[0].cols())
+        throw std::invalid_argument("Metrics::fillEpochMetricRow: number of outputs doesn't match allocation");
+    if (row >= static_cast<size_t>(resultMetrics[0].rows()))
+        throw std::out_of_range("Metrics::fillEpochMetricRow: row out of range");
+
+    for (int c = 0; c < YtrueCal.cols(); ++c) {
+        resultMetrics[0](row, c)  = mse(YtrueCal.col(c).eval(), YpredCal.col(c).eval());
+        resultMetrics[1](row, c)  = rmse(YtrueCal.col(c).eval(), YpredCal.col(c).eval());
+        resultMetrics[2](row, c)  = pi(YtrueCal.col(c).eval(), YpredCal.col(c).eval());
+        resultMetrics[3](row, c)  = ns(YtrueCal.col(c).eval(), YpredCal.col(c).eval());
+        resultMetrics[4](row, c)  = kge(YtrueCal.col(c).eval(), YpredCal.col(c).eval());
+        resultMetrics[5](row, c)  = pbias(YtrueCal.col(c).eval(), YpredCal.col(c).eval());
+        resultMetrics[6](row, c)  = rsr(YtrueCal.col(c).eval(), YpredCal.col(c).eval());
+
+        resultMetrics[7](row, c)  = mse(YtrueVal.col(c).eval(), YpredVal.col(c).eval());
+        resultMetrics[8](row, c)  = rmse(YtrueVal.col(c).eval(), YpredVal.col(c).eval());
+        resultMetrics[9](row, c)  = pi(YtrueVal.col(c).eval(), YpredVal.col(c).eval());
+        resultMetrics[10](row, c) = ns(YtrueVal.col(c).eval(), YpredVal.col(c).eval());
+        resultMetrics[11](row, c) = kge(YtrueVal.col(c).eval(), YpredVal.col(c).eval());
+        resultMetrics[12](row, c) = pbias(YtrueVal.col(c).eval(), YpredVal.col(c).eval());
+        resultMetrics[13](row, c) = rsr(YtrueVal.col(c).eval(), YpredVal.col(c).eval());
+    }
+}
+
+/**
+ * Save the 14 "*_epochs" files for one run (one file per metric per split)
+ */
+void Metrics::saveEpochMetricFiles(const std::string &metricsCalBase, const std::string &metricsValBase,
+    int runIndex, const std::vector<Eigen::MatrixXd> &resultMetrics)
+{
+    if (resultMetrics.empty())
+        return;  // recording was disabled
+    if (resultMetrics.size() != 14)
+        throw std::invalid_argument("Metrics::saveEpochMetricFiles: expected 14 metric matrices");
+
+    static const char* names[7] = {"MSE", "RMSE", "PI", "NS", "KGE", "PBIAS", "RSR"};
+    for (int i = 0; i < 7; ++i) {
+        saveMetricsCsv(makeMetricFilename(metricsCalBase, runIndex, std::string(names[i]) + "_epochs"),
+                       resultMetrics[i]);
+        saveMetricsCsv(makeMetricFilename(metricsValBase, runIndex, std::string(names[i]) + "_epochs"),
+                       resultMetrics[7 + i]);
+    }
+}

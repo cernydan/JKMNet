@@ -290,6 +290,17 @@ class Metrics {
             const std::vector<double> &values,
             bool writeHeader = false);
 
+        //!< ---- Epoch-metrics machinery (shared by MLP *EpochVal trainers and LSTM ensemble runs) ----
+        static size_t epochMetricRows(int maxIterations, int metricsAfterXEpochs);  //!< Number of recorded rows (ceil(maxIterations / metricsAfterXEpochs))
+        static bool isEpochMetricRecord(int epoch, int metricsAfterXEpochs, int maxIterations);  //!< True for 1-based epoch if metrics should be recorded: every metricsAfterXEpochs-th epoch and always the final epoch
+        static size_t epochMetricRowIndex(int epoch, int metricsAfterXEpochs, int maxIterations);  //!< Row index in the result matrices for a 1-based recording epoch
+        static std::vector<Eigen::MatrixXd> initEpochMetrics(int maxIterations, int metricsAfterXEpochs, int nOutputs);  //!< Allocate the 14 metric matrices (7 calib + 7 valid), NaN-prefilled
+        static void fillEpochMetricRow(std::vector<Eigen::MatrixXd> &resultMetrics, size_t row,
+            const Eigen::MatrixXd &YtrueCal, const Eigen::MatrixXd &YpredCal,
+            const Eigen::MatrixXd &YtrueVal, const Eigen::MatrixXd &YpredVal);  //!< Compute the 7 metrics per output column and store them into row `row` of all 14 matrices
+        static void saveEpochMetricFiles(const std::string &metricsCalBase, const std::string &metricsValBase,
+            int runIndex, const std::vector<Eigen::MatrixXd> &resultMetrics);  //!< Save the 14 "*_epochs" files (MSE, RMSE, PI, NS, KGE, PBIAS, RSR × calib/valid) for one run
+
         //Eigen::VectorXd calcMetricsAll(); //<! Calculate all metrics
 
     protected:
