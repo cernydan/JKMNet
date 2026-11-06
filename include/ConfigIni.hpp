@@ -136,9 +136,9 @@ struct RunConfig {
     bool save_epoch_metrics = false; ///< Compute and save per-epoch metrics (MLP *_epoch trainers and LSTM models; also gates the extra forward passes)
 
     // objective function for training
-    std::string objective_function = "LEVEL_SLOPE";  ///< Objective (loss) function: MSE, DIFF_SLOPE, LEVEL_SLOPE, DIFF_CURVATURE, LEVEL_SLOPE_CURVATURE, NORMALIZED_SLOPE, PERSISTENCE_INDEX, DILATE
-    double objective_alpha = 0.5;    ///< Weighting parameter for combined losses (alpha in L2)
-    double objective_alpha2 = 0.33;  ///< Second weighting parameter for the curvature term
+    std::string objective_function = "LEVEL_SLOPE";  ///< Objective (loss) function: MSE, DIFF_SLOPE, LEVEL_SLOPE, DIFF_CURVATURE, LEVEL_SLOPE_CURVATURE, NORMALIZED_SLOPE, PERSISTENCE_INDEX, DILATE, DILATE2
+    double objective_alpha = 0.5;    ///< Weighting parameter for combined losses (alpha in L2; shape weight for DILATE/DILATE2)
+    double objective_alpha2 = 0.33;  ///< Second weighting parameter (curvature term; soft-DTW gamma for DILATE2)
 
     // transforms
     std::vector<std::string> transform;      ///< Data transform per column (NONE, MINMAX, NONLINEAR, MINMAXNONLIN, ZSCORE); a single value is broadcast to all columns

@@ -23,6 +23,7 @@ objective_func_type ObjectiveFunctions::fromString(const std::string& s) {
     if (upper == "NORMALIZED_SLOPE" || upper == "SCALED_SLOPE" || upper == "L4") return objective_func_type::NORMALIZED_SLOPE;
     if (upper == "PERSISTENCE_INDEX" || upper == "PI_LOSS" || upper == "L5") return objective_func_type::PERSISTENCE_INDEX;
     if (upper == "DILATE") return objective_func_type::DILATE;
+    if (upper == "DILATE2") return objective_func_type::DILATE2;
 
     throw std::runtime_error("Unknown objective function: " + s);
 }
@@ -37,6 +38,7 @@ std::string ObjectiveFunctions::toString(objective_func_type func) {
         case objective_func_type::NORMALIZED_SLOPE: return "NORMALIZED_SLOPE";
         case objective_func_type::PERSISTENCE_INDEX: return "PERSISTENCE_INDEX";
         case objective_func_type::DILATE: return "DILATE";
+        case objective_func_type::DILATE2: return "DILATE2";
         default: return "UNKNOWN";
     }
 }
@@ -195,6 +197,20 @@ double ObjectiveFunctions::normalizedSlopeLoss(
     varDObs /= static_cast<double>(dObs.size());
     double stdDObs = std::sqrt(varDObs);
 
+    // Degenerate normalization (fewer than 3 points or constant observed series):
+    // stdDObs is 0 (or NaN), so normalizing would explode by ~1/epsilon. Fall back
+    // to the unnormalized slope loss instead.
+    if (!(stdDObs > 0.0)) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            std::cerr << "[Warning] ObjectiveFunctions::normalizedSlopeLoss: zero standard deviation of "
+                         "observed differences (horizon < 3 or constant observations); "
+                         "falling back to DIFF_SLOPE loss.\n";
+        }
+        return diffSlopeLoss(obs, sim);
+    }
+
     // Normalized slope loss
     double sumSq = 0.0;
     for (int i = 0; i < dObs.size(); ++i) {
@@ -308,6 +324,229 @@ double ObjectiveFunctions::dilateLoss(
     return delta * shapeTerm + (1.0 - delta) * temporalTerm;
 }
 
+namespace {
+
+/// Soft-minimum of three values with smoothing gamma (log-sum-exp trick).
+/**
+ * Computes min^gamma(a0,a1,a2) = -gamma * log(sum_k exp(-a_k/gamma)) together
+ * with the three weights w_k = d min^gamma / d a_k (which sum to 1).
+ */
+void softMin3(double a0, double a1, double a2, double gamma,
+             double& minValue, double weights[3]) {
+    // b_k = -a_k / gamma; soft-min = -gamma * log(sum exp(b_k)), stabilized by max-shift
+    double b[3] = {-a0 / gamma, -a1 / gamma, -a2 / gamma};
+    double maxB = std::max(b[0], std::max(b[1], b[2]));
+    double expB[3] = {std::exp(b[0] - maxB), std::exp(b[1] - maxB), std::exp(b[2] - maxB)};
+    double Z = expB[0] + expB[1] + expB[2];
+    minValue = -gamma * (maxB + std::log(Z));
+    weights[0] = expB[0] / Z;
+    weights[1] = expB[1] / Z;
+    weights[2] = expB[2] / Z;
+}
+
+} // anonymous namespace
+
+void ObjectiveFunctions::dilate2ComputeDP(
+    const Eigen::VectorXd& obs,
+    const Eigen::VectorXd& sim,
+    double gamma,
+    Eigen::MatrixXd& D,
+    Eigen::MatrixXd& V,
+    std::array<Eigen::MatrixXd, 3>& Q,
+    Eigen::MatrixXd& E
+) {
+    const int N = static_cast<int>(obs.size());
+
+    // Cost matrix D(i,j) = (obs_i - sim_j)^2
+    D.resize(N, N);
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            double diff = obs(i) - sim(j);
+            D(i, j) = diff * diff;
+        }
+    }
+
+    // Forward DP: V(i,j) = D(i-1,j-1) + softmin^gamma(V(i,j-1), V(i-1,j-1), V(i-1,j))
+    // (padded 1..N; borders 1e10, V(0,0)=0), storing the soft-min weights in Q
+    V.resize(N + 1, N + 1);
+    V.setConstant(1e10);
+    V(0, 0) = 0.0;
+    for (int k = 0; k < 3; ++k) {
+        Q[k].setZero(N + 2, N + 2);
+    }
+    for (int i = 1; i <= N; ++i) {
+        for (int j = 1; j <= N; ++j) {
+            double v;
+            double w[3];
+            softMin3(V(i, j - 1), V(i - 1, j - 1), V(i - 1, j), gamma, v, w);
+            V(i, j) = D(i - 1, j - 1) + v;
+            Q[0](i, j) = w[0];  // weight of the "left"   predecessor V(i,   j-1)
+            Q[1](i, j) = w[1];  // weight of the "diagonal" predecessor V(i-1, j-1)
+            Q[2](i, j) = w[2];  // weight of the "up"     predecessor V(i-1, j)
+        }
+    }
+    // Sentinel cell for the backward pass
+    for (int k = 0; k < 3; ++k) {
+        Q[k](N + 1, N + 1) = 1.0;
+    }
+
+    // Backward DP: alignment matrix E = d softDTW / dD (padded, seeded at (N+1,N+1))
+    E.setZero(N + 2, N + 2);
+    E(N + 1, N + 1) = 1.0;
+    for (int i = N; i >= 1; --i) {
+        for (int j = N; j >= 1; --j) {
+            E(i, j) = Q[0](i, j + 1) * E(i, j + 1)
+                    + Q[1](i + 1, j + 1) * E(i + 1, j + 1)
+                    + Q[2](i + 1, j) * E(i + 1, j);
+        }
+    }
+}
+
+Eigen::MatrixXd ObjectiveFunctions::dilate2HessianProduct(
+    const Eigen::MatrixXd& Z,
+    const std::array<Eigen::MatrixXd, 3>& Q,
+    const Eigen::MatrixXd& E,
+    double gamma
+) {
+    const int N = static_cast<int>(Z.rows());
+
+    // Differential forward DP: V_dot(i,j) = Z(i-1,j-1) + sum_k Q_k * V_dot(pred_k)
+    Eigen::MatrixXd V_dot = Eigen::MatrixXd::Zero(N + 1, N + 1);
+    std::array<Eigen::MatrixXd, 3> Q_dot;
+    for (int k = 0; k < 3; ++k) {
+        Q_dot[k] = Eigen::MatrixXd::Zero(N + 2, N + 2);
+    }
+    for (int i = 1; i <= N; ++i) {
+        for (int j = 1; j <= N; ++j) {
+            V_dot(i, j) = Z(i - 1, j - 1)
+                + Q[0](i, j) * V_dot(i, j - 1)
+                + Q[1](i, j) * V_dot(i - 1, j - 1)
+                + Q[2](i, j) * V_dot(i - 1, j);
+            // Soft-min Hessian product:
+            // Q_dot_k = Q_k * (sum_l Q_l v_l - v_k) / gamma
+            double v[3] = {V_dot(i, j - 1), V_dot(i - 1, j - 1), V_dot(i - 1, j)};
+            double sumQv = Q[0](i, j) * v[0] + Q[1](i, j) * v[1] + Q[2](i, j) * v[2];
+            for (int k = 0; k < 3; ++k) {
+                Q_dot[k](i, j) = Q[k](i, j) * (sumQv - v[k]) / gamma;
+            }
+        }
+    }
+
+    // Differential backward DP: E_dot = d (Z . E) / dD
+    Eigen::MatrixXd E_dot = Eigen::MatrixXd::Zero(N + 2, N + 2);
+    for (int j = N; j >= 1; --j) {
+        for (int i = N; i >= 1; --i) {
+            E_dot(i, j) = Q_dot[0](i, j + 1) * E(i, j + 1)
+                        + Q[0](i, j + 1) * E_dot(i, j + 1)
+                        + Q_dot[1](i + 1, j + 1) * E(i + 1, j + 1)
+                        + Q[1](i + 1, j + 1) * E_dot(i + 1, j + 1)
+                        + Q_dot[2](i + 1, j) * E(i + 1, j)
+                        + Q[2](i + 1, j) * E_dot(i + 1, j);
+        }
+    }
+
+    return E_dot.block(1, 1, N, N);
+}
+
+double ObjectiveFunctions::dilate2Loss(
+    const Eigen::VectorXd& obs,
+    const Eigen::VectorXd& sim,
+    double delta,
+    double gamma
+) {
+    if (obs.size() != sim.size()) {
+        throw std::invalid_argument("ObjectiveFunctions::dilate2Loss: vector sizes must match");
+    }
+    if (gamma <= 0.0) {
+        throw std::invalid_argument("ObjectiveFunctions::dilate2Loss: gamma must be positive");
+    }
+    const int N = static_cast<int>(obs.size());
+    if (N == 0) {
+        return 0.0;
+    }
+
+    Eigen::MatrixXd D, V, E;
+    std::array<Eigen::MatrixXd, 3> Q;
+    dilate2ComputeDP(obs, sim, gamma, D, V, Q, E);
+
+    // Shape term: soft-DTW discrepancy
+    double shapeTerm = V(N, N);
+
+    // Temporal term: TDI = sum_ij E(i,j) * (i-j)^2 / N^2  (1-based indices i,j)
+    double temporalTerm = 0.0;
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            double tDev = static_cast<double>(i - j);
+            temporalTerm += E(i + 1, j + 1) * tDev * tDev;
+        }
+    }
+    temporalTerm /= (static_cast<double>(N) * static_cast<double>(N));
+
+    return delta * shapeTerm + (1.0 - delta) * temporalTerm;
+}
+
+Eigen::VectorXd ObjectiveFunctions::dilate2Gradient(
+    const Eigen::VectorXd& obs,
+    const Eigen::VectorXd& sim,
+    double delta,
+    double gamma
+) {
+    if (obs.size() != sim.size()) {
+        throw std::invalid_argument("ObjectiveFunctions::dilate2Gradient: vector sizes must match");
+    }
+    if (gamma <= 0.0) {
+        throw std::invalid_argument("ObjectiveFunctions::dilate2Gradient: gamma must be positive");
+    }
+    const int N = static_cast<int>(obs.size());
+    Eigen::VectorXd grad(N);
+    if (N == 0) {
+        return grad;
+    }
+
+    Eigen::MatrixXd D, V, E;
+    std::array<Eigen::MatrixXd, 3> Q;
+    dilate2ComputeDP(obs, sim, gamma, D, V, Q, E);
+
+    // Shape gradient: d softDTW / d sim_j = sum_i E(i,j) * 2 * (sim_j - obs_i)
+    Eigen::VectorXd shapeGrad(N);
+    for (int j = 0; j < N; ++j) {
+        double sumE = 0.0;
+        double sumEObs = 0.0;
+        for (int i = 0; i < N; ++i) {
+            sumE += E(i + 1, j + 1);
+            sumEObs += E(i + 1, j + 1) * obs(i);
+        }
+        shapeGrad(j) = delta * 2.0 * (sumE * sim(j) - sumEObs);
+    }
+
+    // Temporal gradient: TDI depends on sim through E, differentiated via the
+    // soft-DTW Hessian-vector product with the upstream gradient of TDI w.r.t. E
+    Eigen::VectorXd temporalGrad = Eigen::VectorXd::Zero(N);
+    if (delta != 1.0) {
+        Eigen::MatrixXd Z(N, N);  // d loss / dE = (1-delta) * Omega / N^2
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < N; ++j) {
+                double tDev = static_cast<double>(i - j);
+                Z(i, j) = (1.0 - delta) * tDev * tDev
+                        / (static_cast<double>(N) * static_cast<double>(N));
+            }
+        }
+        Eigen::MatrixXd E_dot = dilate2HessianProduct(Z, Q, E, gamma);
+        for (int j = 0; j < N; ++j) {
+            double sumEd = 0.0;
+            double sumEdObs = 0.0;
+            for (int i = 0; i < N; ++i) {
+                sumEd += E_dot(i, j);
+                sumEdObs += E_dot(i, j) * obs(i);
+            }
+            temporalGrad(j) = 2.0 * (sumEd * sim(j) - sumEdObs);
+        }
+    }
+
+    grad = shapeGrad + temporalGrad;
+    return grad;
+}
+
 double ObjectiveFunctions::computeLoss(
     const Eigen::VectorXd& obs,
     const Eigen::VectorXd& sim,
@@ -339,6 +578,9 @@ double ObjectiveFunctions::computeLoss(
             return persistenceIndexLoss(obs, sim, epsilon);
         case objective_func_type::DILATE:
             return dilateLoss(obs, sim, alpha, epsilon);
+        case objective_func_type::DILATE2:
+            // alpha = shape/time trade-off, alpha2 = soft-DTW smoothing (gamma)
+            return dilate2Loss(obs, sim, alpha, alpha2);
         default:
             return levelSlopeLoss(obs, sim, alpha);
     }
@@ -425,7 +667,21 @@ Eigen::VectorXd ObjectiveFunctions::computeGradient(
                 varDObs += diff * diff;
             }
             varDObs /= static_cast<double>(dObs.size());
-            double stdDObs = std::sqrt(varDObs) + epsilon;
+            double rawStdDObs = std::sqrt(varDObs);
+
+            // Degenerate normalization (horizon < 3 or constant observed series):
+            // fall back to the unnormalized slope gradient (see normalizedSlopeLoss)
+            if (!(rawStdDObs > 0.0)) {
+                static bool warned = false;
+                if (!warned) {
+                    warned = true;
+                    std::cerr << "[Warning] ObjectiveFunctions::computeGradient: NORMALIZED_SLOPE with zero "
+                                 "std of observed differences (horizon < 3 or constant observations); "
+                                 "falling back to DIFF_SLOPE gradient.\n";
+                }
+                return computeGradient(obs, sim, objective_func_type::DIFF_SLOPE, alpha, alpha2, epsilon);
+            }
+            double stdDObs = rawStdDObs + epsilon;
 
             // Normalized gradient
             for (int i = 0; i < n; ++i) {
@@ -477,6 +733,15 @@ Eigen::VectorXd ObjectiveFunctions::computeGradient(
             Eigen::VectorXd slopeGrad = computeGradient(obs, sim, objective_func_type::DIFF_SLOPE, alpha, alpha2, epsilon);
             for (int i = 0; i < n; ++i) {
                 grad(i) = alpha * mseGrad(i) + (1.0 - alpha) * slopeGrad(i);
+            }
+            break;
+        }
+        case objective_func_type::DILATE2: {
+            // Exact gradient of the DILATE2 loss (soft-DTW + TDI);
+            // alpha = shape/time trade-off, alpha2 = soft-DTW smoothing (gamma)
+            Eigen::VectorXd dilate2Grad = dilate2Gradient(obs, sim, alpha, alpha2);
+            for (int i = 0; i < n; ++i) {
+                grad(i) = dilate2Grad(i);
             }
             break;
         }

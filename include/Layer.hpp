@@ -234,16 +234,28 @@ public:
 
     /// Set the deltas of an output layer from the gradient of the chosen loss function w.r.t. the layer output.
     /**
-     * The current output vector is treated as the prediction; for MSE the delta
-     * is simply (output - obs), for other losses the gradient is computed by
-     * ObjectiveFunctions::computeGradient.
+     * The current output vector is treated as the prediction. The gradient of
+     * the loss w.r.t. the output is computed by ObjectiveFunctions::computeGradient
+     * (MSE included, with its 2*(sim-obs)/n normalization) and then multiplied by
+     * the derivative of this layer's activation function, so the deltas are
+     * correct at the pre-activation level.
      * @param obs Observed (target) values with the same size as the output.
      * @param lossType Objective (loss) function type.
      * @param alpha Weighting parameter for combined losses.
      * @param alpha2 Second weighting parameter (curvature term).
      * @param epsilon Small constant for numerical stability.
+     * @note For DILATE2, alpha2 doubles as the soft-DTW smoothing parameter (gamma).
      */
     void setDeltasFromLossGradient(const Eigen::VectorXd &obs, objective_func_type lossType, double alpha = 0.5, double alpha2 = 0.33, double epsilon = 1e-8);
+
+    /// Get the derivative of this layer's activation function at the stored pre-activations.
+    /**
+     * Requires calculateOutput() to have been called so the pre-activations are
+     * current. Used when setting output-layer deltas manually (e.g. MLP::horizonBackprop)
+     * to apply the same activation chain rule as setDeltasFromLossGradient.
+     * @return Vector of f'(z) values, same size as the layer output.
+     */
+    Eigen::VectorXd getActivationDerivative();
 
     /// Reset the Adam optimizer state variables (MtForAdam and VtForAdam) to zero.
     void resetAdamState();
