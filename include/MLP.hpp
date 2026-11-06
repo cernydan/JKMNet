@@ -558,7 +558,7 @@ class MLP {
         void setObjectiveFunction(const std::string& funcName);
         objective_func_type getObjectiveFunction() const;  //!< Getter for the current objective function
         void setObjectiveAlpha(double alpha);  //!< Setter for the alpha parameter of combined losses
-        void setObjectiveAlpha2(double alpha2);  //!< Setter for the alpha2 parameter of the curvature term
+        void setObjectiveAlpha2(double alpha2);  //!< Setter for the alpha2 parameter (curvature term; soft-DTW gamma for DILATE2)
         double getObjectiveAlpha() const;  //!< Getter for the alpha parameter
         double getObjectiveAlpha2() const;  //!< Getter for the alpha2 parameter
 

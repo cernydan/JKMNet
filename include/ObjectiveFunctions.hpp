@@ -6,6 +6,7 @@
 #define OBJECTIVE_FUNCTIONS_HPP
 
 #include "eigen-3.4/Eigen/Dense"
+#include <array>
 #include <string>
 #include <vector>
 
@@ -18,7 +19,8 @@ enum class objective_func_type {
     LEVEL_SLOPE_CURVATURE,  //!< L3': Combined Level + Slope + Curvature Loss
     NORMALIZED_SLOPE,       //!< L4: Normalized/Scaled Slope Loss
     PERSISTENCE_INDEX,      //!< L5: Persistence-Index-Based Loss
-    DILATE                  //!< DILATE: Shape and Temporal Alignment Loss
+    DILATE,                 //!< DILATE: Shape and Temporal Alignment Loss (simplified surrogate gradient)
+    DILATE2                 //!< DILATE2: Faithful DILATE (Le Guen & Thome 2019) with exact soft-DTW + TDI gradients
 };
 
 /// Provides various loss functions and their gradients for network training.
@@ -56,6 +58,8 @@ public:
      * @param alpha2 Second weighting parameter for the curvature term (default 0.33).
      * @param epsilon Small constant to prevent division by zero (default 1e-8).
      * @return Scalar loss value.
+     * @note For DILATE2, alpha is the shape/time trade-off and alpha2 is used
+     *       as the soft-DTW smoothing parameter (gamma).
      */
     static double computeLoss(
         const Eigen::VectorXd& obs,
@@ -75,7 +79,8 @@ public:
      * @param alpha2 Second weighting parameter for the curvature term (default 0.33).
      * @param epsilon Small constant to prevent division by zero (default 1e-8).
      * @return Gradient vector of the loss with respect to sim (same size as sim).
-     * @note The DILATE gradient is only approximated (falls back to a level+slope combination).
+     * @note The DILATE gradient is only approximated (falls back to a level+slope combination);
+     *       DILATE2 uses the exact gradient of its loss (alpha2 as soft-DTW gamma).
      */
     static Eigen::VectorXd computeGradient(
         const Eigen::VectorXd& obs,
@@ -96,6 +101,7 @@ public:
      * @param epsilon Small constant to prevent division by zero (default 1e-8).
      * @return Mean loss over all rows.
      * @throw std::invalid_argument If the matrix dimensions do not match.
+     * @note For DILATE2, alpha2 is used as the soft-DTW smoothing parameter (gamma).
      */
     static double computeBatchLoss(
         const Eigen::MatrixXd& Y_obs,
@@ -217,6 +223,49 @@ public:
         double gamma = 0.1
     );
 
+    /// DILATE2 Loss — faithful DILATE (Le Guen & Thome, NeurIPS 2019).
+    /**
+     * L = delta * softDTW_gamma(OBS, SIM) + (1-delta) * TDI, where
+     * softDTW is the soft dynamic time warping discrepancy over the squared
+     * Euclidean cost matrix D[i,j] = (obs_i - sim_j)^2 (shape term), and
+     * TDI is the temporal distortion index: the soft-DTW alignment matrix E
+     * weighted by the squared index distances Omega[i,j] = (i-j)^2, normalized
+     * by N^2 (temporal term). This is the loss actually minimized by
+     * dilate2Gradient.
+     * @param obs Observed values (one row of observations).
+     * @param sim Simulated/predicted values (same size as obs).
+     * @param delta Weight of the shape (soft-DTW) term; (1-delta) weights the temporal term.
+     * @param gamma Smoothing parameter of the soft-minimum (gamma -> 0 recovers hard DTW).
+     * @return Combined scalar loss.
+     * @throw std::invalid_argument If the vector sizes do not match or gamma <= 0.
+     */
+    static double dilate2Loss(
+        const Eigen::VectorXd& obs,
+        const Eigen::VectorXd& sim,
+        double delta = 0.5,
+        double gamma = 0.1
+    );
+
+    /// Gradient of the DILATE2 loss w.r.t. sim (exact, via soft-DTW Hessian-vector product).
+    /**
+     * The shape gradient uses the soft-DTW alignment matrix E = d softDTW / dD.
+     * The temporal gradient differentiates TDI through E using the soft-DTW
+     * Hessian-vector product (forward/backward differential DP, following the
+     * reference implementation of the DILATE paper).
+     * @param obs Observed values.
+     * @param sim Simulated/predicted values (same size as obs).
+     * @param delta Weight of the shape term; (1-delta) weights the temporal term.
+     * @param gamma Smoothing parameter of the soft-minimum.
+     * @return Gradient vector (same size as sim).
+     * @throw std::invalid_argument If the vector sizes do not match or gamma <= 0.
+     */
+    static Eigen::VectorXd dilate2Gradient(
+        const Eigen::VectorXd& obs,
+        const Eigen::VectorXd& sim,
+        double delta = 0.5,
+        double gamma = 0.1
+    );
+
 private:
     /// Compute the first difference (dx_i = x_i - x_{i-1}).
     /**
@@ -264,6 +313,51 @@ private:
     static double temporalPenalty(
         const Eigen::VectorXd& y,
         const Eigen::VectorXd& yhat
+    );
+
+    /// Shared soft-DTW dynamic programming for DILATE2 (forward DP + alignment backtrace).
+    /**
+     * Computes the cost matrix D, the soft-DTW forward DP V (with the three
+     * soft-min weights per cell collected in Q), and the alignment matrix E
+     * (= d softDTW / dD, via the backward DP seeded at the last cell).
+     * Padded indexing follows the reference DILATE implementation: V is
+     * (N+1)x(N+1) with V(0,0)=0 and borders 1e10; Q[k] and E are (N+2)x(N+2)
+     * with the seed Q[k](N+1,N+1)=1, E(N+1,N+1)=1.
+     * @param obs Observed values.
+     * @param sim Simulated values (same size as obs).
+     * @param gamma Soft-min smoothing parameter (must be > 0).
+     * @param[out] D NxN cost matrix D(i,j) = (obs(i)-sim(j))^2.
+     * @param[out] V (N+1)x(N+1) soft-DTW forward DP; V(N,N) is the soft-DTW value.
+     * @param[out] Q Three (N+2)x(N+2) soft-min weight matrices per DP cell.
+     * @param[out] E (N+2)x(N+2) alignment matrix; E(i+1,j+1) = d softDTW / dD(i,j).
+     */
+    static void dilate2ComputeDP(
+        const Eigen::VectorXd& obs,
+        const Eigen::VectorXd& sim,
+        double gamma,
+        Eigen::MatrixXd& D,
+        Eigen::MatrixXd& V,
+        std::array<Eigen::MatrixXd, 3>& Q,
+        Eigen::MatrixXd& E
+    );
+
+    /// Soft-DTW Hessian-vector product for the DILATE2 temporal gradient.
+    /**
+     * Given the upstream gradient Z = d loss / dE (NxN, cropped), computes
+     * E_dot = d (sum(Z * E)) / dD (NxN, cropped) via the differential forward
+     * DP (V_dot), the soft-min Hessian product (Q_dot) and the differential
+     * backward DP (E_dot). Requires Q and E from a prior dilate2ComputeDP call.
+     * @param Z NxN upstream gradient w.r.t. the alignment matrix E (cropped).
+     * @param Q Soft-min weights from dilate2ComputeDP.
+     * @param E Alignment matrix from dilate2ComputeDP.
+     * @param gamma Soft-min smoothing parameter (must be > 0).
+     * @return NxN matrix E_dot = d (Z . E) / dD.
+     */
+    static Eigen::MatrixXd dilate2HessianProduct(
+        const Eigen::MatrixXd& Z,
+        const std::array<Eigen::MatrixXd, 3>& Q,
+        const Eigen::MatrixXd& E,
+        double gamma
     );
 };
 

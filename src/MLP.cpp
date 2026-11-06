@@ -2617,7 +2617,7 @@ void MLP::setObjectiveAlpha(double alpha) {
 }
 
 /// Implements setObjectiveAlpha2. Coefficient of the curvature term of the
-/// objective function.
+/// objective function (serves as the soft-DTW smoothing parameter for DILATE2).
 void MLP::setObjectiveAlpha2(double alpha2) {
     objectiveAlpha2_ = alpha2;
 }
@@ -2667,10 +2667,12 @@ Eigen::MatrixXd MLP::horizonBackprop(const std::vector<Eigen::VectorXd> &stepInp
     Eigen::VectorXd simHorizon(n);
     Eigen::MatrixXd unitDeltas(layers_[0].getWeights().cols() - 1, n);
     Eigen::VectorXd dUnit(1);
-    dUnit(0) = 1.0;
     for (int s = 0; s < n; ++s) {
         calcOneOutput(stepInputs[s]);
         simHorizon(s) = output(0);
+        // Unit delta at the output layer must live at the pre-activation level,
+        // so scale by f'(z) of the output activation (chain rule)
+        dUnit(0) = layers_[layers_.size()-1].getActivationDerivative()(0);
         layers_[layers_.size()-1].setDeltas(dUnit);
         if (layers_.size() > 1) {
             for (int i = static_cast<int>(layers_.size()) - 2; i >= 0; --i) {
@@ -2691,7 +2693,8 @@ Eigen::MatrixXd MLP::horizonBackprop(const std::vector<Eigen::VectorXd> &stepInp
     Eigen::VectorXd d(1);
     for (int s = 0; s < n; ++s) {
         calcOneOutput(stepInputs[s]);
-        d(0) = grad(s);
+        // Loss gradient w.r.t. the output, chained through the output activation
+        d(0) = grad(s) * layers_[layers_.size()-1].getActivationDerivative()(0);
         layers_[layers_.size()-1].setDeltas(d);
         layers_[layers_.size()-1].calculateBatchGradient();
         if (layers_.size() > 1) {

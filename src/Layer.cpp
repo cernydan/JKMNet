@@ -693,18 +693,29 @@ void Layer::setDeltasFromLossGradient(
     double alpha2,
     double epsilon
 ) {
-    // Compute gradient of the loss w.r.t. output (simulated values)
-    // The gradient becomes our deltas for backpropagation
+    // Compute gradient of the loss w.r.t. the layer output (simulated values).
+    // MSE uses the same 2*(sim-obs)/n normalization as every other objective
+    // in ObjectiveFunctions::computeGradient, so all losses scale consistently.
     Eigen::VectorXd sim = output;  // Current layer output is the "prediction"
 
-    if (lossType == objective_func_type::MSE) {
-        // Standard MSE gradient: d/d(sim_i) MSE = 2 * (sim_i - obs_i) / n
-        // We use just (sim - obs) as the constant factor doesn't matter for GD
-        deltas = sim - obs;
-    } else {
-        // Use custom loss gradient from ObjectiveFunctions
-        deltas = ObjectiveFunctions::computeGradient(obs, sim, lossType, alpha, alpha2, epsilon);
-    }
+    Eigen::VectorXd lossGrad = ObjectiveFunctions::computeGradient(
+        obs, sim, lossType, alpha, alpha2, epsilon
+    );
+
+    // Chain rule through the output activation: deltas are defined at the
+    // pre-activation level (like Layer::calculateDeltas does for hidden
+    // layers), so multiply by f'(z) of this layer's activation function.
+    deltas = lossGrad.array() * setActivFunDeriv(activations, activ_func).array();
+}
+
+/**
+ * Get the derivative of the layer's activation function evaluated at the
+ * stored pre-activations (requires calculateOutput() to have been called).
+ * Used by callers that set output-layer deltas manually to apply the same
+ * chain-rule correction as setDeltasFromLossGradient.
+ */
+Eigen::VectorXd Layer::getActivationDerivative() {
+    return setActivFunDeriv(activations, activ_func);
 }
 
 
