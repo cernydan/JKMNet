@@ -60,9 +60,8 @@ public:
      * (beta1 = 0.9, beta2 = 0.99, eps = 1e-8) to every layer.
      * @param deltaFromMlp Error signal of the next (MLP) layer, one entry per element of the CNN output vector.
      * @param learningRate Step size for the Adam update.
-     * @param iterationNum Current training iteration (1-based), used for Adam bias correction.
      */
-    void bpAdam1input(Eigen::VectorXd deltaFromMlp, double learningRate, int iterationNum);
+    void bpAdam1input(Eigen::VectorXd deltaFromMlp, double learningRate);
 
     /// Compute network outputs for multiple 1D inputs at once.
     /**

@@ -102,6 +102,7 @@ void LSTMLayer::initLSTMLayer(const int numInputs,
     U_VtForAdam = Eigen::MatrixXd::Zero(settings.cells4gates, settings.cells);
     b_MtForAdam = Eigen::VectorXd::Zero(settings.cells4gates);
     b_VtForAdam = Eigen::VectorXd::Zero(settings.cells4gates);
+    adamIteration_ = 0;
     deltaOutput = Eigen::MatrixXd::Zero(settings.cells,settings.timeSteps);
     deltaCellState = Eigen::MatrixXd::Zero(settings.cells,settings.timeSteps);
     deltaGates = Eigen::MatrixXd::Zero(settings.cells4gates,settings.timeSteps);
@@ -245,7 +246,9 @@ void LSTMLayer::updateWeights(double learningRate){
     b -= learningRate * bGradient;
 }
 
-void LSTMLayer::updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi) {
+void LSTMLayer::updateAdam(double learningRate, double beta1, double beta2, double epsi) {
+    ++adamIteration_;
+
     W_MtForAdam = beta1 * W_MtForAdam.array() + (1 - beta1) * Wgradient.array();
     U_MtForAdam = beta1 * U_MtForAdam.array() + (1 - beta1) * Ugradient.array();
     b_MtForAdam = beta1 * b_MtForAdam.array() + (1 - beta1) * bGradient.array();
@@ -254,12 +257,26 @@ void LSTMLayer::updateAdam(double learningRate, int iterationNum, double beta1, 
     U_VtForAdam = beta2 * U_VtForAdam.array() + (1 - beta2) * Ugradient.array() * Ugradient.array();
     b_VtForAdam = beta2 * b_VtForAdam.array() + (1 - beta2) * bGradient.array() * bGradient.array();
 
-    double beta1Corr = 1.0 - std::pow(beta1, iterationNum);
-    double beta2Corr = 1.0 - std::pow(beta2, iterationNum);
+    double beta1Corr = 1.0 - std::pow(beta1, static_cast<double>(adamIteration_));
+    double beta2Corr = 1.0 - std::pow(beta2, static_cast<double>(adamIteration_));
 
     W -= learningRate * (W_MtForAdam.array() / (beta1Corr * ((W_VtForAdam.array()/beta2Corr).sqrt() + epsi))).matrix();
     U -= learningRate * (U_MtForAdam.array() / (beta1Corr * ((U_VtForAdam.array()/beta2Corr).sqrt() + epsi))).matrix();
     b -= learningRate * (b_MtForAdam.array() / (beta1Corr * ((b_VtForAdam.array()/beta2Corr).sqrt() + epsi))).matrix();
+}
+
+std::uint64_t LSTMLayer::getAdamIteration() const {
+    return adamIteration_;
+}
+
+void LSTMLayer::resetAdamState(){
+    W_MtForAdam.setZero();
+    W_VtForAdam.setZero();
+    U_MtForAdam.setZero();
+    U_VtForAdam.setZero();
+    b_MtForAdam.setZero();
+    b_VtForAdam.setZero();
+    adamIteration_ = 0;
 }
 
 void LSTMLayer::eraseMemory(){

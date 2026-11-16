@@ -1022,8 +1022,9 @@ void JKMNet::ensembleLstmFirstTest(){
                 mlps_[run].runAndCalculateBatchGradient(lstm_vec[run].getForwardOutputVector(),Y_train.row(i));
                 lstm_vec[run].setDeltaFromNextLayer(mlps_[run].getFirstLayerInputDelta());
                 lstm_vec[run].calculateGradients();
-                lstm_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
+                // One Adam update per sample; each layer/LSTM counts its own Adam steps
+                lstm_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.99, 1e-8);
+                mlps_[run].updateWeightsAdam(cfg_.learning_rate);
                 lstm_vec[run].eraseMemory();
             }
 
@@ -1350,7 +1351,8 @@ void JKMNet::ensembleLstmPastFutureTest(){
                         stepInputs[s] = lstm_to_mlp[run].col(s);
                     }
                     delta_mlp_to_lstm[run] = mlps_[run].horizonBackprop(stepInputs, separate_obs[run].row(0).transpose());
-                    mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
+                    // One Adam update per sample (the layers count the Adam steps)
+                    mlps_[run].updateWeightsAdam(cfg_.learning_rate);
                 }
                 // Backward: push the MLP delta into the "together" LSTM and
                 // split its input deltas back between the past/future encoders
@@ -1360,11 +1362,12 @@ void JKMNet::ensembleLstmPastFutureTest(){
                 lstm_future_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,cfg_.lstm_past_time_steps,cfg_.lstm_cells,cfg_.lstm_future_time_steps)));
                 lstm_past_vec[run].calculateGradients();
                 lstm_future_vec[run].calculateGradients();
-                // Adam-update all three LSTMs; MLP was already updated above;
+                // Adam-update all three LSTMs (one update per sample, step counters
+                // are internal to the LSTMs); MLP was already updated above;
                 // memories are cleared per sample so samples stay independent
-                lstm_past_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                lstm_future_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                lstm_together_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
+                lstm_past_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.99, 1e-8);
+                lstm_future_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.99, 1e-8);
+                lstm_together_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.99, 1e-8);
                 lstm_past_vec[run].eraseMemory();
                 lstm_future_vec[run].eraseMemory();
                 lstm_together_vec[run].eraseMemory();

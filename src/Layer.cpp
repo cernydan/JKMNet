@@ -23,6 +23,7 @@ Layer::Layer()
       weightGrad(),
       MtForAdam(),
       VtForAdam(),
+      adamIteration_(0),
       previousWeights() {
 }
 
@@ -46,6 +47,7 @@ Layer::Layer(const Layer& other): weights(),
       weightGrad(),
       MtForAdam(),
       VtForAdam(),
+      adamIteration_(0),
       previousWeights()  {
 
     weights = other.weights;
@@ -58,6 +60,7 @@ Layer::Layer(const Layer& other): weights(),
     deltas = other.deltas;
     VtForAdam = other.VtForAdam;
     MtForAdam = other.MtForAdam;
+    adamIteration_ = other.adamIteration_;
     previousWeights = other.previousWeights;
 
 }
@@ -78,6 +81,7 @@ Layer& Layer::operator=(const Layer& other){
         weightGrad     = other.weightGrad;
         MtForAdam      = other.MtForAdam;
         VtForAdam      = other.VtForAdam;
+        adamIteration_ = other.adamIteration_;
         previousWeights = other.previousWeights;
     
   }
@@ -99,8 +103,10 @@ Layer::Layer(Layer&& other) noexcept
       weightGrad(std::move(other.weightGrad)),
       MtForAdam(std::move(other.MtForAdam)),
       VtForAdam(std::move(other.VtForAdam)),
+      adamIteration_(other.adamIteration_),
       previousWeights(std::move(other.previousWeights)) {
 
+    other.adamIteration_ = 0;
 }
 
 /**
@@ -119,6 +125,8 @@ Layer& Layer::operator=(Layer&& other) noexcept {
         weightGrad     = std::move(other.weightGrad);
         MtForAdam      = std::move(other.MtForAdam);
         VtForAdam      = std::move(other.VtForAdam);
+        adamIteration_ = other.adamIteration_;
+        other.adamIteration_ = 0;
         previousWeights = std::move(other.previousWeights);
     
   }
@@ -202,9 +210,10 @@ void Layer::initLayer(unsigned numInputs,
     // Initialize BP gradient
     weightGrad.setZero(numNeurons, numInputs+1);
 
-    // Initialize ADAM parameters
+    // Initialize ADAM parameters (moments and the bias-correction step counter)
     MtForAdam.setZero(numNeurons, numInputs+1);
     VtForAdam.setZero(numNeurons, numInputs+1);
+    adamIteration_ = 0;
 
     previousWeights = weights;
 }
@@ -409,12 +418,27 @@ void Layer::updateWeightsMomentum(double learningRate, double moment) {
 
 /**
  * Apply a gradient calculation using the Adam algorithm (with bias correction of both moment estimates)
+ *
+ * The bias-correction step is this layer's own counter of Adam updates, which is
+ * advanced here: one call is one weight update, so the counter counts patterns in
+ * online training and mini-batches in batch training (never epochs).
  */
-void Layer::updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi) {
+void Layer::updateAdam(double learningRate, double beta1, double beta2, double epsi) {
+    ++adamIteration_;
+    const double beta1Corr = 1.0 - std::pow(beta1, static_cast<double>(adamIteration_));
+    const double beta2Corr = 1.0 - std::pow(beta2, static_cast<double>(adamIteration_));
+
     MtForAdam = beta1 * MtForAdam.array() + (1 - beta1) * weightGrad.array();
     VtForAdam = beta2 * VtForAdam.array() + (1 - beta2) * weightGrad.array() * weightGrad.array();
-    weights -= learningRate * (MtForAdam.array() / ((1 - std::pow(beta1, iterationNum)) * 
-               (sqrt(VtForAdam.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
+    weights -= learningRate * (MtForAdam.array() / (beta1Corr *
+               (sqrt(VtForAdam.array()/beta2Corr) + epsi))).matrix();
+}
+
+/**
+ * Number of Adam updates applied since the Adam state was (re)initialized
+ */
+std::uint64_t Layer::getAdamIteration() const {
+    return adamIteration_;
 }
 
 /**
@@ -579,8 +603,10 @@ Eigen::VectorXd Layer::setActivFunDeriv(const Eigen::VectorXd& weightedSum, acti
             { return 1.4 * std::exp(x) * std::exp(-0.7 * std::exp(x)); });
             break;
 
-        case activ_func_type::ROOTSIG:  // f'(x) = x / ((1 + sqrt(1 + x^2)) * sqrt(1 + x^2))
-            derivatedOutput = derivatedOutput.array().unaryExpr([](double x) 
+        // f(x) = x / (1 + s) with s = sqrt(1 + x^2)
+        // f'(x) = (1 + s - x^2/s) / (1 + s)^2 = (1 + 1/s) / (1 + s)^2 = 1 / (s * (1 + s))
+        case activ_func_type::ROOTSIG:  // f'(x) = 1 / ((1 + sqrt(1 + x^2)) * sqrt(1 + x^2))
+            derivatedOutput = derivatedOutput.array().unaryExpr([](double x)
             { return 1.0 / ((1.0 + std::sqrt(1.0 + x * x)) * std::sqrt(1.0 + x * x)); });
             break;
 
@@ -679,11 +705,13 @@ void Layer::weightsToVector(){
 }
 
 /**
- * Reset the Adam optimizer state variables (MtForAdam and VtForAdam) to zero
+ * Reset the Adam optimizer state (moments and step counter) to zero, so that the
+ * next updateAdam call is again treated as the first step
  */
 void Layer::resetAdamState(){
     MtForAdam.setZero();
     VtForAdam.setZero();
+    adamIteration_ = 0;
 }
 
 void Layer::setDeltasFromLossGradient(

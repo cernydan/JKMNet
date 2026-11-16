@@ -6,6 +6,8 @@
  * @brief Declares the CNNLayer class — a 1D convolutional layer with pooling, activation, and Adam filter updates — plus the Sizes struct and pool_type enum.
  */
 
+#include <cstdint>
+
 #include "eigen-3.4/Eigen/Dense"
 #include "ConfigIni.hpp"
 
@@ -170,13 +172,20 @@ public:
     void setDeltaFromNextLayer(const Eigen::VectorXd& nextDelta);   //!< Set the error delta arriving from the following layer
     /// Apply one Adam update step to the filters and the bias from the stored gradients.
     /**
+     * The Adam time step is owned by the layer and incremented by this call, so it
+     * counts actual weight updates rather than epochs.
      * @param learningRate Adam step size.
-     * @param iterationNum 1-based step counter for Adam's bias correction.
      * @param beta1 Exponential decay of the first moment estimate.
      * @param beta2 Exponential decay of the second moment estimate.
      * @param epsi Small stabilizer in the denominator.
      */
-    void updateFiltersAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi);
+    void updateFiltersAdam(double learningRate, double beta1, double beta2, double epsi);
+    /// Get the number of Adam updates applied since init1DCNNLayer().
+    /**
+     * @return 0-based count of updateFiltersAdam() calls; the next update uses it
+     *         + 1 as the bias-correction step.
+     */
+    std::uint64_t getAdamIteration() const;
 
 protected:
 private:
@@ -197,6 +206,7 @@ private:
     Eigen::MatrixXd VtForAdam;  //!< Adam second-moment accumulator for the filters
     Eigen::VectorXd MtForAdamBias;  //!< Adam first-moment accumulator for the bias
     Eigen::VectorXd VtForAdamBias;  //!< Adam second-moment accumulator for the bias
+    std::uint64_t adamIteration_ = 0;  //!< Number of Adam updates applied (Adam's bias-correction step counter)
     Eigen::VectorXd avgPoolBpHelp;  //!< Scratch vector distributing average-pool deltas over window rows
     Eigen::VectorXd maxPoolBpHelp;  //!< Scratch vector routing a max-pool delta to the argmax row
     Eigen::MatrixXi maxPoolBpIndicesHelp;   //!< Argmax row indices per pooling window, saved during maxPool forward pass

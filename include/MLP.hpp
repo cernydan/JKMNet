@@ -244,13 +244,14 @@ class MLP {
         void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate);
         /// Forward pass for one pattern followed by an immediate Adam weight update.
         /**
+         * Adam's bias-correction step is maintained inside every layer, so this
+         * call simply performs one update (no step counter has to be tracked here).
          * @param input Input vector.
          * @param obsOut Target (observed) output vector.
          * @param learningRate Adam step size.
-         * @param iterationNum 1-based step counter for Adam's bias correction.
          * @throw std::logic_error If called before initMLP.
          */
-        void runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate, int iterationNum);
+        void runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate);
         /// Forward pass for one pattern; accumulate the per-layer batch gradients without updating weights.
         /**
          * Call repeatedly over a batch, then apply updateWeights()/updateWeightsAdam().
@@ -267,21 +268,21 @@ class MLP {
         void updateWeights(double learningRate);
         /// Apply one Adam step per layer from the accumulated batch gradient, then clear it.
         /**
-         * Uses beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8.
+         * Uses beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8. Adam's bias-correction
+         * step is counted inside each layer, i.e. once per call of this function
+         * (per pattern in online training, per mini-batch in batch training).
          * @param learningRate Adam step size.
-         * @param iterationNum 1-based step counter for Adam's bias correction.
          * @throw std::logic_error If called before initMLP.
          */
-        void updateWeightsAdam(double learningRate, int iterationNum);
+        void updateWeightsAdam(double learningRate);
         /// Same as updateWeightsAdam but keeps the accumulated gradients, so further patterns keep accumulating.
         /**
          * Used by the LSTM horizon training where several steps contribute before clearing.
          * @param learningRate Adam step size.
-         * @param iterationNum 1-based step counter for Adam's bias correction.
          * @throw std::logic_error If called before initMLP.
          */
-        void updateWeightsAdamNoClear(double learningRate, int iterationNum);
-        /// Reset the Adam moment accumulators of every layer (first/second moments).
+        void updateWeightsAdamNoClear(double learningRate);
+        /// Reset the Adam state of every layer (first/second moment accumulators and step counters).
         /**
          * Used when the MLP is trained as part of a coupled LSTM->MLP model so
          * each window starts a fresh Adam trajectory.

@@ -1172,10 +1172,9 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
  */
 /// Implements runAndBPadam. Same forward + backpropagation order as runAndBP,
 /// but the weight update uses Adam (Layer::updateAdam) with fixed hyperparameters
-/// beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8.
-/// @param iterationNum 1-based step counter passed to Adam for the bias
-///        correction of the first and second moment estimates.
-void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate, int iterationNum) {
+/// beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8. Adam's bias-correction step is
+/// counted inside each layer, so no step counter is passed here.
+void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate) {
     if (layers_.empty())
         throw std::logic_error("runMLP called before initMLP");
 
@@ -1195,7 +1194,7 @@ void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsO
         }
     }
     for(size_t i = 0; i < getNumLayers(); i++){
-        layers_[i].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
+        layers_[i].updateAdam(learningRate,0.9, 0.99, 1e-8);
     }
 }
 
@@ -1243,14 +1242,16 @@ void MLP::updateWeights(double learningRate){
 /// Implements updateWeightsAdam. Applies one Adam step per layer (Layer::updateAdam
 /// with beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8) from the accumulated gradient
 /// and then zeroes the gradient so the next batch accumulates from scratch.
-/// @param iterationNum 1-based step counter for Adam's bias correction.
+/// Adam's bias-correction step is counted inside each layer, so one call of this
+/// function advances it by exactly one (per pattern in online training, per
+/// mini-batch in batch training).
 /// @throw std::logic_error If called before initMLP.
-void MLP::updateWeightsAdam(double learningRate, int iterationNum){
+void MLP::updateWeightsAdam(double learningRate){
     if (layers_.empty())
         throw std::logic_error("updateWeights called before initMLP");
 
     for(size_t i = 0; i < getNumLayers(); i++){
-        layers_[i].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
+        layers_[i].updateAdam(learningRate,0.9, 0.99, 1e-8);
         layers_[i].setGradient(layers_[i].getGradient().setZero());
     }
 }
@@ -1258,21 +1259,21 @@ void MLP::updateWeightsAdam(double learningRate, int iterationNum){
 /// Implements updateWeightsAdamNoClear. Applies one Adam step per layer but
 /// intentionally leaves the accumulated gradients in place so further patterns
 /// keep accumulating (used by the LSTM horizon training).
-/// @param iterationNum 1-based step counter for Adam's bias correction.
 /// @throw std::logic_error If called before initMLP.
-void MLP::updateWeightsAdamNoClear(double learningRate, int iterationNum){
+void MLP::updateWeightsAdamNoClear(double learningRate){
     if (layers_.empty())
         throw std::logic_error("updateWeightsAdamNoClear called before initMLP");
 
     for(size_t i = 0; i < getNumLayers(); i++){
-        layers_[i].updateAdam(learningRate, iterationNum, 0.9, 0.99, 1e-8);
+        layers_[i].updateAdam(learningRate, 0.9, 0.99, 1e-8);
         // Do NOT clear gradients - allow accumulation
     }
 }
 
-/// Implements resetGradientsForLSTM. Resets the Adam moment state (first/second
-/// moment accumulators) of every layer; used when the MLP is trained as part of
-/// a coupled LSTM->MLP model so a fresh Adam trajectory starts for each window.
+/// Implements resetGradientsForLSTM. Resets the Adam state (first/second moment
+/// accumulators and the step counter) of every layer; used when the MLP is trained
+/// as part of a coupled LSTM->MLP model so a fresh Adam trajectory starts for each
+/// window.
 void MLP::resetGradientsForLSTM(){
     if (layers_.empty())
         return;
@@ -1384,7 +1385,8 @@ void MLP::onlineBP(int maxIterations, double maxError, double learningRate, cons
  */
 /// Implements onlineAdam. Same per-pattern online training loop as onlineBP, but
 /// weights are updated with Adam (beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8);
-/// the epoch counter is used as Adam's step for the bias correction.
+/// every pattern is one Adam update, and each layer counts those updates itself
+/// for Adam's bias correction (so the step advances with patterns, not epochs).
 /// Early stopping and the `result` bookkeeping follow onlineBP.
 /// @throw std::logic_error If called before initMLP.
 /// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP.
@@ -1439,8 +1441,9 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
                 }
             }
             Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            // One Adam update per pattern (the layers count the Adam steps)
             for(size_t i = 0; i < getNumLayers(); i++){
-                layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+                layers_[i].updateAdam(learningRate,0.9, 0.99, 1e-8);
             }
         }
         Error = Error / numOfPatterns;
@@ -1476,8 +1479,8 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
 /// @p batchSize (the last batch may be smaller); for every pattern in a batch
 /// the forward pass and backpropagation only accumulate gradients
 /// (calculateBatchGradient), and one Adam update is applied per batch, after
-/// which the gradients are zeroed. Adam's bias-correction step is the epoch
-/// counter (not the batch counter).
+/// which the gradients are zeroed. Adam's bias-correction step advances once per
+/// batch update (counted inside the layers), not per epoch.
 /// Early stopping and the `result` bookkeeping follow onlineBP.
 /// @throw std::logic_error If called before initMLP.
 /// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP,
@@ -1538,8 +1541,9 @@ void MLP::batchAdam(int maxIterations, double maxError, int batchSize, double le
                 }
                 Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
                 }
+                // One Adam update per mini-batch (the layers count the Adam steps)
                 for (int i = 0; i <= lastLayerIndex; i++){
-                    layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+                    layers_[i].updateAdam(learningRate,0.9, 0.99, 1e-8);
                     layers_[i].setGradient(layers_[i].getGradient().setZero());
                 }
             }
@@ -1946,8 +1950,9 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
                 }
             }
             Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            // One Adam update per pattern (the layers count the Adam steps)
             for(size_t i = 0; i < getNumLayers(); i++){
-                layers_[i].updateAdam(learningRate,epoch,0.9, 0.99, 1e-8);
+                layers_[i].updateAdam(learningRate,0.9, 0.99, 1e-8);
             }
         }
         Error = Error / numOfPatterns;
@@ -2092,8 +2097,9 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
 /// Implements batchAdamEpochVal — mini-batch Adam training with periodic
 /// train/validation metric evaluation. Each epoch splits the training patterns
 /// into mini-batches; gradients are accumulated per batch
-/// (calculateBatchGradient) and applied with one Adam step per batch, with the
-/// epoch counter used as Adam's bias-correction step. Early stopping below
+/// (calculateBatchGradient) and applied with one Adam step per batch, the
+/// bias-correction step advancing once per batch (counted inside the layers).
+/// Early stopping below
 /// maxError and `result` bookkeeping follow onlineAdam; metric matrices follow
 /// the same 14-entry layout as onlineAdamEpochVal.
 /// @param batchSize Number of patterns per mini-batch (last batch may be smaller).
@@ -2177,8 +2183,9 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
                 }
                 Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
                 }
+                // One Adam update per mini-batch (the layers count the Adam steps)
                 for (int i = 0; i <= lastLayerIndex; i++){
-                    layers_[i].updateAdam(learningRate,epoch,0.9, 0.99, 1e-8);
+                    layers_[i].updateAdam(learningRate,0.9, 0.99, 1e-8);
                     layers_[i].setGradient(layers_[i].getGradient().setZero());
                 }
             }

@@ -46,6 +46,7 @@ void CNNLayer::init1DCNNLayer(int numberOfFilters,
 
     MtForAdam = Eigen::MatrixXd::Zero(sizes.filtSize, sizes.numFilt);
     VtForAdam = Eigen::MatrixXd::Zero(sizes.filtSize, sizes.numFilt);
+    adamIteration_ = 0;
 
     auto weightInit = strToWeightInit(initType);
 
@@ -512,14 +513,23 @@ void CNNLayer::setDeltaFromNextLayer(const Eigen::VectorXd& nextDelta){
     deltaFromNextLayer = nextDelta;
 }
 
-void CNNLayer::updateFiltersAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi){
+void CNNLayer::updateFiltersAdam(double learningRate, double beta1, double beta2, double epsi){
+    // One call = one weight update, so the Adam step counter is advanced here
+    ++adamIteration_;
+    const double beta1Corr = 1.0 - std::pow(beta1, static_cast<double>(adamIteration_));
+    const double beta2Corr = 1.0 - std::pow(beta2, static_cast<double>(adamIteration_));
+
     MtForAdam = beta1 * MtForAdam.array() + (1 - beta1) * filtersGradient.array();
     VtForAdam = beta2 * VtForAdam.array() + (1 - beta2) * filtersGradient.array() * filtersGradient.array();
-    filters1D -= learningRate * (MtForAdam.array() / ((1 - std::pow(beta1, iterationNum)) * 
-                (sqrt(VtForAdam.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
+    filters1D -= learningRate * (MtForAdam.array() / (beta1Corr *
+                (sqrt(VtForAdam.array()/beta2Corr) + epsi))).matrix();
 
     MtForAdamBias = beta1 * MtForAdamBias.array() + (1 - beta1) * biasGradient.array();
     VtForAdamBias = beta2 * VtForAdamBias.array() + (1 - beta2) * biasGradient.array() * biasGradient.array();
-    bias1D -= learningRate * (MtForAdamBias.array() / ((1 - std::pow(beta1, iterationNum)) * 
-               (sqrt(VtForAdamBias.array()/(1 - std::pow(beta2,iterationNum))) + epsi))).matrix();
+    bias1D -= learningRate * (MtForAdamBias.array() / (beta1Corr *
+               (sqrt(VtForAdamBias.array()/beta2Corr) + epsi))).matrix();
+}
+
+std::uint64_t CNNLayer::getAdamIteration() const{
+    return adamIteration_;
 }
