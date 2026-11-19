@@ -250,6 +250,26 @@ class Data {
          */
         Eigen::MatrixXd shuffleMatrix(const Eigen::MatrixXd &matrix, const std::vector<int>& permVec);
 
+        /// Build training indices with output-driven oversampling.
+        /**
+         * The quantile is computed only from finite entries of @p outputs and
+         * a pattern is selected when at least one of its output entries is
+         * strictly above that threshold. Selected rows occur @p multiplier times
+         * in the returned index vector (all other rows occur once); the caller
+         * can shuffle the returned vector separately.
+         *
+         * @param outputs Training outputs (one row per pattern).
+         * @param quantile Quantile in (0, 1); 0 disables oversampling.
+         * @param multiplier Total occurrences of each selected pattern.
+         * @return Zero-based row indices defining one epoch's pattern order.
+         * @throw std::invalid_argument If the quantile/multiplier combination or
+         *         the expanded index count is invalid.
+         */
+        static std::vector<int> makeOversampledTrainIndices(
+            const Eigen::MatrixXd& outputs,
+            double quantile,
+            int multiplier);
+
         /// Restore the original row order of a matrix shuffled with permVec.
         /**
          * @param matrix Row-shuffled matrix.

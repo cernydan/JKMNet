@@ -415,8 +415,10 @@ void Data::logRunSettings(std::ostream& os, const RunConfig& cfg, unsigned run_i
     os << "Batch size: "     << cfg.batch_size     << "\n";
     os << "Ensemble runs: "  << cfg.ensemble_runs  << "\n";
     os << "Train fraction: " << cfg.train_fraction << "\n";
-    os << "Shuffle: "        << (cfg.shuffle ? "true" : "false") << "\n";
+    os << "Shuffle (every epoch): " << (cfg.shuffle ? "true" : "false") << "\n";
     os << "Split shuffle: "  << (cfg.split_shuffle ? "true" : "false") << "\n";
+    os << "Oversample quantile (outputs): " << cfg.oversample_quantile << "\n";
+    os << "Oversample multiplier (total copies): " << cfg.oversample_multiplier << "\n";
     os << "Seed: "           << cfg.seed           << "\n";
 
     // --- Transform ---
@@ -1929,6 +1931,86 @@ Eigen::MatrixXd Data::unshuffleMatrix(const Eigen::MatrixXd &matrix, const std::
         oldmat.row(permVec[i]) = matrix.row(i);
     }
     return oldmat;
+}
+
+/// Implements makeOversampledTrainIndices.
+std::vector<int> Data::makeOversampledTrainIndices(
+    const Eigen::MatrixXd& outputs,
+    double quantile,
+    int multiplier)
+{
+    if (multiplier < 1)
+        throw std::invalid_argument("oversample_multiplier must be at least 1");
+    if (quantile != 0.0 && !(quantile > 0.0 && quantile < 1.0))
+        throw std::invalid_argument("oversample_quantile must be 0 (disabled) or lie in (0, 1)");
+
+    const int rows = static_cast<int>(outputs.rows());
+    const int cols = static_cast<int>(outputs.cols());
+
+    std::vector<int> order;
+    order.reserve(static_cast<size_t>(std::max(0, rows)));
+    for (int i = 0; i < rows; ++i) {
+        order.push_back(i);
+    }
+
+    if (rows == 0 || cols == 0 || quantile == 0.0 || multiplier == 1) {
+        return order;
+    }
+
+    std::vector<double> values;
+    values.reserve(static_cast<size_t>(outputs.size()));
+    for (Eigen::Index r = 0; r < outputs.rows(); ++r) {
+        for (Eigen::Index c = 0; c < outputs.cols(); ++c) {
+            const double v = outputs(r, c);
+            if (std::isfinite(v)) values.push_back(v);
+        }
+    }
+    if (values.empty()) {
+        return order;
+    }
+
+    std::sort(values.begin(), values.end());
+    const double position = quantile * static_cast<double>(values.size() - 1);
+    const size_t lowerIdx = static_cast<size_t>(std::floor(position));
+    const size_t upperIdx = static_cast<size_t>(std::ceil(position));
+    const double fraction = position - static_cast<double>(lowerIdx);
+    const double threshold = lowerIdx == upperIdx
+        ? values[lowerIdx]
+        : values[lowerIdx] + fraction * (values[upperIdx] - values[lowerIdx]);
+    if (!std::isfinite(threshold)) {
+        return order;
+    }
+
+    std::vector<char> selected(static_cast<size_t>(rows), 0);
+    size_t selectedCount = 0;
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            const double v = outputs(r, c);
+            if (std::isfinite(v) && v > threshold) {
+                selected[static_cast<size_t>(r)] = 1;
+                ++selectedCount;
+                break;
+            }
+        }
+    }
+    if (selectedCount == 0) {
+        return order;
+    }
+
+    const size_t extraPerSelected = static_cast<size_t>(multiplier - 1);
+    const size_t expandedSize = static_cast<size_t>(rows) + selectedCount * extraPerSelected;
+    if (expandedSize > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        throw std::invalid_argument("oversampled training index vector would exceed the maximum supported size");
+    }
+
+    order.reserve(expandedSize);
+    for (size_t i = 0; i < selected.size(); ++i) {
+        if (!selected[i]) continue;
+        for (size_t copy = 0; copy < extraPerSelected; ++copy) {
+            order.push_back(static_cast<int>(i));
+        }
+    }
+    return order;
 }
 
 

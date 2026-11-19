@@ -77,7 +77,7 @@ void CNN::bpAdam1input(Eigen::VectorXd deltaFromMlp, double learningRate){
     }
 
     for(size_t i = 0; i < layers_.size(); i++){
-        layers_[i].updateFiltersAdam(learningRate, 0.9, 0.99, 1e-8);
+        layers_[i].updateFiltersAdam(learningRate, 0.9, 0.999, 1e-8);
     }
 }
 

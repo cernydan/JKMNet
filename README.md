@@ -116,10 +116,21 @@ ensemble_runs = 20
 max_iterations = 500
 learning_rate = 0.001
 train_fraction = 0.8
+shuffle = true                 ; reorder the training patterns before every epoch
+oversample_quantile = 0        ; 0 disables it; otherwise use 0 < q < 1
+oversample_multiplier = 1      ; total occurrences of each selected output pattern
 
 [paths]
 weights_csv = data/outputs/weights/weights_final.csv
 ```
+
+`shuffle` controls the logical training order. When enabled, each epoch uses a new
+random permutation of the training patterns; validation and metric evaluation remain
+in their original order. Oversampling is output-driven: the quantile is computed from
+all finite `Y_train` entries, and a pattern is repeated when at least one output value
+is above that quantile. `oversample_multiplier = 10` gives each selected pattern ten
+total occurrences (the original plus nine copies) in every epoch. Validation patterns
+are never duplicated.
 
 ---
 

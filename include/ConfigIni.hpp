@@ -123,10 +123,12 @@ struct RunConfig {
     int max_metrics_step = 99;   ///< Compute and save metrics every n-th epoch in the *_EPOCH trainers
     double max_error = 0.002;    ///< Target mean error; training stops early once the epoch error falls below it
     double learning_rate = 0.001;///< Step size of the weight updates (Adam / backpropagation)
-    bool shuffle = true;         ///< Whether to shuffle pattern order during training
+    bool shuffle = true;         ///< Whether to shuffle the training-pattern order (reshuffled before every epoch)
     unsigned seed = 42;          ///< RNG seed for weight initialization and shuffling (0 means non-deterministic where supported)
     int batch_size = 30;         ///< Number of patterns per batch in the batch trainers
     double train_fraction = 0.8; ///< Fraction of patterns used for calibration; the rest forms the validation set
+    double oversample_quantile = 0.0;  ///< Output quantile for oversampling; 0 disables it, otherwise 0 < q < 1
+    int oversample_multiplier = 1;     ///< Total occurrences of each oversampled pattern (1 disables oversampling)
     bool split_shuffle = true;   ///< Whether the calibration/validation split shuffles the pattern order
 
     int lstm_past_time_steps = 30;   ///< Length of the past observation window fed to the LSTM encoder
@@ -600,6 +602,12 @@ inline RunConfig parseConfigIni(const std::string &path) {
     std::string strainf = get("train_fraction");
     if (!strainf.empty()) cfg.train_fraction = std::stod(strainf);
 
+    std::string soversampleq = get("oversample_quantile");
+    if (!soversampleq.empty()) cfg.oversample_quantile = std::stod(soversampleq);
+
+    std::string soversamplem = get("oversample_multiplier");
+    if (!soversamplem.empty()) cfg.oversample_multiplier = std::stoi(soversamplem);
+
     std::string spasttimesteps = get("lstm_past_time_steps");
     if (!spasttimesteps.empty()) cfg.lstm_past_time_steps = std::stoi(spasttimesteps);
 
@@ -702,6 +710,13 @@ inline RunConfig parseConfigIni(const std::string &path) {
 
     if(cfg.columns.size() != cfg.transform_alpha.size()){
         throw std::runtime_error("config: columns length and transform_alpha length must match");
+    }
+
+    if (cfg.oversample_quantile < 0.0 || cfg.oversample_quantile >= 1.0) {
+        throw std::runtime_error("config: oversample_quantile must be 0 (disabled) or lie in (0, 1)");
+    }
+    if (cfg.oversample_multiplier < 1) {
+        throw std::runtime_error("config: oversample_multiplier must be at least 1 (1 disables oversampling)");
     }
 
     return cfg;
