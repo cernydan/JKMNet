@@ -5,6 +5,8 @@
 #ifndef LAYER_HPP
 #define LAYER_HPP
 
+#include <cstdint>
+
 #include "eigen-3.4/Eigen/Dense"
 #include "ObjectiveFunctions.hpp"
 
@@ -160,13 +162,22 @@ public:
 
     /// Apply a gradient descent step using the Adam algorithm (with bias correction).
     /**
+     * The Adam time step is owned by the layer: it is incremented by this call,
+     * so it counts actual weight updates (one per pattern in online training,
+     * one per mini-batch in batch training) and not epochs.
      * @param learningRate Step size.
-     * @param iterationNum 1-based training iteration index, used for bias correction.
      * @param beta1 Exponential decay rate for the first moment estimate.
      * @param beta2 Exponential decay rate for the second moment estimate.
      * @param epsi Small constant for numerical stability.
      */
-    void updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi);
+    void updateAdam(double learningRate, double beta1, double beta2, double epsi);
+
+    /// Get the number of Adam updates applied since the Adam state was (re)initialized.
+    /**
+     * @return 0-based count of updateAdam() calls; the next update uses it + 1
+     *         as the bias-correction step.
+     */
+    std::uint64_t getAdamIteration() const;
 
     /// Apply a gradient descent step with momentum: W = W - learningRate * (dE/dW) + moment * (W - W_prev).
     /**
@@ -257,7 +268,11 @@ public:
      */
     Eigen::VectorXd getActivationDerivative();
 
-    /// Reset the Adam optimizer state variables (MtForAdam and VtForAdam) to zero.
+    /// Reset the Adam optimizer state (MtForAdam, VtForAdam and the step counter) to zero.
+    /**
+     * After resetting, the next updateAdam() call is treated as step 1 again,
+     * which is required whenever the moment accumulators are zeroed.
+     */
     void resetAdamState();
 
     /// Map an activ_func_type value to its string name.
@@ -291,6 +306,7 @@ private:
     Eigen::MatrixXd weightGrad;  //!< The backpropagation gradient matrix for the layer (∂E/∂W)
     Eigen::MatrixXd MtForAdam;  //!< Mt parameter for every weight in ADAM algorithm
     Eigen::MatrixXd VtForAdam;  //!< Vt parameter for every weight in ADAM algorithm
+    std::uint64_t adamIteration_ = 0;  //!< Number of Adam updates applied (Adam's bias-correction step counter)
     Eigen::MatrixXd previousWeights; //!< The weight matrix saved from the previous training step (used for momentum)
 };
 

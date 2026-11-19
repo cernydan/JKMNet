@@ -6,6 +6,8 @@
  * @brief Declares the LSTMLayer class — an LSTM layer with forward pass over a time-step segment and backpropagation through time (BPTT) — plus the LSTMSettings struct.
  */
 
+#include <cstdint>
+
 #include "eigen-3.4/Eigen/Dense"
 #include "ConfigIni.hpp"
 
@@ -110,13 +112,23 @@ public:
   void updateWeights(double learningRate);
   /// Apply one Adam update step to W, U, and b from the stored gradients.
   /**
+   * The Adam time step is owned by the layer and incremented by this call, so it
+   * counts actual weight updates (one per sample/window in the LSTM trainers)
+   * rather than epochs.
    * @param learningRate Adam step size.
-   * @param iterationNum 1-based step counter for Adam's bias correction.
    * @param beta1 Exponential decay of the first moment estimate.
    * @param beta2 Exponential decay of the second moment estimate.
    * @param epsi Small stabilizer in the denominator.
    */
-  void updateAdam(double learningRate, int iterationNum, double beta1, double beta2, double epsi);
+  void updateAdam(double learningRate, double beta1, double beta2, double epsi);
+  /// Get the number of Adam updates applied since initLSTMLayer().
+  /**
+   * @return 0-based count of updateAdam() calls; the next update uses it + 1 as
+   *         the bias-correction step.
+   */
+  std::uint64_t getAdamIteration() const;
+  /// Reset the Adam optimizer state (moment accumulators and step counter) to zero.
+  void resetAdamState();
   /// Clear the forward-pass states, inputs, and deltas (weight gradients and Adam moments are kept).
   /**
    * Called between samples in online training so samples stay independent.
@@ -163,6 +175,7 @@ private:
   Eigen::MatrixXd U_VtForAdam;    //!< Adam second-moment accumulator for U
   Eigen::VectorXd b_MtForAdam;    //!< Adam first-moment accumulator for b
   Eigen::VectorXd b_VtForAdam;    //!< Adam second-moment accumulator for b
+  std::uint64_t adamIteration_ = 0;  //!< Number of Adam updates applied (Adam's bias-correction step counter)
   Eigen::MatrixXd deltaOutput;    //!< Delta of the layer output h per cell (rows) and time step (columns)
   Eigen::MatrixXd deltaCellState; //!< Delta of the cell state per cell (rows) and time step (columns)
   Eigen::MatrixXd deltaGates; //!< Delta of the gate activations (4*cells rows, gates stacked, by time-step columns)

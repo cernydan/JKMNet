@@ -16,6 +16,9 @@
 #include <iomanip>
 #include <cerrno>
 #include <cstring>
+#include <algorithm>
+#include <random>
+#include <stdexcept>
 
 using namespace std;
 using namespace std::chrono;
@@ -37,9 +40,12 @@ MLP::MLP()
       weightsVectorMlp(),
       calibCrit(),
       validCrit(),
-      result()
+      result(),
+      trainingOrder_(),
+      reshuffleTrainingOrder_(false),
+      trainingRng_(0)
        {
-   
+
 }
 
 
@@ -67,7 +73,10 @@ MLP::MLP(const MLP& other)
       weightsVectorMlp(other.weightsVectorMlp),
       calibCrit(other.calibCrit),
       validCrit(other.validCrit),
-      result(other.result) {
+      result(other.result),
+      trainingOrder_(other.trainingOrder_),
+      reshuffleTrainingOrder_(other.reshuffleTrainingOrder_),
+      trainingRng_(other.trainingRng_) {
     // deep copies handled automatically by Eigen and std::vector
 }
 
@@ -91,6 +100,9 @@ MLP& MLP::operator=(const MLP& other){
         calibCrit = other.calibCrit;
         validCrit = other.validCrit;
         result = other.result;
+        trainingOrder_ = other.trainingOrder_;
+        reshuffleTrainingOrder_ = other.reshuffleTrainingOrder_;
+        trainingRng_ = other.trainingRng_;
   }
   return *this;
 
@@ -112,8 +124,11 @@ MLP::MLP(MLP&& other) noexcept
       weightsVectorMlp(std::move(other.weightsVectorMlp)),
       calibCrit(std::move(other.calibCrit)),
       validCrit(std::move(other.validCrit)),
-      result(std::move(other.result)) {
-    
+      result(std::move(other.result)),
+      trainingOrder_(std::move(other.trainingOrder_)),
+      reshuffleTrainingOrder_(other.reshuffleTrainingOrder_),
+      trainingRng_(std::move(other.trainingRng_)) {
+    other.reshuffleTrainingOrder_ = false;
 }
 
 /**
@@ -134,6 +149,10 @@ MLP& MLP::operator=(MLP&& other) noexcept {
         calibCrit = std::move(other.calibCrit);
         validCrit = std::move(other.validCrit);
         result = std::move(other.result);
+        trainingOrder_ = std::move(other.trainingOrder_);
+        reshuffleTrainingOrder_ = other.reshuffleTrainingOrder_;
+        trainingRng_ = std::move(other.trainingRng_);
+        other.reshuffleTrainingOrder_ = false;
     }
     return *this;
 }
@@ -1172,10 +1191,9 @@ void MLP::runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, 
  */
 /// Implements runAndBPadam. Same forward + backpropagation order as runAndBP,
 /// but the weight update uses Adam (Layer::updateAdam) with fixed hyperparameters
-/// beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8.
-/// @param iterationNum 1-based step counter passed to Adam for the bias
-///        correction of the first and second moment estimates.
-void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate, int iterationNum) {
+/// beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8. Adam's bias-correction step is
+/// counted inside each layer, so no step counter is passed here.
+void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate) {
     if (layers_.empty())
         throw std::logic_error("runMLP called before initMLP");
 
@@ -1195,7 +1213,7 @@ void MLP::runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsO
         }
     }
     for(size_t i = 0; i < getNumLayers(); i++){
-        layers_[i].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
+        layers_[i].updateAdam(learningRate,0.9, 0.999, 1e-8);
     }
 }
 
@@ -1241,16 +1259,18 @@ void MLP::updateWeights(double learningRate){
 }
 
 /// Implements updateWeightsAdam. Applies one Adam step per layer (Layer::updateAdam
-/// with beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8) from the accumulated gradient
+/// with beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8) from the accumulated gradient
 /// and then zeroes the gradient so the next batch accumulates from scratch.
-/// @param iterationNum 1-based step counter for Adam's bias correction.
+/// Adam's bias-correction step is counted inside each layer, so one call of this
+/// function advances it by exactly one (per pattern in online training, per
+/// mini-batch in batch training).
 /// @throw std::logic_error If called before initMLP.
-void MLP::updateWeightsAdam(double learningRate, int iterationNum){
+void MLP::updateWeightsAdam(double learningRate){
     if (layers_.empty())
         throw std::logic_error("updateWeights called before initMLP");
 
     for(size_t i = 0; i < getNumLayers(); i++){
-        layers_[i].updateAdam(learningRate,iterationNum,0.9, 0.99, 1e-8);
+        layers_[i].updateAdam(learningRate,0.9, 0.999, 1e-8);
         layers_[i].setGradient(layers_[i].getGradient().setZero());
     }
 }
@@ -1258,21 +1278,21 @@ void MLP::updateWeightsAdam(double learningRate, int iterationNum){
 /// Implements updateWeightsAdamNoClear. Applies one Adam step per layer but
 /// intentionally leaves the accumulated gradients in place so further patterns
 /// keep accumulating (used by the LSTM horizon training).
-/// @param iterationNum 1-based step counter for Adam's bias correction.
 /// @throw std::logic_error If called before initMLP.
-void MLP::updateWeightsAdamNoClear(double learningRate, int iterationNum){
+void MLP::updateWeightsAdamNoClear(double learningRate){
     if (layers_.empty())
         throw std::logic_error("updateWeightsAdamNoClear called before initMLP");
 
     for(size_t i = 0; i < getNumLayers(); i++){
-        layers_[i].updateAdam(learningRate, iterationNum, 0.9, 0.99, 1e-8);
+        layers_[i].updateAdam(learningRate, 0.9, 0.999, 1e-8);
         // Do NOT clear gradients - allow accumulation
     }
 }
 
-/// Implements resetGradientsForLSTM. Resets the Adam moment state (first/second
-/// moment accumulators) of every layer; used when the MLP is trained as part of
-/// a coupled LSTM->MLP model so a fresh Adam trajectory starts for each window.
+/// Implements resetGradientsForLSTM. Resets the Adam state (first/second moment
+/// accumulators and the step counter) of every layer; used when the MLP is trained
+/// as part of a coupled LSTM->MLP model so a fresh Adam trajectory starts for each
+/// window.
 void MLP::resetGradientsForLSTM(){
     if (layers_.empty())
         return;
@@ -1281,6 +1301,58 @@ void MLP::resetGradientsForLSTM(){
         // Reset Adam state variables
         layers_[i].resetAdamState();
     }
+}
+
+/// Implements setTrainingOrder.
+void MLP::setTrainingOrder(const std::vector<int>& order, bool reshuffleEachEpoch, unsigned rngSeed) {
+    for (int index : order) {
+        if (index < 0)
+            throw std::invalid_argument("training order contains a negative row index");
+    }
+    trainingOrder_ = order;
+    reshuffleTrainingOrder_ = reshuffleEachEpoch;
+    trainingRng_.seed(rngSeed);
+}
+
+/// Implements clearTrainingOrder.
+void MLP::clearTrainingOrder() {
+    trainingOrder_.clear();
+    reshuffleTrainingOrder_ = false;
+    trainingRng_.seed(0);
+}
+
+/// Implements getTrainingOrder.
+const std::vector<int>& MLP::getTrainingOrder() const {
+    return trainingOrder_;
+}
+
+/// Implements getReshuffleTrainingOrder.
+bool MLP::getReshuffleTrainingOrder() const {
+    return reshuffleTrainingOrder_;
+}
+
+/// Implements prepareTrainingOrder.
+std::vector<int> MLP::prepareTrainingOrder(int rowCount) const {
+    std::vector<int> order;
+
+    if (trainingOrder_.empty()) {
+        order.reserve(static_cast<size_t>(std::max(0, rowCount)));
+        for (int i = 0; i < rowCount; ++i) {
+            order.push_back(i);
+        }
+    } else {
+        order = trainingOrder_;
+        for (int index : order) {
+            if (index < 0 || index >= rowCount) {
+                throw std::out_of_range("training order contains a row index outside the supplied matrices");
+            }
+        }
+    }
+
+    if (reshuffleTrainingOrder_) {
+        std::shuffle(order.begin(), order.end(), trainingRng_);
+    }
+    return order;
 }
 
 /**
@@ -1329,10 +1401,13 @@ void MLP::onlineBP(int maxIterations, double maxError, double learningRate, cons
     auto start = high_resolution_clock::now();
     for (int iter = 1; iter < maxIterations + 1; iter++){
         Error = 0.0;
-        for (int pat = 0; pat < numOfPatterns; pat++){
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const double epochDenominator = static_cast<double>(epochOrder.size());
+        for (size_t pos = 0; pos < epochOrder.size(); ++pos){
+            const int pat = epochOrder[pos];
             Eigen::VectorXd currentInp = X.row(pat);
             Eigen::VectorXd currentObs = Y.row(pat);
-            
+
             calcOneOutput(currentInp);
 
             // Output layer BP - use custom objective function for deltas
@@ -1353,7 +1428,7 @@ void MLP::onlineBP(int maxIterations, double maxError, double learningRate, cons
                 layers_[i].updateWeights(learningRate);
             }
         }
-        Error = Error / numOfPatterns;
+        Error = Error / epochDenominator;
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
@@ -1383,8 +1458,9 @@ void MLP::onlineBP(int maxIterations, double maxError, double learningRate, cons
  * Online backpropagation using Adam algorithm - separete inp out matrices
  */
 /// Implements onlineAdam. Same per-pattern online training loop as onlineBP, but
-/// weights are updated with Adam (beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8);
-/// the epoch counter is used as Adam's step for the bias correction.
+/// weights are updated with Adam (beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8);
+/// every pattern is one Adam update, and each layer counts those updates itself
+/// for Adam's bias correction (so the step advances with patterns, not epochs).
 /// Early stopping and the `result` bookkeeping follow onlineBP.
 /// @throw std::logic_error If called before initMLP.
 /// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP.
@@ -1419,7 +1495,10 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
     auto start = high_resolution_clock::now();
     for (int iter = 1; iter < maxIterations + 1; iter++){
         Error = 0.0;
-        for (int pat = 0; pat < numOfPatterns; pat++){
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const double epochDenominator = static_cast<double>(epochOrder.size());
+        for (size_t pos = 0; pos < epochOrder.size(); ++pos){
+            const int pat = epochOrder[pos];
             Eigen::VectorXd currentInp = X.row(pat);
             Eigen::VectorXd currentObs = Y.row(pat);
 
@@ -1439,11 +1518,12 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
                 }
             }
             Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            // One Adam update per pattern occurrence (the layers count the Adam steps)
             for(size_t i = 0; i < getNumLayers(); i++){
-                layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+                layers_[i].updateAdam(learningRate,0.9, 0.999, 1e-8);
             }
         }
-        Error = Error / numOfPatterns;
+        Error = Error / epochDenominator;
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
@@ -1476,8 +1556,8 @@ void MLP::onlineAdam(int maxIterations, double maxError, double learningRate, co
 /// @p batchSize (the last batch may be smaller); for every pattern in a batch
 /// the forward pass and backpropagation only accumulate gradients
 /// (calculateBatchGradient), and one Adam update is applied per batch, after
-/// which the gradients are zeroed. Adam's bias-correction step is the epoch
-/// counter (not the batch counter).
+/// which the gradients are zeroed. Adam's bias-correction step advances once per
+/// batch update (counted inside the layers), not per epoch.
 /// Early stopping and the `result` bookkeeping follow onlineBP.
 /// @throw std::logic_error If called before initMLP.
 /// @throw std::invalid_argument / std::runtime_error Same checks as onlineBP,
@@ -1513,14 +1593,17 @@ void MLP::batchAdam(int maxIterations, double maxError, int batchSize, double le
     auto start = high_resolution_clock::now();
     for (int iter = 1; iter < maxIterations + 1; iter++){
         Error = 0.0;
-        for(int batch = 0; batch < (numOfPatterns + batchSize - 1)/batchSize; batch++){
-            int start = batch * batchSize;
-            int end   = std::min(start + batchSize,numOfPatterns);
-            for (int pat = start; pat < end; pat++){
-
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const int occurrences = static_cast<int>(epochOrder.size());
+        const double epochDenominator = static_cast<double>(occurrences);
+        for(int batch = 0; batch < (occurrences + batchSize - 1)/batchSize; batch++){
+            const int batchBegin = batch * batchSize;
+            const int batchEnd   = std::min(batchBegin + batchSize, occurrences);
+            for (int pos = batchBegin; pos < batchEnd; pos++){
+                const int pat = epochOrder[pos];
                 Eigen::VectorXd currentInp = X.row(pat);
                 Eigen::VectorXd currentObs = Y.row(pat);
-                
+
                 calcOneOutput(currentInp);
 
                 // Output layer gradient
@@ -1538,12 +1621,13 @@ void MLP::batchAdam(int maxIterations, double maxError, int batchSize, double le
                 }
                 Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
                 }
+                // One Adam update per mini-batch (the layers count the Adam steps)
                 for (int i = 0; i <= lastLayerIndex; i++){
-                    layers_[i].updateAdam(learningRate,iter,0.9, 0.99, 1e-8);
+                    layers_[i].updateAdam(learningRate,0.9, 0.999, 1e-8);
                     layers_[i].setGradient(layers_[i].getGradient().setZero());
                 }
             }
-            Error = Error / numOfPatterns;
+            Error = Error / epochDenominator;
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
@@ -1609,14 +1693,17 @@ void MLP::batchBP(int maxIterations, double maxError, int batchSize, double lear
     auto start = high_resolution_clock::now();
     for (int iter = 1; iter < maxIterations + 1; iter++){
         Error = 0.0;
-        for(int batch = 0; batch < (numOfPatterns + batchSize - 1)/batchSize; batch++){
-            int start = batch * batchSize;
-            int end   = std::min(start + batchSize,numOfPatterns);
-            for (int pat = start; pat < end; pat++){
-
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const int occurrences = static_cast<int>(epochOrder.size());
+        const double epochDenominator = static_cast<double>(occurrences);
+        for(int batch = 0; batch < (occurrences + batchSize - 1)/batchSize; batch++){
+            const int batchBegin = batch * batchSize;
+            const int batchEnd   = std::min(batchBegin + batchSize, occurrences);
+            for (int pos = batchBegin; pos < batchEnd; pos++){
+                const int pat = epochOrder[pos];
                 Eigen::VectorXd currentInp = X.row(pat);
                 Eigen::VectorXd currentObs = Y.row(pat);
-                
+
                 calcOneOutput(currentInp);
 
                 // Output layer gradient
@@ -1639,7 +1726,7 @@ void MLP::batchBP(int maxIterations, double maxError, int batchSize, double lear
                     layers_[i].setGradient(layers_[i].getGradient().setZero());
                 }
             }
-            Error = Error / numOfPatterns;
+            Error = Error / epochDenominator;
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
@@ -1710,7 +1797,10 @@ void MLP::onlinePenalizeBP(int maxIterations, double maxError, double learningRa
     auto start = high_resolution_clock::now();
     for (int iter = 1; iter < maxIterations + 1; iter++){
         Error = 0.0;
-        for (int pat = 0; pat < numOfPatterns; pat++){
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const double epochDenominator = static_cast<double>(epochOrder.size());
+        for (size_t pos = 0; pos < epochOrder.size(); ++pos){
+            const int pat = epochOrder[pos];
             Eigen::VectorXd currentInp = X.row(pat);
             Eigen::VectorXd currentObs = Y.row(pat);
 
@@ -1734,7 +1824,7 @@ void MLP::onlinePenalizeBP(int maxIterations, double maxError, double learningRa
                 layers_[i].updateWeights(learningRate);
             }
         }
-        Error = Error / numOfPatterns;
+        Error = Error / epochDenominator;
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
@@ -1805,10 +1895,13 @@ void MLP::onlineMomentumBP(int maxIterations, double maxError, double learningRa
     auto start = high_resolution_clock::now();
     for (int iter = 1; iter < maxIterations + 1; iter++){
         Error = 0.0;
-        for (int pat = 0; pat < numOfPatterns; pat++){
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const double epochDenominator = static_cast<double>(epochOrder.size());
+        for (size_t pos = 0; pos < epochOrder.size(); ++pos){
+            const int pat = epochOrder[pos];
             Eigen::VectorXd currentInp = X.row(pat);
             Eigen::VectorXd currentObs = Y.row(pat);
-            
+
             calcOneOutput(currentInp);
 
             // Output layer BP - use custom objective function for deltas
@@ -1829,7 +1922,7 @@ void MLP::onlineMomentumBP(int maxIterations, double maxError, double learningRa
                 layers_[i].updateWeightsMomentum(learningRate, moment);
             }
         }
-        Error = Error / numOfPatterns;
+        Error = Error / epochDenominator;
         if(Error <= maxError){
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
@@ -1926,7 +2019,10 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
     for(int epoch = 1; epoch <= maxIterations; epoch++){
         // Run one epoch of online Adam: per-pattern forward + backprop + Adam update
         Error = 0.0;
-        for (int pat = 0; pat < numOfPatterns; pat++){
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const double epochDenominator = static_cast<double>(epochOrder.size());
+        for (size_t pos = 0; pos < epochOrder.size(); ++pos){
+            const int pat = epochOrder[pos];
             Eigen::VectorXd currentInp = Xtrain.row(pat);
             Eigen::VectorXd currentObs = Ytrain.row(pat);
 
@@ -1946,11 +2042,12 @@ std::vector<Eigen::MatrixXd> MLP::onlineAdamEpochVal(
                 }
             }
             Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
+            // One Adam update per pattern occurrence (the layers count the Adam steps)
             for(size_t i = 0; i < getNumLayers(); i++){
-                layers_[i].updateAdam(learningRate,epoch,0.9, 0.99, 1e-8);
+                layers_[i].updateAdam(learningRate,0.9, 0.999, 1e-8);
             }
         }
-        Error = Error / numOfPatterns;
+        Error = Error / epochDenominator;
         // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
         // in original units with chronological (unshuffled) calibration order when epochCtx is given
         if (Metrics::isEpochMetricRecord(epoch, metricsAfterXEpochs, maxIterations)) {
@@ -2092,8 +2189,9 @@ std::vector<Eigen::MatrixXd> MLP::onlineBpEpochVal(
 /// Implements batchAdamEpochVal — mini-batch Adam training with periodic
 /// train/validation metric evaluation. Each epoch splits the training patterns
 /// into mini-batches; gradients are accumulated per batch
-/// (calculateBatchGradient) and applied with one Adam step per batch, with the
-/// epoch counter used as Adam's bias-correction step. Early stopping below
+/// (calculateBatchGradient) and applied with one Adam step per batch, the
+/// bias-correction step advancing once per batch (counted inside the layers).
+/// Early stopping below
 /// maxError and `result` bookkeeping follow onlineAdam; metric matrices follow
 /// the same 14-entry layout as onlineAdamEpochVal.
 /// @param batchSize Number of patterns per mini-batch (last batch may be smaller).
@@ -2152,14 +2250,17 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
     for(int epoch = 1; epoch <= maxIterations; epoch++){
         // Run batch Adam
         Error = 0.0;
-        for(int batch = 0; batch < (numOfPatterns + batchSize - 1)/batchSize; batch++){
-            int start = batch * batchSize;
-            int end   = std::min(start + batchSize,numOfPatterns);
-            for (int pat = start; pat < end; pat++){
-
+        const std::vector<int> epochOrder = prepareTrainingOrder(numOfPatterns);
+        const int occurrences = static_cast<int>(epochOrder.size());
+        const double epochDenominator = static_cast<double>(occurrences);
+        for(int batch = 0; batch < (occurrences + batchSize - 1)/batchSize; batch++){
+            const int batchBegin = batch * batchSize;
+            const int batchEnd   = std::min(batchBegin + batchSize, occurrences);
+            for (int pos = batchBegin; pos < batchEnd; pos++){
+                const int pat = epochOrder[pos];
                 Eigen::VectorXd currentInp = Xtrain.row(pat);
                 Eigen::VectorXd currentObs = Ytrain.row(pat);
-                
+
                 calcOneOutput(currentInp);
 
                 // Output layer gradient
@@ -2177,12 +2278,13 @@ std::vector<Eigen::MatrixXd> MLP::batchAdamEpochVal(
                 }
                 Error += layers_[lastLayerIndex].getDeltas().squaredNorm();
                 }
+                // One Adam update per mini-batch (the layers count the Adam steps)
                 for (int i = 0; i <= lastLayerIndex; i++){
-                    layers_[i].updateAdam(learningRate,epoch,0.9, 0.99, 1e-8);
+                    layers_[i].updateAdam(learningRate,0.9, 0.999, 1e-8);
                     layers_[i].setGradient(layers_[i].getGradient().setZero());
                 }
             }
-            Error = Error / numOfPatterns;
+            Error = Error / epochDenominator;
 
         // Epoch metrics: recorded every metricsAfterXEpochs epochs and at the final epoch;
         // in original units with chronological (unshuffled) calibration order when epochCtx is given

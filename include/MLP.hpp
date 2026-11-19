@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <functional>
+#include <random>
 #include "eigen-3.4/Eigen/Dense"
 
 #include "Layer.hpp"
@@ -244,13 +245,14 @@ class MLP {
         void runAndBP(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate);
         /// Forward pass for one pattern followed by an immediate Adam weight update.
         /**
+         * Adam's bias-correction step is maintained inside every layer, so this
+         * call simply performs one update (no step counter has to be tracked here).
          * @param input Input vector.
          * @param obsOut Target (observed) output vector.
          * @param learningRate Adam step size.
-         * @param iterationNum 1-based step counter for Adam's bias correction.
          * @throw std::logic_error If called before initMLP.
          */
-        void runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate, int iterationNum);
+        void runAndBPadam(const Eigen::VectorXd& input, const Eigen::VectorXd& obsOut, double learningRate);
         /// Forward pass for one pattern; accumulate the per-layer batch gradients without updating weights.
         /**
          * Call repeatedly over a batch, then apply updateWeights()/updateWeightsAdam().
@@ -267,26 +269,48 @@ class MLP {
         void updateWeights(double learningRate);
         /// Apply one Adam step per layer from the accumulated batch gradient, then clear it.
         /**
-         * Uses beta1 = 0.9, beta2 = 0.99, epsilon = 1e-8.
+         * Uses beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8. Adam's bias-correction
+         * step is counted inside each layer, i.e. once per call of this function
+         * (per pattern in online training, per mini-batch in batch training).
          * @param learningRate Adam step size.
-         * @param iterationNum 1-based step counter for Adam's bias correction.
          * @throw std::logic_error If called before initMLP.
          */
-        void updateWeightsAdam(double learningRate, int iterationNum);
+        void updateWeightsAdam(double learningRate);
         /// Same as updateWeightsAdam but keeps the accumulated gradients, so further patterns keep accumulating.
         /**
          * Used by the LSTM horizon training where several steps contribute before clearing.
          * @param learningRate Adam step size.
-         * @param iterationNum 1-based step counter for Adam's bias correction.
          * @throw std::logic_error If called before initMLP.
          */
-        void updateWeightsAdamNoClear(double learningRate, int iterationNum);
-        /// Reset the Adam moment accumulators of every layer (first/second moments).
+        void updateWeightsAdamNoClear(double learningRate);
+        /// Reset the Adam state of every layer (first/second moment accumulators and step counters).
         /**
          * Used when the MLP is trained as part of a coupled LSTM->MLP model so
          * each window starts a fresh Adam trajectory.
          */
         void resetGradientsForLSTM();
+
+        /// Configure the logical pattern order used by the training methods.
+        /**
+         * The training matrices themselves are never reordered or duplicated.
+         * The configured vector contains one or more row-index occurrences and
+         * is used only for training; all metric evaluation remains based on the
+         * original matrix rows. If @p reshuffleEachEpoch is true, every epoch
+         * shuffles a copy of @p order using this MLP's private RNG.
+         *
+         * @param order Zero-based row indices. An empty vector means the
+         *        identity order 0..rows-1.
+         * @param reshuffleEachEpoch Whether to randomize the order before each epoch.
+         * @param rngSeed Seed for the per-epoch order RNG.
+         * @throw std::invalid_argument If an index is negative.
+         */
+        void setTrainingOrder(const std::vector<int>& order, bool reshuffleEachEpoch, unsigned rngSeed);
+        /// Clear the custom training order and return to fixed row order.
+        void clearTrainingOrder();
+        /// Get the configured base training index order (empty means identity).
+        const std::vector<int>& getTrainingOrder() const;
+        /// Whether the configured training order is reshuffled after every epoch.
+        bool getReshuffleTrainingOrder() const;
 
         /// Online (per-pattern) backpropagation trainer - separate input/output matrices.
         /**
@@ -601,6 +625,19 @@ class MLP {
         double objectiveAlpha_ = 0.5;     //!< Alpha weighting parameter for combined losses
         double objectiveAlpha2_ = 0.33;   //!< Second alpha parameter for the curvature term
         double objectiveEpsilon_ = 1e-8;  //!< Numerical stabilizer used inside the objective gradients
+
+        std::vector<int> trainingOrder_;         //!< Base logical pattern order; empty means identity
+        bool reshuffleTrainingOrder_ = false;    //!< Whether each epoch gets a new order
+        mutable std::mt19937 trainingRng_{0};    //!< RNG used only for per-epoch training-order shuffles
+
+        /// Return this epoch's pattern order (validated against @p rowCount).
+        /**
+         * The returned vector may contain repeated indices. With no configured
+         * order, the identity order is returned; with an order and reshuffling,
+         * its copy is shuffled. Validation is performed every epoch to catch a
+         * mismatch between a stored order and a newly supplied matrix.
+         */
+        std::vector<int> prepareTrainingOrder(int rowCount) const;
 };
 
 #endif // MLP_H

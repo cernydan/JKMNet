@@ -10,10 +10,12 @@
 
 #include <random>
 #include <iostream>
+#include <algorithm>
+#include <stdexcept>
 #include "eigen-3.4/Eigen/Dense"
 #include <filesystem>
 #include <fstream>
-#include <ostream> 
+#include <ostream>
 
 using namespace std;
 
@@ -137,6 +139,10 @@ TrainingResult JKMNet::trainAdamOnlineSplit(
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
     mlp.initMLP(zeroIn, rngSeed);
 
+    const std::vector<int> trainingOrder = Data::makeOversampledTrainIndices(
+        Y, cfg_.oversample_quantile, cfg_.oversample_multiplier);
+    mlp.setTrainingOrder(trainingOrder, shuffle, rngSeed);
+
     // Train with the online Adam method; any failure is logged and rethrown
     try {
         mlp.onlineAdam(maxIterations, maxError, learningRate, X, Y);
@@ -233,6 +239,10 @@ TrainingResult JKMNet::trainAdamBatchSplit(
     Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
     mlp.initMLP(zeroIn, rngSeed);
 
+    const std::vector<int> trainingOrder = Data::makeOversampledTrainIndices(
+        Y, cfg_.oversample_quantile, cfg_.oversample_multiplier);
+    mlp.setTrainingOrder(trainingOrder, shuffle, rngSeed);
+
     // Run training with batchAdam method
     try {
         mlp.batchAdam(maxIterations, maxError, batchSize, learningRate, X, Y);
@@ -320,6 +330,10 @@ void JKMNet::KFold(
             int inputSize = static_cast<int>(trainInps.cols()); // each pattern is a row of inputs (flattened)
             Eigen::VectorXd zeroIn = Eigen::VectorXd::Zero(inputSize);
             testMlp.initMLP(zeroIn, seed);
+
+            const std::vector<int> foldTrainingOrder = Data::makeOversampledTrainIndices(
+                trainOuts, cfg_.oversample_quantile, cfg_.oversample_multiplier);
+            testMlp.setTrainingOrder(foldTrainingOrder, shuffle, seed + static_cast<unsigned>(run) * 1000003u);
 
             // Train with online Adam; any failure is logged and rethrown
             try {
@@ -455,6 +469,18 @@ void JKMNet::ensembleRunMlpVector(){
 
     std::cout << "-> Data split into training and validation sets." << std::endl;
 
+    // Build the oversampled, per-epoch pattern index order from the training
+    // outputs only. The training matrices remain unmodified; repetitions and
+    // reshuffling happen logically inside each MLP.
+    const std::vector<int> trainingOrder = Data::makeOversampledTrainIndices(
+        Y_train, cfg_.oversample_quantile, cfg_.oversample_multiplier);
+    const unsigned baseOrderSeed = cfg_.seed == 0
+        ? std::random_device{}()
+        : cfg_.seed;
+    std::cout << "-> Training order prepared: " << Y_train.rows()
+              << " unique patterns, " << trainingOrder.size()
+              << " pattern occurrences per epoch." << std::endl;
+
     std::cout << "-> Transforming data..." << std::endl;
 
     // Fit the transformation scalers on calibration data only...
@@ -539,6 +565,12 @@ void JKMNet::ensembleRunMlpVector(){
         data_.logRunSettings(logFile, cfg_, run_id_integer);
 
         logFile << "Run " << run_id << " starting...\n";
+
+        mlps_[run].setTrainingOrder(trainingOrder, cfg_.shuffle,
+                                   baseOrderSeed + run * 1000003u);
+        logFile << "Training order: " << trainingOrder.size()
+                << " pattern occurrences per epoch (reshuffle: "
+                << (cfg_.shuffle ? "true" : "false") << ")\n";
 
         // Persist the initial weights (layer-wise CSV and flat vector CSV)
         mlps_[run].saveWeightsCsv(Metrics::addRunIdToFilename(cfg_.weights_csv_init, run_id));
@@ -935,6 +967,21 @@ void JKMNet::ensembleLstmFirstTest(){
 
     std::cout << "-> Data split into training and validation sets." << std::endl;
 
+    // Select oversampled training windows using output values only. Invert the
+    // global transform first so the configured quantile refers to output units.
+    Eigen::MatrixXd Y_train_selection = Y_train;
+    try {
+        Y_train_selection = data_.inverseTransformOutputs(Y_train_selection);
+    } catch (...) {}
+    const std::vector<int> trainingOrder = Data::makeOversampledTrainIndices(
+        Y_train_selection, cfg_.oversample_quantile, cfg_.oversample_multiplier);
+    const unsigned baseOrderSeed = cfg_.seed == 0
+        ? std::random_device{}()
+        : cfg_.seed;
+    std::cout << "-> Training order prepared: " << Y_train.rows()
+              << " unique patterns, " << trainingOrder.size()
+              << " pattern occurrences per epoch." << std::endl;
+
     std::vector<std::string> colNames;
     for (int c = 0; c < Y_train.cols(); ++c) {
         colNames.push_back("h" + std::to_string(c+1));
@@ -1013,17 +1060,34 @@ void JKMNet::ensembleLstmFirstTest(){
         // Online training loop over epochs and windowed samples:
         // forward through the LSTM, gradient through the output MLP,
         // backpropagate the MLP's first-layer delta into the LSTM, then
-        // Adam-update both parts; the LSTM memory is cleared per sample
+        // Adam-update both parts; the LSTM memory is cleared per sample.
+        std::mt19937 orderRng(baseOrderSeed + run * 1000003u);
+        auto nextEpochOrder = [&]() {
+            std::vector<int> order = trainingOrder;
+            if (cfg_.shuffle) {
+                std::shuffle(order.begin(), order.end(), orderRng);
+            }
+            for (int index : order) {
+                if (index < 0 || static_cast<size_t>(index) >= X_train.size()) {
+                    throw std::out_of_range("training order contains a window index outside the training data");
+                }
+            }
+            return order;
+        };
+
         for(int iter = 1; iter <= cfg_.max_iterations ; iter++){
             std::cout<<"\n"<< iter<< "\n";
-            for(size_t i = 0; i < X_train.size() ; i++){
+            const std::vector<int> epochOrder = nextEpochOrder();
+            for(size_t pos = 0; pos < epochOrder.size(); ++pos){
+                const size_t i = static_cast<size_t>(epochOrder[pos]);
                 lstm_vec[run].setInputTSSegment(X_train[i]);
                 lstm_vec[run].calculateTimeSteps();
                 mlps_[run].runAndCalculateBatchGradient(lstm_vec[run].getForwardOutputVector(),Y_train.row(i));
                 lstm_vec[run].setDeltaFromNextLayer(mlps_[run].getFirstLayerInputDelta());
                 lstm_vec[run].calculateGradients();
-                lstm_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
+                // One Adam update per sample; each layer/LSTM counts its own Adam steps
+                lstm_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.999, 1e-8);
+                mlps_[run].updateWeightsAdam(cfg_.learning_rate);
                 lstm_vec[run].eraseMemory();
             }
 
@@ -1213,7 +1277,7 @@ void JKMNet::ensembleLstmPastFutureTest(){
 
     // Build the windowed dataset: separate past-observation and
     // future-forcing input segments plus the horizon targets
-    auto [X_trainPast, X_trainFuture, Y_train, X_validPast, X_validFuture, Y_valid, pat_indices, calIdxForUnshuffle] = 
+    auto [X_trainPast, X_trainFuture, Y_train, X_validPast, X_validFuture, Y_valid, pat_indices, calIdxForUnshuffle] =
                                                     data_.makeLstmPastFutureData(cfg_.lstm_past_time_steps,
                                                                                 cfg_.lstm_future_time_steps,
                                                                                 cfg_.train_fraction,
@@ -1221,6 +1285,21 @@ void JKMNet::ensembleLstmPastFutureTest(){
                                                                                 cfg_.seed);
 
     std::cout << "-> Data split into training and validation sets." << std::endl;
+
+    // Select oversampled training windows using output values only, in the
+    // pre-transform output units when inversion is available.
+    Eigen::MatrixXd Y_train_selection = Y_train;
+    try {
+        Y_train_selection = data_.inverseTransformOutputs(Y_train_selection);
+    } catch (...) {}
+    const std::vector<int> trainingOrder = Data::makeOversampledTrainIndices(
+        Y_train_selection, cfg_.oversample_quantile, cfg_.oversample_multiplier);
+    const unsigned baseOrderSeed = cfg_.seed == 0
+        ? std::random_device{}()
+        : cfg_.seed;
+    std::cout << "-> Training order prepared: " << Y_train.rows()
+              << " unique patterns, " << trainingOrder.size()
+              << " pattern occurrences per epoch." << std::endl;
 
     std::vector<std::string> colNames;
     for (int c = 0; c < Y_train.cols(); ++c) {
@@ -1327,9 +1406,27 @@ void JKMNet::ensembleLstmPastFutureTest(){
             }
         };
 
-        // Online training loop over epochs and windowed samples
+        // Online training loop over epochs and windowed samples.
+        std::mt19937 orderRng(baseOrderSeed + run * 1000003u);
+        auto nextEpochOrder = [&]() {
+            std::vector<int> order = trainingOrder;
+            if (cfg_.shuffle) {
+                std::shuffle(order.begin(), order.end(), orderRng);
+            }
+            for (int index : order) {
+                if (index < 0 || static_cast<size_t>(index) >= X_trainPast.size() ||
+                    static_cast<size_t>(index) >= X_trainFuture.size() ||
+                    static_cast<size_t>(index) >= static_cast<size_t>(Y_train.rows())) {
+                    throw std::out_of_range("training order contains a window index outside the training data");
+                }
+            }
+            return order;
+        };
+
         for(int iter = 1; iter <= cfg_.max_iterations ; iter++){
-            for(size_t i = 0; i < X_trainPast.size() ; i++){
+            const std::vector<int> epochOrder = nextEpochOrder();
+            for(size_t pos = 0; pos < epochOrder.size(); ++pos){
+                const size_t i = static_cast<size_t>(epochOrder[pos]);
                 // Forward: encode past observations and future forcings...
                 lstm_past_vec[run].setInputTSSegment(X_trainPast[i]);
                 lstm_future_vec[run].setInputTSSegment(X_trainFuture[i]);
@@ -1350,7 +1447,8 @@ void JKMNet::ensembleLstmPastFutureTest(){
                         stepInputs[s] = lstm_to_mlp[run].col(s);
                     }
                     delta_mlp_to_lstm[run] = mlps_[run].horizonBackprop(stepInputs, separate_obs[run].row(0).transpose());
-                    mlps_[run].updateWeightsAdam(cfg_.learning_rate,iter);
+                    // One Adam update per sample (the layers count the Adam steps)
+                    mlps_[run].updateWeightsAdam(cfg_.learning_rate);
                 }
                 // Backward: push the MLP delta into the "together" LSTM and
                 // split its input deltas back between the past/future encoders
@@ -1360,11 +1458,12 @@ void JKMNet::ensembleLstmPastFutureTest(){
                 lstm_future_vec[run].setDeltaFromNextLayer(Eigen::MatrixXd(lstm_together_vec[run].getDeltaInputs().block(0,cfg_.lstm_past_time_steps,cfg_.lstm_cells,cfg_.lstm_future_time_steps)));
                 lstm_past_vec[run].calculateGradients();
                 lstm_future_vec[run].calculateGradients();
-                // Adam-update all three LSTMs; MLP was already updated above;
+                // Adam-update all three LSTMs (one update per sample, step counters
+                // are internal to the LSTMs); MLP was already updated above;
                 // memories are cleared per sample so samples stay independent
-                lstm_past_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                lstm_future_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
-                lstm_together_vec[run].updateAdam(cfg_.learning_rate,iter,0.9, 0.99, 1e-8);
+                lstm_past_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.999, 1e-8);
+                lstm_future_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.999, 1e-8);
+                lstm_together_vec[run].updateAdam(cfg_.learning_rate,0.9, 0.999, 1e-8);
                 lstm_past_vec[run].eraseMemory();
                 lstm_future_vec[run].eraseMemory();
                 lstm_together_vec[run].eraseMemory();
